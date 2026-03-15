@@ -26,94 +26,197 @@
       "Done":        { bg: "#f0fdf4", border: "#86efac", badge: "#16a34a" },
     };
 
-    const WORKER_URL = "https://morning-mud-283c.moreno-a64.workers.dev";
-    const DB_URL = `${WORKER_URL}/db/projects`;
-    const HEADERS = { "Content-Type": "application/json" };
+    const WORKER = "https://morning-mud-283c.moreno-a64.workers.dev";
 
-    const SEED_PROJECTS = [
-      { id: "proj-benches", name: "Benches", tasks: [
-        { id: 1, col: "To Do", title: "Ask building engineers about the AC separation", notes: "HVAC is shared with no pressure differential needed. Main concern is how airflow behaves across the glass partition and door — check with Kottermann and building engineers whether the shared system will distribute air evenly across the mixed lab area." },
-        { id: 2, col: "To Do", title: "Speak with David to check the labs", notes: "" },
-        { id: 3, col: "In Progress", title: "Ask Kottermann how would it be a mix lab", notes: "Ask for different layout options" },
-        { id: 4, col: "Blocked", title: "Francesc", notes: "call him" }
-      ]}
-    ];
-
-    // ── RestDB ───────────────────────────────────────────────────────────────
-    const db = {
-      load: async () => {
-        const res = await fetch(DB_URL, { headers: HEADERS });
-        const data = await res.json();
-        if (!data.length) return SEED_PROJECTS;
-        return data.map(r => ({ ...r.project, _id: r._id }));
-      },
-      save: async (project) => {
-        if (project._id) {
-          await fetch(`${DB_URL}/${project._id}`, { method: "PUT", headers: HEADERS, body: JSON.stringify({ project }) });
-        } else {
-          const res = await fetch(DB_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ project }) });
-          const data = await res.json();
-          return data._id;
-        }
-      },
-      delete: async (id) => { await fetch(`${DB_URL}/${id}`, { method: "DELETE", headers: HEADERS }); },
-      export: (data) => {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob); a.download = "building-issues.json"; a.click();
-      }
+    const api = {
+      login: (u, p) => fetch(`${WORKER}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) }).then(r => r.json()),
+      register: (u, p) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) }).then(r => r.json()),
+      getProjects: () => fetch(`${WORKER}/db/projects`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      saveProject: (p) => p._id
+        ? fetch(`${WORKER}/db/projects/${p._id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json())
+        : fetch(`${WORKER}/db/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json()),
+      deleteProject: (id) => fetch(`${WORKER}/db/projects/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
+      log: (username, action, details) => fetch(`${WORKER}/db/logs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, action, details, timestamp: new Date().toISOString() }) }),
+      getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
     };
 
+    // ── Login Screen ─────────────────────────────────────────────────────────
+    function Login({ onLogin }) {
+      const [username, setUsername] = useState("");
+      const [password, setPassword] = useState("");
+      const [error, setError] = useState("");
+      const [loading, setLoading] = useState(false);
+      const [mode, setMode] = useState("login");
+
+      const submit = async () => {
+        if (!username.trim() || !password.trim()) return;
+        setLoading(true); setError("");
+        const fn = mode === "login" ? api.login : api.register;
+        const res = await fn(username.trim(), password.trim());
+        if (res.error) setError(res.error);
+        else onLogin(res.username);
+        setLoading(false);
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "36px 40px", width: 320, boxShadow: "0 4px 24px #0004" }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>📋 Building Issues</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24 }}>{mode === "login" ? "Sign in to continue" : "Create a new account"}</div>
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username"
+              style={{ width: "100%", fontSize: 13, padding: "9px 12px", borderRadius: 7, border: "1px solid #cbd5e1", marginBottom: 10, outline: "none" }} />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"
+              onKeyDown={e => e.key === "Enter" && submit()}
+              style={{ width: "100%", fontSize: 13, padding: "9px 12px", borderRadius: 7, border: "1px solid #cbd5e1", marginBottom: 16, outline: "none" }} />
+            {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 12 }}>{error}</div>}
+            <button onClick={submit} disabled={loading}
+              style={{ width: "100%", fontSize: 14, padding: "10px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: loading ? 0.7 : 1 }}>
+              {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
+            </button>
+            <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: "#64748b" }}>
+              {mode === "login" ? <>No account? <span onClick={() => { setMode("register"); setError(""); }} style={{ color: "#2563eb", cursor: "pointer" }}>Register</span></> 
+                               : <>Have an account? <span onClick={() => { setMode("login"); setError(""); }} style={{ color: "#2563eb", cursor: "pointer" }}>Sign in</span></>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Audit Log Panel ──────────────────────────────────────────────────────
+    function AuditLog() {
+      const [logs, setLogs] = useState([]);
+      const [loading, setLoading] = useState(true);
+      useEffect(() => {
+        api.getLogs().then(data => { setLogs(Array.isArray(data) ? data : []); setLoading(false); });
+      }, []);
+      return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>📋 Audit Log</div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+            {loading ? <div style={{ color: "#94a3b8", fontSize: 12 }}>Loading…</div>
+              : logs.length === 0 ? <div style={{ color: "#94a3b8", fontSize: 12 }}>No activity yet.</div>
+              : logs.map((l, i) => (
+                <div key={i} style={{ marginBottom: 10, padding: "8px 10px", background: "#fff", borderRadius: 7, border: "1px solid #e2e8f0", fontSize: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                    <span style={{ fontWeight: 600, color: "#1e293b" }}>{l.username}</span>
+                    <span style={{ color: "#94a3b8" }}>{new Date(l.timestamp).toLocaleString()}</span>
+                  </div>
+                  <div style={{ color: "#475569" }}><span style={{ fontWeight: 600, color: "#2563eb" }}>{l.action}</span> — {l.details}</div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      );
+    }
+
+    // ── AI Chat ──────────────────────────────────────────────────────────────
+    function AIChat({ projects, onRefresh, username }) {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState("");
+      const [asking, setAsking] = useState(false);
+      const bottomRef = useRef(null);
+      useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, asking]);
+
+      const executeAction = async (action) => {
+        const record = projects.find(r => r.id === action.projectId);
+        if (!record) return "❌ Project not found.";
+        let updatedTasks = [...(record.tasks || [])];
+        let logDetails = "";
+        if (action.type === "add_task") { updatedTasks.push({ id: Date.now(), ...action.task }); logDetails = `Added task "${action.task.title}" to ${record.name} as ${action.task.col}`; }
+        else if (action.type === "move_task") { const t = updatedTasks.find(t => t.id === action.taskId); logDetails = `Moved "${t?.title}" to ${action.col} in ${record.name}`; updatedTasks = updatedTasks.map(t => t.id === action.taskId ? { ...t, col: action.col } : t); }
+        else if (action.type === "update_task") { const t = updatedTasks.find(t => t.id === action.taskId); logDetails = `Updated "${t?.title}" in ${record.name}`; updatedTasks = updatedTasks.map(t => t.id === action.taskId ? { ...t, ...action.updates } : t); }
+        else if (action.type === "delete_task") { const t = updatedTasks.find(t => t.id === action.taskId); logDetails = `Deleted "${t?.title}" from ${record.name}`; updatedTasks = updatedTasks.filter(t => t.id !== action.taskId); }
+        await api.saveProject({ ...record, tasks: updatedTasks });
+        await api.log(username, action.type, logDetails);
+        await onRefresh();
+        return `✅ Done!`;
+      };
+
+      const ask = async () => {
+        if (!input.trim()) return;
+        setAsking(true);
+        const userMsg = input;
+        const newMessages = [...messages, { role: "user", content: userMsg }];
+        setMessages(newMessages); setInput("");
+        try {
+          const result = await api.ai({
+            model: "claude-sonnet-4-20250514", max_tokens: 1000,
+            system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(projects, null, 2)}\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId.`,
+            messages: newMessages
+          });
+          let reply = result.content?.[0]?.text || "No response.";
+          const actionMatch = reply.match(/<ACTION>(.*?)<\/ACTION>/s);
+          let actionResult = "";
+          if (actionMatch) {
+            reply = reply.replace(/<ACTION>.*?<\/ACTION>/s, "").trim();
+            try { actionResult = await executeAction(JSON.parse(actionMatch[1])); }
+            catch (e) { actionResult = "❌ Could not parse action."; }
+          }
+          setMessages(prev => [...prev, { role: "assistant", content: actionResult ? `${reply}\n\n${actionResult}` : reply }]);
+        } catch (e) { setMessages(prev => [...prev, { role: "assistant", content: "Error: " + e.message }]); }
+        setAsking(false);
+      };
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8fafc" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>🤖 AI Assistant</div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {messages.length === 0 && <div style={{ color: "#94a3b8", textAlign: "center", marginTop: 30, fontSize: 12 }}>Ask me anything or give me instructions!<br/><em>"Add a blocked task…" · "What's in progress?"</em></div>}
+            {messages.map((m, i) => (
+              <div key={i} className="msg-bubble" style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", background: m.role === "user" ? "#2563eb" : "#fff", color: m.role === "user" ? "#fff" : "#1e293b", borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px", boxShadow: "0 1px 3px #0001", border: m.role === "assistant" ? "1px solid #e2e8f0" : "none" }}>{m.content}</div>
+            ))}
+            {asking && <div className="msg-bubble" style={{ alignSelf: "flex-start", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px 12px 12px 2px", color: "#94a3b8" }}>Thinking…</div>}
+            <div ref={bottomRef} />
+          </div>
+          <div style={{ padding: "10px 14px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8 }}>
+            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(); }} placeholder="Ask or give instructions…" style={{ flex: 1, fontSize: 13, padding: "7px 10px", borderRadius: 7, border: "1px solid #cbd5e1", outline: "none" }} />
+            <button onClick={ask} disabled={asking || !input.trim()} style={{ fontSize: 13, padding: "7px 14px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: asking ? 0.6 : 1 }}>Send</button>
+          </div>
+        </div>
+      );
+    }
+
     // ── Board ────────────────────────────────────────────────────────────────
-    function Board({ project, onUpdate }) {
+    function Board({ project, onUpdate, username }) {
       const [editing, setEditing] = useState(null);
       const [draft, setDraft] = useState("");
       const [addingTo, setAddingTo] = useState(null);
       const [newTitle, setNewTitle] = useState("");
-      const [copied, setCopied] = useState(false);
 
-      const moveTask = (id, dir) => {
+      const moveTask = async (id, dir) => {
         const t = project.tasks.find(t => t.id === id);
         const ci = COLUMNS.indexOf(t.col), ni = ci + dir;
         if (ni < 0 || ni >= COLUMNS.length) return;
-        onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) });
+        const updated = { ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) };
+        await onUpdate(updated);
+        api.log(username, "move_task", `Moved "${t.title}" to ${COLUMNS[ni]} in ${project.name}`);
       };
       const startEdit = (id, field, val) => { setEditing({ id, field }); setDraft(val); };
-      const commitEdit = () => {
+      const commitEdit = async () => {
         if (!editing) return;
-        onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
+        const t = project.tasks.find(t => t.id === editing.id);
+        const updated = { ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) };
+        await onUpdate(updated);
+        api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
         setEditing(null);
       };
-      const deleteTask = (id) => onUpdate({ ...project, tasks: project.tasks.filter(t => t.id !== id) });
-      const addTask = (col) => {
+      const deleteTask = async (id) => {
+        const t = project.tasks.find(t => t.id === id);
+        await onUpdate({ ...project, tasks: project.tasks.filter(t => t.id !== id) });
+        api.log(username, "delete_task", `Deleted "${t.title}" from ${project.name}`);
+      };
+      const addTask = async (col) => {
         if (!newTitle.trim()) return;
-        onUpdate({ ...project, tasks: [...project.tasks, { id: Date.now(), col, title: newTitle.trim(), notes: "" }] });
+        const task = { id: Date.now(), col, title: newTitle.trim(), notes: "" };
+        await onUpdate({ ...project, tasks: [...project.tasks, task] });
+        api.log(username, "add_task", `Added "${task.title}" to ${project.name} as ${col}`);
         setNewTitle(""); setAddingTo(null);
-      };
-      const syncText = () => {
-        let out = `[${project.name} — current state]\n`;
-        COLUMNS.forEach(col => {
-          const ct = project.tasks.filter(t => t.col === col);
-          if (ct.length) { out += `\n${col.toUpperCase()}:\n`; ct.forEach(t => { out += `  - ${t.title}`; if (t.notes) out += `\n    Notes: ${t.notes}`; out += "\n"; }); }
-        });
-        return out;
-      };
-      const handleCopy = async () => {
-        const text = syncText();
-        try { await navigator.clipboard.writeText(text); } catch {
-          const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-          document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
-        }
-        setCopied(true); setTimeout(() => setCopied(false), 2000);
       };
 
       return (
         <div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-            <button onClick={handleCopy} style={{ fontSize: 12, padding: "6px 14px", borderRadius: 6, border: "1px solid #cbd5e1", background: copied ? "#f0fdf4" : "#f8fafc", color: copied ? "#16a34a" : "#475569", cursor: "pointer", fontWeight: 600 }}>
-              {copied ? "✓ Copied!" : "📋 Copy state"}
-            </button>
-          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
             {COLUMNS.map(col => {
               const s = COL_STYLE[col], colTasks = project.tasks.filter(t => t.col === col);
@@ -161,115 +264,32 @@
       );
     }
 
-    // ── AI Chat ──────────────────────────────────────────────────────────────
-    function AIChat({ projects, onRefresh }) {
-      const [messages, setMessages] = useState([]);
-      const [input, setInput] = useState("");
-      const [asking, setAsking] = useState(false);
-      const bottomRef = useRef(null);
-
-      useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, asking]);
-
-      const executeAction = async (action) => {
-        const record = projects.find(r => r.id === action.projectId);
-        if (!record) return "❌ Project not found.";
-        let updatedTasks = [...(record.tasks || [])];
-        if (action.type === "add_task") updatedTasks.push({ id: Date.now(), ...action.task });
-        else if (action.type === "move_task") updatedTasks = updatedTasks.map(t => t.id === action.taskId ? { ...t, col: action.col } : t);
-        else if (action.type === "update_task") updatedTasks = updatedTasks.map(t => t.id === action.taskId ? { ...t, ...action.updates } : t);
-        else if (action.type === "delete_task") updatedTasks = updatedTasks.filter(t => t.id !== action.taskId);
-        const updatedProject = { ...record, tasks: updatedTasks };
-        await db.save(updatedProject);
-        await onRefresh();
-        return `✅ Done!`;
-      };
-
-      const ask = async () => {
-        if (!input.trim()) return;
-        setAsking(true);
-        const userMsg = input;
-        const newMessages = [...messages, { role: "user", content: userMsg }];
-        setMessages(newMessages);
-        setInput("");
-        try {
-          const res = await fetch(`${WORKER_URL}/ai`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 1000,
-              system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(projects, null, 2)}\n\nYou can answer questions AND perform actions.\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId. For read-only questions just answer normally.`,
-              messages: newMessages
-            })
-          });
-          const result = await res.json();
-          let reply = result.content?.[0]?.text || "No response.";
-          const actionMatch = reply.match(/<ACTION>(.*?)<\/ACTION>/s);
-          let actionResult = "";
-          if (actionMatch) {
-            reply = reply.replace(/<ACTION>.*?<\/ACTION>/s, "").trim();
-            try { actionResult = await executeAction(JSON.parse(actionMatch[1])); }
-            catch (e) { actionResult = "❌ Could not parse action."; }
-          }
-          setMessages(prev => [...prev, { role: "assistant", content: actionResult ? `${reply}\n\n${actionResult}` : reply }]);
-        } catch (e) {
-          setMessages(prev => [...prev, { role: "assistant", content: "Error: " + e.message }]);
-        }
-        setAsking(false);
-      };
-
-      return (
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8fafc" }}>
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>🤖 AI Assistant</div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-            {messages.length === 0 && (
-              <div style={{ color: "#94a3b8", textAlign: "center", marginTop: 30, fontSize: 12 }}>
-                Ask me anything or give me instructions!<br/>
-                <em>"Add a blocked task…" · "What's in progress?" · "Move X to Done"</em>
-              </div>
-            )}
-            {messages.map((m, i) => (
-              <div key={i} className="msg-bubble" style={{
-                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                background: m.role === "user" ? "#2563eb" : "#fff",
-                color: m.role === "user" ? "#fff" : "#1e293b",
-                borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-                boxShadow: "0 1px 3px #0001",
-                border: m.role === "assistant" ? "1px solid #e2e8f0" : "none"
-              }}>{m.content}</div>
-            ))}
-            {asking && <div className="msg-bubble" style={{ alignSelf: "flex-start", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px 12px 12px 2px", color: "#94a3b8" }}>Thinking…</div>}
-            <div ref={bottomRef} />
-          </div>
-          <div style={{ padding: "10px 14px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8 }}>
-            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(); }}
-              placeholder="Ask or give instructions…"
-              style={{ flex: 1, fontSize: 13, padding: "7px 10px", borderRadius: 7, border: "1px solid #cbd5e1", outline: "none" }} />
-            <button onClick={ask} disabled={asking || !input.trim()} style={{ fontSize: 13, padding: "7px 14px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: asking ? 0.6 : 1 }}>Send</button>
-          </div>
-        </div>
-      );
-    }
-
     // ── App ──────────────────────────────────────────────────────────────────
     function App() {
+      const [user, setUser] = useState(() => sessionStorage.getItem("bi-user") || null);
       const [projects, setProjects] = useState([]);
       const [active, setActive] = useState(null);
       const [loading, setLoading] = useState(true);
       const [addingProject, setAddingProject] = useState(false);
       const [newProjectName, setNewProjectName] = useState("");
-      const [showChat, setShowChat] = useState(false);
+      const [panel, setPanel] = useState(null); // "ai" | "log" | null
+
+      const handleLogin = (username) => { sessionStorage.setItem("bi-user", username); setUser(username); };
+      const handleLogout = () => { sessionStorage.removeItem("bi-user"); setUser(null); };
 
       const loadData = async () => {
-        try { const p = await db.load(); setProjects(p); setActive(a => a || p[0]?.id || null); }
-        catch { setProjects([]); }
+        try {
+          const data = await api.getProjects();
+          const p = data.map(r => ({ ...r.project, _id: r._id }));
+          setProjects(p); setActive(a => a || p[0]?.id || null);
+        } catch { setProjects([]); }
         setLoading(false);
       };
 
-      useEffect(() => { loadData(); }, []);
+      useEffect(() => { if (user) loadData(); }, [user]);
 
       const updateProject = async (updated) => {
-        await db.save(updated);
+        await api.saveProject(updated);
         setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
       };
 
@@ -277,19 +297,22 @@
         if (!newProjectName.trim()) return;
         const id = "proj-" + Date.now();
         const p = { id, name: newProjectName.trim(), tasks: [] };
-        const _id = await db.save(p);
-        setProjects(prev => [...prev, { ...p, _id }]);
+        const res = await api.saveProject(p);
+        setProjects(prev => [...prev, { ...p, _id: res._id }]);
+        api.log(user, "add_project", `Created project "${p.name}"`);
         setActive(id); setNewProjectName(""); setAddingProject(false);
       };
 
       const deleteProject = async (id) => {
         const p = projects.find(p => p.id === id);
-        if (p?._id) await db.delete(p._id);
+        if (p?._id) await api.deleteProject(p._id);
+        api.log(user, "delete_project", `Deleted project "${p?.name}"`);
         const updated = projects.filter(p => p.id !== id);
         setProjects(updated);
         if (active === id) setActive(updated[0]?.id || null);
       };
 
+      if (!user) return <Login onLogin={handleLogin} />;
       if (loading) return <div style={{ padding: 32, color: "#64748b" }}>Loading…</div>;
 
       const activeProject = projects.find(p => p.id === active);
@@ -301,14 +324,15 @@
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button onClick={() => db.export(projects)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>⬇ Export</button>
-              <button onClick={() => setShowChat(s => !s)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: showChat ? "#2563eb" : "#1e293b", color: showChat ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI Assistant</button>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user}</span>
+              <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
+              <button onClick={() => setPanel(panel === "ai" ? null : "ai")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "ai" ? "#2563eb" : "#1e293b", color: panel === "ai" ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI</button>
+              <button onClick={handleLogout} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>Sign out</button>
             </div>
           </div>
 
           <div style={{ display: "flex", height: "calc(100vh - 49px)" }}>
-            {/* Sidebar */}
             <div style={{ width: 200, minWidth: 200, background: "#1e293b", padding: "12px 0", display: "flex", flexDirection: "column" }}>
               {projects.map(p => (
                 <div key={p.id} onClick={() => setActive(p.id)} style={{ padding: "8px 14px", cursor: "pointer", background: active === p.id ? "#334155" : "transparent", borderLeft: active === p.id ? "3px solid #60a5fa" : "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
@@ -330,19 +354,18 @@
               </div>
             </div>
 
-            {/* Main board */}
             <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
               {activeProject
                 ? <><h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                    <Board project={activeProject} onUpdate={updateProject} /></>
+                    <Board project={activeProject} onUpdate={updateProject} username={user} /></>
                 : <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
               }
             </div>
 
-            {/* AI Chat panel */}
-            {showChat && (
+            {panel && (
               <div style={{ width: 320, minWidth: 320, borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
-                <AIChat projects={projects} onRefresh={loadData} />
+                {panel === "ai" && <AIChat projects={projects} onRefresh={loadData} username={user} />}
+                {panel === "log" && <AuditLog />}
               </div>
             )}
           </div>
