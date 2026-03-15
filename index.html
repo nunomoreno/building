@@ -10,13 +10,13 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; }
+    .msg-bubble { white-space: pre-wrap; line-height: 1.5; font-size: 13px; padding: 10px 14px; border-radius: 12px; max-width: 80%; }
   </style>
 </head>
 <body>
   <div id="root"></div>
-
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const COLUMNS = ["To Do", "In Progress", "Blocked", "Done"];
     const COL_STYLE = {
@@ -26,68 +26,41 @@
       "Done":        { bg: "#f0fdf4", border: "#86efac", badge: "#16a34a" },
     };
 
-    const SEED_PROJECTS = [
-      {
-        id: "proj-benches",
-        name: "Benches",
-        tasks: [
-          { id: 1, col: "To Do", title: "Ask building engineers about the AC separation", notes: "HVAC is shared with no pressure differential needed. Main concern is how airflow behaves across the glass partition and door — check with Kottermann and building engineers whether the shared system will distribute air evenly across the mixed lab area." },
-          { id: 2, col: "To Do", title: "Speak with David to check the labs", notes: "" },
-          { id: 3, col: "In Progress", title: "Ask Kottermann how would it be a mix lab", notes: "Ask for different layout options" },
-        ]
-      }
-    ];
-
     const RESTDB_URL = "https://bulding-a424.restdb.io/rest/projects";
     const RESTDB_KEY = "69b6e0baf6ec4d711db2a5d7";
-    const HEADERS = {
-      "Content-Type": "application/json",
-      "x-apikey": RESTDB_KEY,
-      "cache-control": "no-cache"
-    };
+    const HEADERS = { "Content-Type": "application/json", "x-apikey": RESTDB_KEY, "cache-control": "no-cache" };
 
-    // ── RestDB Backend ───────────────────────────────────────────────────────
+    const SEED_PROJECTS = [
+      { id: "proj-benches", name: "Benches", tasks: [
+        { id: 1, col: "To Do", title: "Ask building engineers about the AC separation", notes: "HVAC is shared with no pressure differential needed. Main concern is how airflow behaves across the glass partition and door — check with Kottermann and building engineers whether the shared system will distribute air evenly across the mixed lab area." },
+        { id: 2, col: "To Do", title: "Speak with David to check the labs", notes: "" },
+        { id: 3, col: "In Progress", title: "Ask Kottermann how would it be a mix lab", notes: "Ask for different layout options" },
+        { id: 4, col: "Blocked", title: "Francesc", notes: "call him" }
+      ]}
+    ];
+
+    // ── RestDB ───────────────────────────────────────────────────────────────
     const db = {
       load: async () => {
-        try {
-          const res = await fetch(RESTDB_URL, { headers: HEADERS });
-          const data = await res.json();
-          if (!data.length) return SEED_PROJECTS;
-          return data.map(r => ({ ...r.project, _id: r._id }));
-        } catch (e) { console.error("Load error", e); return []; }
+        const res = await fetch(RESTDB_URL, { headers: HEADERS });
+        const data = await res.json();
+        if (!data.length) return SEED_PROJECTS;
+        return data.map(r => ({ ...r.project, _id: r._id }));
       },
       save: async (project) => {
-        try {
-          if (project._id) {
-            // Update existing
-            await fetch(`${RESTDB_URL}/${project._id}`, {
-              method: "PUT",
-              headers: HEADERS,
-              body: JSON.stringify({ project })
-            });
-          } else {
-            // Create new
-            const res = await fetch(RESTDB_URL, {
-              method: "POST",
-              headers: HEADERS,
-              body: JSON.stringify({ project })
-            });
-            const data = await res.json();
-            return data._id;
-          }
-        } catch (e) { console.error("Save error", e); }
+        if (project._id) {
+          await fetch(`${RESTDB_URL}/${project._id}`, { method: "PUT", headers: HEADERS, body: JSON.stringify({ project }) });
+        } else {
+          const res = await fetch(RESTDB_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ project }) });
+          const data = await res.json();
+          return data._id;
+        }
       },
-      delete: async (id) => {
-        try {
-          await fetch(`${RESTDB_URL}/${id}`, { method: "DELETE", headers: HEADERS });
-        } catch (e) { console.error("Delete error", e); }
-      },
+      delete: async (id) => { await fetch(`${RESTDB_URL}/${id}`, { method: "DELETE", headers: HEADERS }); },
       export: (data) => {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = "building-issues.json";
-        a.click(); URL.revokeObjectURL(url);
+        a.href = URL.createObjectURL(blob); a.download = "building-issues.json"; a.click();
       }
     };
 
@@ -101,50 +74,35 @@
 
       const moveTask = (id, dir) => {
         const t = project.tasks.find(t => t.id === id);
-        const ci = COLUMNS.indexOf(t.col);
-        const ni = ci + dir;
+        const ci = COLUMNS.indexOf(t.col), ni = ci + dir;
         if (ni < 0 || ni >= COLUMNS.length) return;
         onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) });
       };
-
       const startEdit = (id, field, val) => { setEditing({ id, field }); setDraft(val); };
       const commitEdit = () => {
         if (!editing) return;
         onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
         setEditing(null);
       };
-
       const deleteTask = (id) => onUpdate({ ...project, tasks: project.tasks.filter(t => t.id !== id) });
-
       const addTask = (col) => {
         if (!newTitle.trim()) return;
         onUpdate({ ...project, tasks: [...project.tasks, { id: Date.now(), col, title: newTitle.trim(), notes: "" }] });
         setNewTitle(""); setAddingTo(null);
       };
-
       const syncText = () => {
         let out = `[${project.name} — current state]\n`;
         COLUMNS.forEach(col => {
           const ct = project.tasks.filter(t => t.col === col);
-          if (ct.length) {
-            out += `\n${col.toUpperCase()}:\n`;
-            ct.forEach(t => {
-              out += `  - ${t.title}`;
-              if (t.notes) out += `\n    Notes: ${t.notes}`;
-              out += "\n";
-            });
-          }
+          if (ct.length) { out += `\n${col.toUpperCase()}:\n`; ct.forEach(t => { out += `  - ${t.title}`; if (t.notes) out += `\n    Notes: ${t.notes}`; out += "\n"; }); }
         });
         return out;
       };
-
       const handleCopy = async () => {
         const text = syncText();
         try { await navigator.clipboard.writeText(text); } catch {
-          const ta = document.createElement("textarea");
-          ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-          document.body.appendChild(ta); ta.focus(); ta.select();
-          document.execCommand("copy"); document.body.removeChild(ta);
+          const ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
         }
         setCopied(true); setTimeout(() => setCopied(false), 2000);
       };
@@ -158,8 +116,7 @@
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
             {COLUMNS.map(col => {
-              const s = COL_STYLE[col];
-              const colTasks = project.tasks.filter(t => t.col === col);
+              const s = COL_STYLE[col], colTasks = project.tasks.filter(t => t.col === col);
               return (
                 <div key={col} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 10, padding: "10px 10px 8px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -171,44 +128,30 @@
                     return (
                       <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
                         {editing?.id === task.id && editing.field === "title"
-                          ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
-                              onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
-                              style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
-                          : <div onClick={() => startEdit(task.id, "title", task.title)}
-                              style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
+                          ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
+                          : <div onClick={() => startEdit(task.id, "title", task.title)} style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
                         }
                         {editing?.id === task.id && editing.field === "notes"
-                          ? <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)}
-                              onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }}
-                              style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
-                          : <div onClick={() => startEdit(task.id, "notes", task.notes || "")}
-                              style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>
-                              {task.notes || <em>add note…</em>}
-                            </div>
+                          ? <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
+                          : <div onClick={() => startEdit(task.id, "notes", task.notes || "")} style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>{task.notes || <em>add note…</em>}</div>
                         }
                         <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
-                          <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0}
-                            style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
-                          <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1}
-                            style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
-                          <button onClick={() => deleteTask(task.id)}
-                            style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444", marginLeft: "auto" }}>✕</button>
+                          <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
+                          <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
+                          <button onClick={() => deleteTask(task.id)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444", marginLeft: "auto" }}>✕</button>
                         </div>
                       </div>
                     );
                   })}
                   {addingTo === col
                     ? <div style={{ marginTop: 4 }}>
-                        <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }}
-                          placeholder="Task title…" style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #93c5fd", boxSizing: "border-box" }} />
+                        <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} placeholder="Task title…" style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #93c5fd", boxSizing: "border-box" }} />
                         <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
                           <button onClick={() => addTask(col)} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 4, background: s.badge, color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
                           <button onClick={() => { setAddingTo(null); setNewTitle(""); }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
                         </div>
                       </div>
-                    : <button onClick={() => setAddingTo(col)}
-                        style={{ width: "100%", fontSize: 11, padding: "4px", borderRadius: 5, border: `1px dashed ${s.border}`, background: "transparent", cursor: "pointer", color: s.badge, marginTop: 2 }}>+ Add</button>
+                    : <button onClick={() => setAddingTo(col)} style={{ width: "100%", fontSize: 11, padding: "4px", borderRadius: 5, border: `1px dashed ${s.border}`, background: "transparent", cursor: "pointer", color: s.badge, marginTop: 2 }}>+ Add</button>
                   }
                 </div>
               );
@@ -218,20 +161,112 @@
       );
     }
 
+    // ── AI Chat ──────────────────────────────────────────────────────────────
+    function AIChat({ projects, onRefresh }) {
+      const [messages, setMessages] = useState([]);
+      const [input, setInput] = useState("");
+      const [asking, setAsking] = useState(false);
+      const bottomRef = useRef(null);
+
+      useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, asking]);
+
+      const executeAction = async (action) => {
+        const record = projects.find(r => r.id === action.projectId);
+        if (!record) return "❌ Project not found.";
+        let updatedTasks = [...(record.tasks || [])];
+        if (action.type === "add_task") updatedTasks.push({ id: Date.now(), ...action.task });
+        else if (action.type === "move_task") updatedTasks = updatedTasks.map(t => t.id === action.taskId ? { ...t, col: action.col } : t);
+        else if (action.type === "update_task") updatedTasks = updatedTasks.map(t => t.id === action.taskId ? { ...t, ...action.updates } : t);
+        else if (action.type === "delete_task") updatedTasks = updatedTasks.filter(t => t.id !== action.taskId);
+        const updatedProject = { ...record, tasks: updatedTasks };
+        await db.save(updatedProject);
+        await onRefresh();
+        return `✅ Done!`;
+      };
+
+      const ask = async () => {
+        if (!input.trim()) return;
+        setAsking(true);
+        const userMsg = input;
+        const newMessages = [...messages, { role: "user", content: userMsg }];
+        setMessages(newMessages);
+        setInput("");
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 1000,
+              system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(projects, null, 2)}\n\nYou can answer questions AND perform actions.\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId. For read-only questions just answer normally.`,
+              messages: newMessages
+            })
+          });
+          const result = await res.json();
+          let reply = result.content?.[0]?.text || "No response.";
+          const actionMatch = reply.match(/<ACTION>(.*?)<\/ACTION>/s);
+          let actionResult = "";
+          if (actionMatch) {
+            reply = reply.replace(/<ACTION>.*?<\/ACTION>/s, "").trim();
+            try { actionResult = await executeAction(JSON.parse(actionMatch[1])); }
+            catch (e) { actionResult = "❌ Could not parse action."; }
+          }
+          setMessages(prev => [...prev, { role: "assistant", content: actionResult ? `${reply}\n\n${actionResult}` : reply }]);
+        } catch (e) {
+          setMessages(prev => [...prev, { role: "assistant", content: "Error: " + e.message }]);
+        }
+        setAsking(false);
+      };
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f8fafc" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>🤖 AI Assistant</div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {messages.length === 0 && (
+              <div style={{ color: "#94a3b8", textAlign: "center", marginTop: 30, fontSize: 12 }}>
+                Ask me anything or give me instructions!<br/>
+                <em>"Add a blocked task…" · "What's in progress?" · "Move X to Done"</em>
+              </div>
+            )}
+            {messages.map((m, i) => (
+              <div key={i} className="msg-bubble" style={{
+                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                background: m.role === "user" ? "#2563eb" : "#fff",
+                color: m.role === "user" ? "#fff" : "#1e293b",
+                borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                boxShadow: "0 1px 3px #0001",
+                border: m.role === "assistant" ? "1px solid #e2e8f0" : "none"
+              }}>{m.content}</div>
+            ))}
+            {asking && <div className="msg-bubble" style={{ alignSelf: "flex-start", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px 12px 12px 2px", color: "#94a3b8" }}>Thinking…</div>}
+            <div ref={bottomRef} />
+          </div>
+          <div style={{ padding: "10px 14px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8 }}>
+            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(); }}
+              placeholder="Ask or give instructions…"
+              style={{ flex: 1, fontSize: 13, padding: "7px 10px", borderRadius: 7, border: "1px solid #cbd5e1", outline: "none" }} />
+            <button onClick={ask} disabled={asking || !input.trim()} style={{ fontSize: 13, padding: "7px 14px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: asking ? 0.6 : 1 }}>Send</button>
+          </div>
+        </div>
+      );
+    }
+
     // ── App ──────────────────────────────────────────────────────────────────
     function App() {
       const [projects, setProjects] = useState([]);
       const [active, setActive] = useState(null);
+      const [loading, setLoading] = useState(true);
       const [addingProject, setAddingProject] = useState(false);
       const [newProjectName, setNewProjectName] = useState("");
+      const [showChat, setShowChat] = useState(false);
 
-      useEffect(() => {
-        (async () => {
-          const p = await db.load();
-          setProjects(p);
-          setActive(p[0]?.id || null);
-        })();
-      }, []);
+      const loadData = async () => {
+        try { const p = await db.load(); setProjects(p); setActive(a => a || p[0]?.id || null); }
+        catch { setProjects([]); }
+        setLoading(false);
+      };
+
+      useEffect(() => { loadData(); }, []);
 
       const updateProject = async (updated) => {
         await db.save(updated);
@@ -243,10 +278,8 @@
         const id = "proj-" + Date.now();
         const p = { id, name: newProjectName.trim(), tasks: [] };
         const _id = await db.save(p);
-        const newP = { ...p, _id };
-        setProjects(prev => [...prev, newP]);
-        setActive(id);
-        setNewProjectName(""); setAddingProject(false);
+        setProjects(prev => [...prev, { ...p, _id }]);
+        setActive(id); setNewProjectName(""); setAddingProject(false);
       };
 
       const deleteProject = async (id) => {
@@ -256,6 +289,8 @@
         setProjects(updated);
         if (active === id) setActive(updated[0]?.id || null);
       };
+
+      if (loading) return <div style={{ padding: 32, color: "#64748b" }}>Loading…</div>;
 
       const activeProject = projects.find(p => p.id === active);
       const inProgress = projects.flatMap(p => p.tasks.filter(t => t.col === "In Progress"));
@@ -267,48 +302,49 @@
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-              <button onClick={() => db.export(projects)}
-                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>⬇ Download JSON</button>
-
+              <button onClick={() => db.export(projects)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>⬇ Export</button>
+              <button onClick={() => setShowChat(s => !s)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: showChat ? "#2563eb" : "#1e293b", color: showChat ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI Assistant</button>
             </div>
           </div>
 
           <div style={{ display: "flex", height: "calc(100vh - 49px)" }}>
+            {/* Sidebar */}
             <div style={{ width: 200, minWidth: 200, background: "#1e293b", padding: "12px 0", display: "flex", flexDirection: "column" }}>
               {projects.map(p => (
-                <div key={p.id} onClick={() => setActive(p.id)}
-                  style={{ padding: "8px 14px", cursor: "pointer", background: active === p.id ? "#334155" : "transparent", borderLeft: active === p.id ? "3px solid #60a5fa" : "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+                <div key={p.id} onClick={() => setActive(p.id)} style={{ padding: "8px 14px", cursor: "pointer", background: active === p.id ? "#334155" : "transparent", borderLeft: active === p.id ? "3px solid #60a5fa" : "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                   <span style={{ fontSize: 12, color: active === p.id ? "#f1f5f9" : "#94a3b8", fontWeight: active === p.id ? 600 : 400, lineHeight: 1.3, flex: 1 }}>{p.name}</span>
-                  <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }}
-                    style={{ fontSize: 10, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✕</button>
+                  <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }} style={{ fontSize: 10, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✕</button>
                 </div>
               ))}
               <div style={{ padding: "8px 14px", marginTop: 4 }}>
                 {addingProject
                   ? <div>
-                      <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
-                        onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
-                        placeholder="Project name…" style={{ width: "100%", fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid #475569", background: "#0f172a", color: "#f1f5f9", boxSizing: "border-box" }} />
+                      <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }} placeholder="Project name…" style={{ width: "100%", fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid #475569", background: "#0f172a", color: "#f1f5f9", boxSizing: "border-box" }} />
                       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
                         <button onClick={addProject} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
                         <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "#334155", color: "#94a3b8", border: "none", cursor: "pointer" }}>✕</button>
                       </div>
                     </div>
-                  : <button onClick={() => setAddingProject(true)}
-                      style={{ fontSize: 12, color: "#60a5fa", background: "none", border: "none", cursor: "pointer", padding: 0 }}>+ New project</button>
+                  : <button onClick={() => setAddingProject(true)} style={{ fontSize: 12, color: "#60a5fa", background: "none", border: "none", cursor: "pointer", padding: 0 }}>+ New project</button>
                 }
               </div>
             </div>
 
+            {/* Main board */}
             <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
               {activeProject
-                ? <>
-                    <h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                    <Board project={activeProject} onUpdate={updateProject} />
-                  </>
+                ? <><h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
+                    <Board project={activeProject} onUpdate={updateProject} /></>
                 : <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
               }
             </div>
+
+            {/* AI Chat panel */}
+            {showChat && (
+              <div style={{ width: 320, minWidth: 320, borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
+                <AIChat projects={projects} onRefresh={loadData} />
+              </div>
+            )}
           </div>
         </div>
       );
