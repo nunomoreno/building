@@ -37,19 +37,18 @@
         : fetch(`${WORKER}/db/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json()),
       deleteProject: (id) => fetch(`${WORKER}/db/projects/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
       log: (username, action, details) => fetch(`${WORKER}/db/logs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, action, details, timestamp: new Date().toISOString() }) }),
+      getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       getMembers: () => fetch(`${WORKER}/db/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
-      addMember: (username, password) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }).then(r => r.json()),
       deleteMember: (id) => fetch(`${WORKER}/db/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
       ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
     };
 
-    // ── Login Screen ─────────────────────────────────────────────────────────
+    // ── Login ────────────────────────────────────────────────────────────────
     function Login({ onLogin }) {
       const [username, setUsername] = useState("");
       const [password, setPassword] = useState("");
       const [error, setError] = useState("");
       const [loading, setLoading] = useState(false);
-      const [mode, setMode] = useState("login");
 
       const submit = async () => {
         if (!username.trim() || !password.trim()) return;
@@ -73,23 +72,19 @@
             {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 12 }}>{error}</div>}
             <button onClick={submit} disabled={loading}
               style={{ width: "100%", fontSize: 14, padding: "10px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: loading ? 0.7 : 1 }}>
-              {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
+              {loading ? "Please wait…" : "Sign in"}
             </button>
-            <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: "#94a3b8" }}>
-              Contact your administrator to get access.
-            </div>
+            <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: "#94a3b8" }}>Contact your administrator to get access.</div>
           </div>
         </div>
       );
     }
 
-    // ── Audit Log Panel ──────────────────────────────────────────────────────
+    // ── Audit Log ────────────────────────────────────────────────────────────
     function AuditLog() {
       const [logs, setLogs] = useState([]);
       const [loading, setLoading] = useState(true);
-      useEffect(() => {
-        api.getLogs().then(data => { setLogs(Array.isArray(data) ? data : []); setLoading(false); });
-      }, []);
+      useEffect(() => { api.getLogs().then(data => { setLogs(Array.isArray(data) ? data : []); setLoading(false); }); }, []);
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>📋 Audit Log</div>
@@ -106,6 +101,61 @@
                 </div>
               ))
             }
+          </div>
+        </div>
+      );
+    }
+
+    // ── Users Panel (admin only) ─────────────────────────────────────────────
+    function UsersPanel() {
+      const [members, setMembers] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [newUser, setNewUser] = useState("");
+      const [newPass, setNewPass] = useState("");
+      const [error, setError] = useState("");
+      const [saving, setSaving] = useState(false);
+
+      const load = async () => { const data = await api.getMembers(); setMembers(Array.isArray(data) ? data : []); setLoading(false); };
+      useEffect(() => { load(); }, []);
+
+      const addMember = async () => {
+        if (!newUser.trim() || !newPass.trim()) return;
+        setSaving(true); setError("");
+        const res = await api.register(newUser.trim(), newPass.trim());
+        if (res.error) setError(res.error);
+        else { setNewUser(""); setNewPass(""); await load(); }
+        setSaving(false);
+      };
+
+      const removeMember = async (id, username) => {
+        if (!confirm(`Remove user "${username}"?`)) return;
+        await api.deleteMember(id); await load();
+      };
+
+      return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>👥 Users</div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+            {loading ? <div style={{ color: "#94a3b8", fontSize: 12 }}>Loading…</div> : members.map((m, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: "#fff", borderRadius: 7, border: "1px solid #e2e8f0", marginBottom: 8, fontSize: 13 }}>
+                <div>
+                  <span style={{ fontWeight: 600, color: "#1e293b" }}>{m.username}</span>
+                  {m.role === "admin" && <span style={{ marginLeft: 6, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 7px" }}>admin</span>}
+                </div>
+                {m.role !== "admin" && (
+                  <button onClick={() => removeMember(m._id, m.username)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
+                )}
+              </div>
+            ))}
+            <div style={{ marginTop: 16, borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Add new user</div>
+              <input value={newUser} onChange={e => setNewUser(e.target.value)} placeholder="Username" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
+              <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Password" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+              {error && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 6 }}>{error}</div>}
+              <button onClick={addMember} disabled={saving} style={{ width: "100%", fontSize: 12, padding: "6px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                {saving ? "Adding…" : "Add user"}
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -189,16 +239,14 @@
         const t = project.tasks.find(t => t.id === id);
         const ci = COLUMNS.indexOf(t.col), ni = ci + dir;
         if (ni < 0 || ni >= COLUMNS.length) return;
-        const updated = { ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) };
-        await onUpdate(updated);
+        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) });
         api.log(username, "move_task", `Moved "${t.title}" to ${COLUMNS[ni]} in ${project.name}`);
       };
       const startEdit = (id, field, val) => { setEditing({ id, field }); setDraft(val); };
       const commitEdit = async () => {
         if (!editing) return;
         const t = project.tasks.find(t => t.id === editing.id);
-        const updated = { ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) };
-        await onUpdate(updated);
+        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
         api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
         setEditing(null);
       };
@@ -216,77 +264,77 @@
       };
 
       return (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
-            {COLUMNS.map(col => {
-              const s = COL_STYLE[col], colTasks = project.tasks.filter(t => t.col === col);
-              return (
-                <div key={col} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 10, padding: "10px 10px 8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: s.badge, textTransform: "uppercase" }}>{col}</span>
-                    <span style={{ fontSize: 11, background: s.badge, color: "#fff", borderRadius: 99, padding: "1px 7px" }}>{colTasks.length}</span>
-                  </div>
-                  {colTasks.map(task => {
-                    const ci = COLUMNS.indexOf(col);
-                    return (
-                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
-                        {editing?.id === task.id && editing.field === "title"
-                          ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
-                          : <div onClick={() => startEdit(task.id, "title", task.title)} style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
-                        }
-                        {editing?.id === task.id && editing.field === "notes"
-                          ? <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
-                          : <div onClick={() => startEdit(task.id, "notes", task.notes || "")} style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>{task.notes || <em>add note…</em>}</div>
-                        }
-                        <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
-                          <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
-                          <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
-                          <button onClick={() => deleteTask(task.id)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444", marginLeft: "auto" }}>✕</button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {addingTo === col
-                    ? <div style={{ marginTop: 4 }}>
-                        <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} placeholder="Task title…" style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #93c5fd", boxSizing: "border-box" }} />
-                        <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                          <button onClick={() => addTask(col)} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 4, background: s.badge, color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
-                          <button onClick={() => { setAddingTo(null); setNewTitle(""); }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
-                        </div>
-                      </div>
-                    : <button onClick={() => setAddingTo(col)} style={{ width: "100%", fontSize: 11, padding: "4px", borderRadius: 5, border: `1px dashed ${s.border}`, background: "transparent", cursor: "pointer", color: s.badge, marginTop: 2 }}>+ Add</button>
-                  }
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+          {COLUMNS.map(col => {
+            const s = COL_STYLE[col], colTasks = project.tasks.filter(t => t.col === col);
+            return (
+              <div key={col} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 10, padding: "10px 10px 8px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: s.badge, textTransform: "uppercase" }}>{col}</span>
+                  <span style={{ fontSize: 11, background: s.badge, color: "#fff", borderRadius: 99, padding: "1px 7px" }}>{colTasks.length}</span>
                 </div>
-              );
-            })}
-          </div>
+                {colTasks.map(task => {
+                  const ci = COLUMNS.indexOf(col);
+                  return (
+                    <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
+                      {editing?.id === task.id && editing.field === "title"
+                        ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
+                        : <div onClick={() => startEdit(task.id, "title", task.title)} style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
+                      }
+                      {editing?.id === task.id && editing.field === "notes"
+                        ? <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
+                        : <div onClick={() => startEdit(task.id, "notes", task.notes || "")} style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>{task.notes || <em>add note…</em>}</div>
+                      }
+                      <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
+                        <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
+                        <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
+                        <button onClick={() => deleteTask(task.id)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444", marginLeft: "auto" }}>✕</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {addingTo === col
+                  ? <div style={{ marginTop: 4 }}>
+                      <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} placeholder="Task title…" style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #93c5fd", boxSizing: "border-box" }} />
+                      <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                        <button onClick={() => addTask(col)} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 4, background: s.badge, color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
+                        <button onClick={() => { setAddingTo(null); setNewTitle(""); }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                      </div>
+                    </div>
+                  : <button onClick={() => setAddingTo(col)} style={{ width: "100%", fontSize: 11, padding: "4px", borderRadius: 5, border: `1px dashed ${s.border}`, background: "transparent", cursor: "pointer", color: s.badge, marginTop: 2 }}>+ Add</button>
+                }
+              </div>
+            );
+          })}
         </div>
       );
     }
 
     // ── App ──────────────────────────────────────────────────────────────────
     function App() {
-      const [user, setUser] = useState(() => sessionStorage.getItem("bi-user") || null);
+      const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem("bi-user")) || null; } catch { return null; } });
       const [projects, setProjects] = useState([]);
       const [active, setActive] = useState(null);
       const [loading, setLoading] = useState(true);
       const [addingProject, setAddingProject] = useState(false);
       const [newProjectName, setNewProjectName] = useState("");
-      const [panel, setPanel] = useState(null); // "ai" | "log" | null
+      const [panel, setPanel] = useState(null);
 
-      const handleLogin = (username) => { sessionStorage.setItem("bi-user", username); setUser(username); };
+      const handleLogin = (username, role) => { const u = { username, role }; sessionStorage.setItem("bi-user", JSON.stringify(u)); setUser(u); };
       const handleLogout = () => { sessionStorage.removeItem("bi-user"); setUser(null); };
 
       const loadData = async () => {
+        setLoading(true);
         try {
           const data = await api.getProjects();
-          const p = data.map(r => ({ ...r.project, _id: r._id }));
-          setProjects(p); setActive(a => a || p[0]?.id || null);
+          const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
+          setProjects(p);
+          setActive(a => a || p[0]?.id || null);
         } catch { setProjects([]); }
         setLoading(false);
       };
 
-      useEffect(() => { if (user) loadData(); }, [user]);
+      useEffect(() => { if (user) loadData(); else setLoading(false); }, [user]);
 
       const updateProject = async (updated) => {
         await api.saveProject(updated);
@@ -315,6 +363,7 @@
       if (!user) return <Login onLogin={handleLogin} />;
       if (loading) return <div style={{ padding: 32, color: "#64748b" }}>Loading…</div>;
 
+      const isAdmin = user.role === "admin";
       const activeProject = projects.find(p => p.id === active);
       const inProgress = projects.flatMap(p => p.tasks.filter(t => t.col === "In Progress"));
       const blocked = projects.flatMap(p => p.tasks.filter(t => t.col === "Blocked"));
@@ -358,7 +407,7 @@
             <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
               {activeProject
                 ? <><h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                    <Board project={activeProject} onUpdate={updateProject} username={user} /></>
+                    <Board project={activeProject} onUpdate={updateProject} username={user.username} /></>
                 : <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
               }
             </div>
