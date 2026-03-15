@@ -192,7 +192,7 @@
         setMessages(newMessages);
         setInput("");
         try {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
+          const res = await fetch("https://morning-mud-283c.moreno-a64.workers.dev", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
