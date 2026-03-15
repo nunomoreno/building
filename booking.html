@@ -413,6 +413,26 @@
             })}
           </div>
 
+          {/* Full day bookings row */}
+          <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600,borderBottom:"2px solid #e2e8f0",background:"#f8fafc"}}>
+            <div style={{padding:"4px 8px",fontSize:10,color:"#94a3b8",display:"flex",alignItems:"center"}}>All day</div>
+            {days.map((day,di)=>{
+              const dateStr=fmt(day);
+              const fullDayBookings=bookings.filter(b=>b.date===dateStr&&b.full_day);
+              return (
+                <div key={di} style={{borderLeft:"1px solid #e2e8f0",minHeight:24,padding:"2px 3px"}}>
+                  {fullDayBookings.map(b=>(
+                    <div key={b.id}
+                      style={{fontSize:10,fontWeight:600,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"2px 6px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}
+                      onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
+                      {b.username} · {b.status}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+
           <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600}}>
             {SLOTS.map((slot,si)=>(
               <React.Fragment key={si}>
@@ -426,7 +446,7 @@
                     <div key={di} className="slot-row"
                       style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",position:"relative",background:"#fff"}}
                       onClick={()=>canBook&&setModal({booking:null,slot:si,date:dateStr})}>
-                      {si===0&&dBookings.map(b=>(
+                      {si===0&&dBookings.filter(b=>!b.full_day).map(b=>(
                         <div key={b.id}
                           style={{position:"absolute",top:getTop(b)+1,left:2,right:2,height:getHeight(b)-2,background:color+"22",borderLeft:`3px solid ${STATUS_COLOR[b.status]||"#94a3b8"}`,borderRadius:4,padding:"2px 6px",zIndex:5,overflow:"hidden",cursor:"pointer"}}
                           onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
