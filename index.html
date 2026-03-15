@@ -454,7 +454,7 @@
             }
           } catch {}
         };
-        const interval = setInterval(poll, 5000);
+        const interval = setInterval(poll, 30000);
         return () => clearInterval(interval);
       }, [user]);
 
@@ -495,7 +495,7 @@
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
-            <span style={{ fontSize: 11, color: "#22c55e" }}>● Live</span>
+            <span style={{ fontSize: 11, color: "#22c55e" }}>● Live (30s)</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
               <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
