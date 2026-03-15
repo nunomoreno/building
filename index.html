@@ -40,9 +40,65 @@
       getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       getMembers: () => fetch(`${WORKER}/db/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       deleteMember: (id) => fetch(`${WORKER}/db/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
-      notify: (type, actor, taskTitle, projectName, mentions, allMembers) =>
-        fetch(`${WORKER}/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, actor, taskTitle, projectName, mentions, allMembers }) }),
+      notify: (actor, taskTitle, projectName, mentions) => fetch(`${WORKER}/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "mention", actor, taskTitle, projectName, mentions }) }),
+      ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
     };
+
+    function extractMentions(text) {
+      return [...(text.matchAll(/@(\w+)/g))].map(m => m[1]);
+    }
+
+    // ── Mention Textarea ─────────────────────────────────────────────────────
+    function MentionTextarea({ value, onChange, members, style, onKeyDown }) {
+      const [showDropdown, setShowDropdown] = useState(false);
+      const [mentionQuery, setMentionQuery] = useState("");
+      const [mentionStart, setMentionStart] = useState(null);
+      const ref = useRef(null);
+      const selectingRef = useRef(false);
+
+      useEffect(() => { ref.current?.focus(); }, []);
+
+      const filtered = members.filter(m => m.toLowerCase().startsWith(mentionQuery.toLowerCase()));
+
+      const handleChange = (e) => {
+        const val = e.target.value;
+        const pos = e.target.selectionStart;
+        onChange(val);
+        const textBefore = val.slice(0, pos);
+        const match = textBefore.match(/@(\w*)$/);
+        if (match) { setShowDropdown(true); setMentionQuery(match[1]); setMentionStart(pos - match[0].length); }
+        else { setShowDropdown(false); }
+      };
+
+      const selectMention = (username) => {
+        selectingRef.current = true;
+        const pos = ref.current?.selectionStart || value.length;
+        const before = value.slice(0, mentionStart);
+        const after = value.slice(pos);
+        onChange(`${before}@${username} ${after}`);
+        setShowDropdown(false);
+        setTimeout(() => { selectingRef.current = false; ref.current?.focus(); }, 0);
+      };
+
+      return (
+        <div style={{ position: "relative" }}>
+          <textarea ref={ref} value={value} onChange={handleChange} onKeyDown={onKeyDown}
+            style={style} />
+          {showDropdown && filtered.length > 0 && (
+            <div style={{ position: "absolute", bottom: "100%", left: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, boxShadow: "0 2px 8px #0002", zIndex: 100, minWidth: 140 }}>
+              {filtered.map(m => (
+                <div key={m} onMouseDown={() => selectMention(m)}
+                  style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#1e293b" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
+                  onMouseLeave={e => e.currentTarget.style.background = ""}>
+                  @{m}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
 
     // ── Login ────────────────────────────────────────────────────────────────
     function Login({ onLogin }) {
@@ -107,7 +163,7 @@
       );
     }
 
-    // ── Users Panel (admin only) ─────────────────────────────────────────────
+    // ── Users Panel ──────────────────────────────────────────────────────────
     function UsersPanel() {
       const [members, setMembers] = useState([]);
       const [loading, setLoading] = useState(true);
@@ -143,6 +199,7 @@
                 <div>
                   <span style={{ fontWeight: 600, color: "#1e293b" }}>{m.username}</span>
                   {m.role === "admin" && <span style={{ marginLeft: 6, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 7px" }}>admin</span>}
+                  {m.email && <div style={{ fontSize: 11, color: "#94a3b8" }}>{m.email}</div>}
                 </div>
                 {m.role !== "admin" && (
                   <button onClick={() => removeMember(m._id, m.username)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
@@ -246,31 +303,33 @@
         await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) });
         api.log(username, "move_task", `Moved "${t.title}" to ${COLUMNS[ni]} in ${project.name}`);
       };
+
       const startEdit = (id, field, val) => { setEditing({ id, field }); setDraft(val); };
+
       const commitEdit = async () => {
         if (!editing) return;
         const t = project.tasks.find(t => t.id === editing.id);
-        const updated = { ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) };
-        await onUpdate(updated);
+        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
         api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
-        // Delayed mention emails — cancel previous timer for this task
         if (editing.field === "notes") {
           const mentions = extractMentions(draft);
           if (mentions.length) {
             const key = `${project.id}-${editing.id}`;
             clearTimeout(mentionTimers.current[key]);
             mentionTimers.current[key] = setTimeout(() => {
-              api.notify("mention", username, t.title, project.name, mentions, []);
-            }, 30000); // 30 second delay
+              api.notify(username, t.title, project.name, mentions);
+            }, 30000);
           }
         }
         setEditing(null);
       };
+
       const deleteTask = async (id) => {
         const t = project.tasks.find(t => t.id === id);
         await onUpdate({ ...project, tasks: project.tasks.filter(t => t.id !== id) });
         api.log(username, "delete_task", `Deleted "${t.title}" from ${project.name}`);
       };
+
       const addTask = async (col) => {
         if (!newTitle.trim()) return;
         const task = { id: Date.now(), col, title: newTitle.trim(), notes: "" };
@@ -294,8 +353,12 @@
                   return (
                     <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
                       {editing?.id === task.id && editing.field === "title"
-                        ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
-                        : <div onClick={() => startEdit(task.id, "title", task.title)} style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
+                        ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
+                            style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
+                        : <div onClick={() => startEdit(task.id, "title", task.title)}
+                            style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
                       }
                       {editing?.id === task.id && editing.field === "notes"
                         ? <div>
@@ -303,11 +366,14 @@
                               onKeyDown={e => { if (e.key === "Escape") setEditing(null); }}
                               style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
                             <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-                              <button onMouseDown={commitEdit} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
-                              <button onMouseDown={() => setEditing(null)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                              <button onClick={commitEdit} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
+                              <button onClick={() => setEditing(null)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
                             </div>
                           </div>
-                        : <div onClick={() => startEdit(task.id, "notes", task.notes || "")} style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>{task.notes || <em>add note…</em>}</div>
+                        : <div onClick={() => startEdit(task.id, "notes", task.notes || "")}
+                            style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>
+                            {task.notes || <em>add note…</em>}
+                          </div>
                       }
                       <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
                         <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
@@ -319,7 +385,9 @@
                 })}
                 {addingTo === col
                   ? <div style={{ marginTop: 4 }}>
-                      <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }} placeholder="Task title…" style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #93c5fd", boxSizing: "border-box" }} />
+                      <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }}
+                        placeholder="Task title…" style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #93c5fd", boxSizing: "border-box" }} />
                       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
                         <button onClick={() => addTask(col)} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 4, background: s.badge, color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
                         <button onClick={() => { setAddingTo(null); setNewTitle(""); }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
@@ -351,23 +419,20 @@
       const loadData = async () => {
         setLoading(true);
         try {
-          const data = await api.getProjects();
+          const [data, m] = await Promise.all([api.getProjects(), api.getMembers()]);
           const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
           setProjects(p);
-          setActive(a => a || p[0]?.id || null);
-          // Load members for @mentions
-          const m = await api.getMembers();
           setMembers(Array.isArray(m) ? m.map(u => u.username) : []);
+          setActive(a => a || p[0]?.id || null);
         } catch { setProjects([]); }
         setLoading(false);
       };
 
       useEffect(() => { if (user) loadData(); else setLoading(false); }, [user]);
 
-      // ── Polling ────────────────────────────────────────────────────────────
+      // Polling
       const projectsRef = useRef(projects);
       useEffect(() => { projectsRef.current = projects; }, [projects]);
-
       useEffect(() => {
         if (!user) return;
         const poll = async () => {
@@ -443,7 +508,9 @@
               <div style={{ padding: "8px 14px", marginTop: 4 }}>
                 {addingProject
                   ? <div>
-                      <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }} placeholder="Project name…" style={{ width: "100%", fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid #475569", background: "#0f172a", color: "#f1f5f9", boxSizing: "border-box" }} />
+                      <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
+                        placeholder="Project name…" style={{ width: "100%", fontSize: 12, padding: "4px 6px", borderRadius: 4, border: "1px solid #475569", background: "#0f172a", color: "#f1f5f9", boxSizing: "border-box" }} />
                       <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
                         <button onClick={addProject} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
                         <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "#334155", color: "#94a3b8", border: "none", cursor: "pointer" }}>✕</button>
