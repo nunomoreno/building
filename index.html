@@ -298,7 +298,15 @@
                         : <div onClick={() => startEdit(task.id, "title", task.title)} style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
                       }
                       {editing?.id === task.id && editing.field === "notes"
-                        ? <MentionTextarea members={members} value={draft} onChange={setDraft} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
+                        ? <div>
+                            <MentionTextarea members={members} value={draft} onChange={setDraft}
+                              onKeyDown={e => { if (e.key === "Escape") setEditing(null); }}
+                              style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
+                            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                              <button onMouseDown={commitEdit} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
+                              <button onMouseDown={() => setEditing(null)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                            </div>
+                          </div>
                         : <div onClick={() => startEdit(task.id, "notes", task.notes || "")} style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>{task.notes || <em>add note…</em>}</div>
                       }
                       <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
