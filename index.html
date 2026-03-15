@@ -55,45 +55,36 @@
       const [mentionQuery, setMentionQuery] = useState("");
       const [mentionStart, setMentionStart] = useState(null);
       const ref = useRef(null);
-      const selectingRef = useRef(false);
 
       useEffect(() => { ref.current?.focus(); }, []);
 
       const filtered = members.filter(m => m.toLowerCase().startsWith(mentionQuery.toLowerCase()));
 
       const handleChange = (e) => {
-        const val = e.target.value;
-        const pos = e.target.selectionStart;
+        const val = e.target.value, pos = e.target.selectionStart;
         onChange(val);
-        const textBefore = val.slice(0, pos);
-        const match = textBefore.match(/@(\w*)$/);
+        const match = val.slice(0, pos).match(/@(\w*)$/);
         if (match) { setShowDropdown(true); setMentionQuery(match[1]); setMentionStart(pos - match[0].length); }
-        else { setShowDropdown(false); }
+        else setShowDropdown(false);
       };
 
       const selectMention = (username) => {
-        selectingRef.current = true;
         const pos = ref.current?.selectionStart || value.length;
-        const before = value.slice(0, mentionStart);
-        const after = value.slice(pos);
-        onChange(`${before}@${username} ${after}`);
+        onChange(`${value.slice(0, mentionStart)}@${username} ${value.slice(pos)}`);
         setShowDropdown(false);
-        setTimeout(() => { selectingRef.current = false; ref.current?.focus(); }, 0);
+        setTimeout(() => ref.current?.focus(), 0);
       };
 
       return (
         <div style={{ position: "relative" }}>
-          <textarea ref={ref} value={value} onChange={handleChange} onKeyDown={onKeyDown}
-            style={style} />
+          <textarea ref={ref} value={value} onChange={handleChange} onKeyDown={onKeyDown} style={style} />
           {showDropdown && filtered.length > 0 && (
             <div style={{ position: "absolute", bottom: "100%", left: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 6, boxShadow: "0 2px 8px #0002", zIndex: 100, minWidth: 140 }}>
               {filtered.map(m => (
                 <div key={m} onMouseDown={() => selectMention(m)}
                   style={{ padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#1e293b" }}
                   onMouseEnter={e => e.currentTarget.style.background = "#f1f5f9"}
-                  onMouseLeave={e => e.currentTarget.style.background = ""}>
-                  @{m}
-                </div>
+                  onMouseLeave={e => e.currentTarget.style.background = ""}>@{m}</div>
               ))}
             </div>
           )}
@@ -167,7 +158,6 @@
     // ── Users Panel ──────────────────────────────────────────────────────────
     function UsersPanel() {
       const [members, setMembers] = useState([]);
-      const membersRef = useRef([]);
       const [loading, setLoading] = useState(true);
       const [newUser, setNewUser] = useState("");
       const [newPass, setNewPass] = useState("");
@@ -204,7 +194,7 @@
                   {m.email && <div style={{ fontSize: 11, color: "#94a3b8" }}>{m.email}</div>}
                 </div>
                 {m.role !== "admin" && (
-                  <button onClick={() => removeMember(m._id, m.username)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
+                  <button onClick={() => removeMember(m.id, m.username)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
                 )}
               </div>
             ))}
@@ -313,20 +303,20 @@
         const t = project.tasks.find(t => t.id === editing.id);
         await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
         api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
-          if (editing.field === "notes") {
-            const mentions = extractMentions(draft);
-            if (mentions.length) {
-              const key = `${project.id}-${editing.id}`;
-              clearTimeout(mentionTimers.current[key]);
-              mentionTimers.current[key] = setTimeout(() => {
-                const mentionsWithEmails = mentions.map(u => ({
-                  username: u,
-                  email: membersRef.current.find(m => m.username === u)?.email || null
-                }));
-                api.notify(username, t.title, project.name, mentionsWithEmails);
-              }, 30000);
-            }
+        if (editing.field === "notes") {
+          const mentions = extractMentions(draft);
+          if (mentions.length) {
+            const key = `${project.id}-${editing.id}`;
+            clearTimeout(mentionTimers.current[key]);
+            mentionTimers.current[key] = setTimeout(() => {
+              const mentionsWithEmails = mentions.map(u => ({
+                username: u,
+                email: (membersRef.current || []).find(m => m.username === u)?.email || null
+              }));
+              api.notify(username, t.title, project.name, mentionsWithEmails);
+            }, 30000);
           }
+        }
         setEditing(null);
       };
 
@@ -360,8 +350,7 @@
                     <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
                       {editing?.id === task.id && editing.field === "title"
                         ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
+                            onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
                             style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
                         : <div onClick={() => startEdit(task.id, "title", task.title)}
                             style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
@@ -413,6 +402,7 @@
       const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem("bi-user")) || null; } catch { return null; } });
       const [projects, setProjects] = useState([]);
       const [members, setMembers] = useState([]);
+      const membersRef = useRef([]);
       const [active, setActive] = useState(null);
       const [loading, setLoading] = useState(true);
       const [addingProject, setAddingProject] = useState(false);
@@ -426,19 +416,17 @@
         setLoading(true);
         try {
           const [data, m] = await Promise.all([api.getProjects(), api.getMembers()]);
-          const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
+          const p = Array.isArray(data) ? data : [];
           setProjects(p);
           const memberList = Array.isArray(m) ? m : [];
           setMembers(memberList.map(u => u.username));
-          // Store full member info including emails
           membersRef.current = memberList;
-        } catch { setProjects([]); }
+          setActive(a => a || p[0]?.id || null);
+        } catch (e) { console.error(e); setProjects([]); }
         setLoading(false);
       };
 
       useEffect(() => { if (user) loadData(); else setLoading(false); }, [user]);
-
-
 
       const updateProject = async (updated) => {
         await api.saveProject(updated);
@@ -469,15 +457,14 @@
 
       const isAdmin = user.role === "admin";
       const activeProject = projects.find(p => p.id === active);
-      const inProgress = projects.flatMap(p => p.tasks.filter(t => t.col === "In Progress"));
-      const blocked = projects.flatMap(p => p.tasks.filter(t => t.col === "Blocked"));
+      const inProgress = projects.flatMap(p => (p.tasks || []).filter(t => t.col === "In Progress"));
+      const blocked = projects.flatMap(p => (p.tasks || []).filter(t => t.col === "Blocked"));
 
       return (
         <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
-
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
               <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
