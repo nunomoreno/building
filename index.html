@@ -30,7 +30,7 @@
 
     const api = {
       login: (u, p) => fetch(`${WORKER}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) }).then(r => r.json()),
-      register: (u, p) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) }).then(r => r.json()),
+      register: (u, p, e) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p, email: e }) }).then(r => r.json()),
       getProjects: () => fetch(`${WORKER}/db/projects`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       saveProject: (p) => p._id
         ? fetch(`${WORKER}/db/projects/${p._id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json())
@@ -113,6 +113,7 @@
       const [loading, setLoading] = useState(true);
       const [newUser, setNewUser] = useState("");
       const [newPass, setNewPass] = useState("");
+      const [newEmail, setNewEmail] = useState("");
       const [error, setError] = useState("");
       const [saving, setSaving] = useState(false);
 
@@ -122,9 +123,9 @@
       const addMember = async () => {
         if (!newUser.trim() || !newPass.trim()) return;
         setSaving(true); setError("");
-        const res = await api.register(newUser.trim(), newPass.trim());
+        const res = await api.register(newUser.trim(), newPass.trim(), newEmail.trim());
         if (res.error) setError(res.error);
-        else { setNewUser(""); setNewPass(""); await load(); }
+        else { setNewUser(""); setNewPass(""); setNewEmail(""); await load(); }
         setSaving(false);
       };
 
@@ -151,7 +152,8 @@
             <div style={{ marginTop: 16, borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Add new user</div>
               <input value={newUser} onChange={e => setNewUser(e.target.value)} placeholder="Username" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
-              <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Password" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+              <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Password" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
+              <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email (for notifications)" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
               {error && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 6 }}>{error}</div>}
               <button onClick={addMember} disabled={saving} style={{ width: "100%", fontSize: 12, padding: "6px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
                 {saving ? "Adding…" : "Add user"}
@@ -235,6 +237,7 @@
       const [draft, setDraft] = useState("");
       const [addingTo, setAddingTo] = useState(null);
       const [newTitle, setNewTitle] = useState("");
+      const mentionTimers = useRef({});
 
       const moveTask = async (id, dir) => {
         const t = project.tasks.find(t => t.id === id);
@@ -250,9 +253,17 @@
         const updated = { ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) };
         await onUpdate(updated);
         api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
-        // Send notifications
-        const mentions = editing.field === "notes" ? extractMentions(draft) : [];
-        api.notify("task_change", username, t.title, project.name, mentions, members);
+        // Delayed mention emails — cancel previous timer for this task
+        if (editing.field === "notes") {
+          const mentions = extractMentions(draft);
+          if (mentions.length) {
+            const key = `${project.id}-${editing.id}`;
+            clearTimeout(mentionTimers.current[key]);
+            mentionTimers.current[key] = setTimeout(() => {
+              api.notify("mention", username, t.title, project.name, mentions, []);
+            }, 30000); // 30 second delay
+          }
+        }
         setEditing(null);
       };
       const deleteTask = async (id) => {
@@ -265,7 +276,6 @@
         const task = { id: Date.now(), col, title: newTitle.trim(), notes: "" };
         await onUpdate({ ...project, tasks: [...project.tasks, task] });
         api.log(username, "add_task", `Added "${task.title}" to ${project.name} as ${col}`);
-        api.notify("task_change", username, task.title, project.name, [], members);
         setNewTitle(""); setAddingTo(null);
       };
 
