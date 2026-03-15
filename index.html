@@ -26,9 +26,9 @@
       "Done":        { bg: "#f0fdf4", border: "#86efac", badge: "#16a34a" },
     };
 
-    const RESTDB_URL = "https://bulding-a424.restdb.io/rest/projects";
-    const RESTDB_KEY = "69b6e0baf6ec4d711db2a5d7";
-    const HEADERS = { "Content-Type": "application/json", "x-apikey": RESTDB_KEY, "cache-control": "no-cache" };
+    const WORKER_URL = "https://morning-mud-283c.moreno-a64.workers.dev";
+    const DB_URL = `${WORKER_URL}/db/projects`;
+    const HEADERS = { "Content-Type": "application/json" };
 
     const SEED_PROJECTS = [
       { id: "proj-benches", name: "Benches", tasks: [
@@ -42,21 +42,21 @@
     // ── RestDB ───────────────────────────────────────────────────────────────
     const db = {
       load: async () => {
-        const res = await fetch(RESTDB_URL, { headers: HEADERS });
+        const res = await fetch(DB_URL, { headers: HEADERS });
         const data = await res.json();
         if (!data.length) return SEED_PROJECTS;
         return data.map(r => ({ ...r.project, _id: r._id }));
       },
       save: async (project) => {
         if (project._id) {
-          await fetch(`${RESTDB_URL}/${project._id}`, { method: "PUT", headers: HEADERS, body: JSON.stringify({ project }) });
+          await fetch(`${DB_URL}/${project._id}`, { method: "PUT", headers: HEADERS, body: JSON.stringify({ project }) });
         } else {
-          const res = await fetch(RESTDB_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ project }) });
+          const res = await fetch(DB_URL, { method: "POST", headers: HEADERS, body: JSON.stringify({ project }) });
           const data = await res.json();
           return data._id;
         }
       },
-      delete: async (id) => { await fetch(`${RESTDB_URL}/${id}`, { method: "DELETE", headers: HEADERS }); },
+      delete: async (id) => { await fetch(`${DB_URL}/${id}`, { method: "DELETE", headers: HEADERS }); },
       export: (data) => {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
         const a = document.createElement("a");
@@ -192,7 +192,7 @@
         setMessages(newMessages);
         setInput("");
         try {
-          const res = await fetch("https://morning-mud-283c.moreno-a64.workers.dev", {
+          const res = await fetch(`${WORKER_URL}/ai`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
