@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerno — Bookings</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f8fafc; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const WORKER = "https://morning-mud-283c.moreno-a64.workers.dev";
+
+    const api = {
+      login: (u, p) => fetch(`${WORKER}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) }).then(r => r.json()),
+      getResources: () => fetch(`${WORKER}/resources`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      saveResource: (r) => r.id
+        ? fetch(`${WORKER}/resources/${r.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(r) }).then(res => res.json())
+        : fetch(`${WORKER}/resources`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(r) }).then(res => res.json()),
+      deleteResource: (id) => fetch(`${WORKER}/resources/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
+      getBookings: (from, to) => fetch(`${WORKER}/bookings?from=${from}&to=${to}`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      saveBooking: (b) => fetch(`${WORKER}/bookings`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) }).then(r => r.json()),
+      updateBooking: (id, data) => fetch(`${WORKER}/bookings/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }).then(r => r.json()),
+      deleteBooking: (id) => fetch(`${WORKER}/bookings/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
+      getMembers: () => fetch(`${WORKER}/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      updateMember: (id, data) => fetch(`${WORKER}/members/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) }).then(r => r.json()),
+    };
+
+    const STATUS_STYLE = {
+      pending:  { bg: "#fff7ed", color: "#ea580c", label: "Pending" },
+      approved: { bg: "#f0fdf4", color: "#16a34a", label: "Approved" },
+      rejected: { bg: "#fff5f5", color: "#ef4444", label: "Rejected" },
+    };
+
+    // ── Login ────────────────────────────────────────────────────────────────
+    function Login({ onLogin }) {
+      const [username, setUsername] = useState("");
+      const [password, setPassword] = useState("");
+      const [error, setError] = useState("");
+      const [loading, setLoading] = useState(false);
+
+      const submit = async () => {
+        if (!username.trim() || !password.trim()) return;
+        setLoading(true); setError("");
+        const res = await api.login(username.trim(), password.trim());
+        if (res.error) setError("Invalid username or password.");
+        else onLogin(res.username, res.role, res.permissions || []);
+        setLoading(false);
+      };
+
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a" }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: "36px 40px", width: 320, boxShadow: "0 4px 24px #0004" }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>⚙️ Kerno Bookings</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24 }}>Sign in to continue</div>
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username"
+              style={{ width: "100%", fontSize: 13, padding: "9px 12px", borderRadius: 7, border: "1px solid #cbd5e1", marginBottom: 10, outline: "none" }} />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"
+              onKeyDown={e => e.key === "Enter" && submit()}
+              style={{ width: "100%", fontSize: 13, padding: "9px 12px", borderRadius: 7, border: "1px solid #cbd5e1", marginBottom: 16, outline: "none" }} />
+            {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 12 }}>{error}</div>}
+            <button onClick={submit} disabled={loading}
+              style={{ width: "100%", fontSize: 14, padding: "10px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: loading ? 0.7 : 1 }}>
+              {loading ? "Please wait…" : "Sign in"}
+            </button>
+            <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: "#94a3b8" }}>Contact your administrator to get access.</div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Resource Form ────────────────────────────────────────────────────────
+    function ResourceForm({ resource, onSave, onCancel }) {
+      const [name, setName] = useState(resource?.name || "");
+      const [description, setDescription] = useState(resource?.description || "");
+      const [bookingType, setBookingType] = useState(resource?.booking_type || "timeslot");
+      const [approvalRequired, setApprovalRequired] = useState(resource?.approval_required || false);
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        if (!name.trim()) return;
+        setSaving(true);
+        await api.saveResource({ ...resource, name: name.trim(), description: description.trim(), booking_type: bookingType, approval_required: approvalRequired });
+        setSaving(false);
+        onSave();
+      };
+
+      return (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{resource?.id ? "Edit Resource" : "New Resource"}</div>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Resource name"
+            style={{ width: "100%", fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+          <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)"
+            style={{ width: "100%", fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <select value={bookingType} onChange={e => setBookingType(e.target.value)}
+              style={{ flex: 1, fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }}>
+              <option value="timeslot">Time slots</option>
+              <option value="fullday">Full days</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569", marginBottom: 12, cursor: "pointer" }}>
+            <input type="checkbox" checked={approvalRequired} onChange={e => setApprovalRequired(e.target.checked)} />
+            Requires admin approval
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={save} disabled={saving} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            <button onClick={onCancel} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Booking Form ─────────────────────────────────────────────────────────
+    function BookingForm({ resource, username, onSave, onCancel }) {
+      const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+      const [fullDay, setFullDay] = useState(resource.booking_type === "fullday");
+      const [startTime, setStartTime] = useState("09:00");
+      const [endTime, setEndTime] = useState("10:00");
+      const [notes, setNotes] = useState("");
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        setSaving(true);
+        const status = resource.approval_required ? "pending" : "approved";
+        await api.saveBooking({ resource_id: resource.id, username, date, full_day: fullDay, start_time: fullDay ? null : startTime, end_time: fullDay ? null : endTime, notes, status });
+        setSaving(false);
+        onSave();
+      };
+
+      return (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>Book: {resource.name}</div>
+          {resource.approval_required && <div style={{ fontSize: 11, color: "#ea580c", marginBottom: 12 }}>⚠ Requires admin approval</div>}
+          <input type="date" value={date} onChange={e => setDate(e.target.value)}
+            style={{ width: "100%", fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+          {resource.booking_type !== "fullday" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569", marginBottom: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={fullDay} onChange={e => setFullDay(e.target.checked)} />
+              Full day
+            </label>
+          )}
+          {!fullDay && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)}
+                style={{ flex: 1, fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }} />
+              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)}
+                style={{ flex: 1, fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }} />
+            </div>
+          )}
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)"
+            style={{ width: "100%", fontSize: 12, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 12, boxSizing: "border-box", resize: "vertical", minHeight: 60 }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={save} disabled={saving} style={{ fontSize: 12, padding: "6px 16px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              {saving ? "Saving…" : "Book"}
+            </button>
+            <button onClick={onCancel} style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── App ──────────────────────────────────────────────────────────────────
+    function App() {
+      const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem("kerno-user")) || null; } catch { return null; } });
+      const [resources, setResources] = useState([]);
+      const [bookings, setBookings] = useState([]);
+      const [members, setMembers] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [view, setView] = useState("calendar"); // calendar | admin
+      const [showResourceForm, setShowResourceForm] = useState(false);
+      const [editResource, setEditResource] = useState(null);
+      const [bookingResource, setBookingResource] = useState(null);
+      const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
+      const [currentMonth, setCurrentMonth] = useState(new Date());
+
+      const handleLogin = (username, role, permissions) => {
+        const u = { username, role, permissions };
+        sessionStorage.setItem("kerno-user", JSON.stringify(u));
+        setUser(u);
+      };
+      const handleLogout = () => { sessionStorage.removeItem("kerno-user"); setUser(null); };
+
+      const isAdmin = user?.role === "admin";
+      const canBook = isAdmin || user?.permissions?.includes("bookings");
+
+      const loadData = async () => {
+        setLoading(true);
+        try {
+          const from = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).toISOString().split("T")[0];
+          const to = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).toISOString().split("T")[0];
+          const [r, b, m] = await Promise.all([api.getResources(), api.getBookings(from, to), api.getMembers()]);
+          setResources(Array.isArray(r) ? r : []);
+          setBookings(Array.isArray(b) ? b : []);
+          setMembers(Array.isArray(m) ? m : []);
+        } catch (e) { console.error(e); }
+        setLoading(false);
+      };
+
+      useEffect(() => { if (user) loadData(); else setLoading(false); }, [user, currentMonth]);
+
+      const approveBooking = async (id) => { await api.updateBooking(id, { status: "approved" }); loadData(); };
+      const rejectBooking = async (id) => { await api.updateBooking(id, { status: "rejected" }); loadData(); };
+      const cancelBooking = async (id) => { await api.deleteBooking(id); loadData(); };
+
+      const togglePermission = async (member, perm) => {
+        const perms = member.permissions || [];
+        const updated = perms.includes(perm) ? perms.filter(p => p !== perm) : [...perms, perm];
+        await api.updateMember(member.id, { permissions: updated });
+        loadData();
+      };
+
+      // Calendar helpers
+      const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+      const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+      const formatDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const dayBookings = (dateStr) => bookings.filter(b => b.date === dateStr);
+      const selectedBookings = dayBookings(selectedDate);
+
+      if (!user) return <Login onLogin={handleLogin} />;
+      if (loading) return <div style={{ padding: 32, color: "#64748b" }}>Loading…</div>;
+
+      return (
+        <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
+          {/* Header */}
+          <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+            <a href="index.html" style={{ fontSize: 16, fontWeight: 700, color: "#fff", textDecoration: "none" }}>⚙️ Kerno</a>
+            <span style={{ color: "#475569" }}>›</span>
+            <span style={{ fontSize: 14, color: "#94a3b8" }}>Bookings</span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+              {isAdmin && <>
+                <button onClick={() => setView(view === "admin" ? "calendar" : "admin")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: view === "admin" ? "#2563eb" : "#1e293b", color: view === "admin" ? "#fff" : "#94a3b8", cursor: "pointer" }}>⚙ Admin</button>
+              </>}
+              <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}</span>
+              <button onClick={handleLogout} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>Sign out</button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", height: "calc(100vh - 49px)" }}>
+            {/* Sidebar — Resources */}
+            <div style={{ width: 220, minWidth: 220, background: "#1e293b", padding: "12px 0", overflowY: "auto" }}>
+              <div style={{ padding: "4px 14px 10px", fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: .5 }}>Resources</div>
+              {resources.map(r => (
+                <div key={r.id} style={{ padding: "8px 14px", fontSize: 12, color: "#94a3b8", borderLeft: "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ color: "#f1f5f9", fontWeight: 500 }}>{r.name}</div>
+                    {r.description && <div style={{ fontSize: 11, color: "#64748b" }}>{r.description}</div>}
+                    <div style={{ fontSize: 10, color: r.approval_required ? "#ea580c" : "#22c55e", marginTop: 2 }}>
+                      {r.approval_required ? "⚠ Approval required" : "✓ Auto-confirm"} · {r.booking_type}
+                    </div>
+                  </div>
+                  {canBook && (
+                    <button onClick={() => setBookingResource(r)}
+                      style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap" }}>Book</button>
+                  )}
+                </div>
+              ))}
+              {resources.length === 0 && <div style={{ padding: "8px 14px", fontSize: 12, color: "#475569" }}>No resources yet.</div>}
+            </div>
+
+            {/* Main */}
+            <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
+
+              {/* Booking form */}
+              {bookingResource && (
+                <BookingForm resource={bookingResource} username={user.username}
+                  onSave={() => { setBookingResource(null); loadData(); }}
+                  onCancel={() => setBookingResource(null)} />
+              )}
+
+              {view === "admin" && isAdmin ? (
+                <div>
+                  <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 16 }}>Admin</h2>
+
+                  {/* Resources management */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>Resources</div>
+                      <button onClick={() => { setEditResource({}); setShowResourceForm(true); }}
+                        style={{ fontSize: 12, padding: "4px 12px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>+ Add</button>
+                    </div>
+                    {showResourceForm && (
+                      <ResourceForm resource={editResource}
+                        onSave={() => { setShowResourceForm(false); setEditResource(null); loadData(); }}
+                        onCancel={() => { setShowResourceForm(false); setEditResource(null); }} />
+                    )}
+                    {resources.map(r => (
+                      <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{r.name}</span>
+                          <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{r.booking_type} · {r.approval_required ? "approval required" : "auto-confirm"}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => { setEditResource(r); setShowResourceForm(true); }}
+                            style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", color: "#475569" }}>Edit</button>
+                          <button onClick={() => { if (confirm(`Delete "${r.name}"?`)) { api.deleteResource(r.id); loadData(); } }}
+                            style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444" }}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pending bookings */}
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b", marginBottom: 12 }}>Pending Approvals</div>
+                    {bookings.filter(b => b.status === "pending").length === 0
+                      ? <div style={{ fontSize: 12, color: "#94a3b8" }}>No pending bookings.</div>
+                      : bookings.filter(b => b.status === "pending").map(b => {
+                          const res = resources.find(r => r.id === b.resource_id);
+                          return (
+                            <div key={b.id} style={{ padding: "10px 12px", background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, marginBottom: 8, fontSize: 12 }}>
+                              <div style={{ fontWeight: 600, color: "#1e293b", marginBottom: 2 }}>{res?.name} — {b.username}</div>
+                              <div style={{ color: "#64748b" }}>{b.date} {b.full_day ? "(Full day)" : `${b.start_time} – ${b.end_time}`}</div>
+                              {b.notes && <div style={{ color: "#475569", marginTop: 4 }}>{b.notes}</div>}
+                              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                                <button onClick={() => approveBooking(b.id)} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 4, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer" }}>✓ Approve</button>
+                                <button onClick={() => rejectBooking(b.id)} style={{ fontSize: 11, padding: "2px 10px", borderRadius: 4, background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }}>✕ Reject</button>
+                              </div>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+
+                  {/* User permissions */}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b", marginBottom: 12 }}>Booking Permissions</div>
+                    {members.map(m => (
+                      <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 8 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>
+                          {m.username}
+                          {m.role === "admin" && <span style={{ marginLeft: 6, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 7px" }}>admin</span>}
+                        </div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", cursor: "pointer" }}>
+                          <input type="checkbox"
+                            checked={m.role === "admin" || (m.permissions || []).includes("bookings")}
+                            disabled={m.role === "admin"}
+                            onChange={() => togglePermission(m, "bookings")} />
+                          Can book
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {/* Calendar */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                      style={{ fontSize: 14, padding: "4px 10px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}>‹</button>
+                    <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+                      {currentMonth.toLocaleString("default", { month: "long", year: "numeric" })}
+                    </h2>
+                    <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+                      style={{ fontSize: 14, padding: "4px 10px", borderRadius: 6, border: "1px solid #e2e8f0", background: "#fff", cursor: "pointer" }}>›</button>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 16 }}>
+                    {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (
+                      <div key={d} style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textAlign: "center", padding: "4px 0" }}>{d}</div>
+                    ))}
+                    {Array.from({ length: getFirstDayOfMonth(currentMonth) }).map((_, i) => <div key={`e${i}`} />)}
+                    {Array.from({ length: getDaysInMonth(currentMonth) }).map((_, i) => {
+                      const d = i + 1;
+                      const dateStr = formatDate(currentMonth.getFullYear(), currentMonth.getMonth(), d);
+                      const dayBks = dayBookings(dateStr);
+                      const isSelected = dateStr === selectedDate;
+                      const isToday = dateStr === new Date().toISOString().split("T")[0];
+                      return (
+                        <div key={d} onClick={() => setSelectedDate(dateStr)}
+                          style={{ minHeight: 64, padding: "4px 6px", borderRadius: 8, border: `1.5px solid ${isSelected ? "#2563eb" : "#e2e8f0"}`, background: isSelected ? "#eff6ff" : "#fff", cursor: "pointer" }}>
+                          <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? "#2563eb" : "#1e293b", marginBottom: 4 }}>{d}</div>
+                          {dayBks.slice(0, 3).map(b => {
+                            const res = resources.find(r => r.id === b.resource_id);
+                            const s = STATUS_STYLE[b.status] || STATUS_STYLE.pending;
+                            return (
+                              <div key={b.id} style={{ fontSize: 10, background: s.bg, color: s.color, borderRadius: 3, padding: "1px 4px", marginBottom: 2, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                                {res?.name} — {b.username}
+                              </div>
+                            );
+                          })}
+                          {dayBks.length > 3 && <div style={{ fontSize: 10, color: "#94a3b8" }}>+{dayBks.length - 3} more</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Selected day bookings */}
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b", marginBottom: 10 }}>
+                      {new Date(selectedDate + "T12:00:00").toLocaleDateString("default", { weekday: "long", day: "numeric", month: "long" })}
+                    </div>
+                    {selectedBookings.length === 0
+                      ? <div style={{ fontSize: 12, color: "#94a3b8" }}>No bookings for this day.</div>
+                      : selectedBookings.map(b => {
+                          const res = resources.find(r => r.id === b.resource_id);
+                          const s = STATUS_STYLE[b.status] || STATUS_STYLE.pending;
+                          return (
+                            <div key={b.id} style={{ padding: "10px 14px", background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{res?.name}</div>
+                                <div style={{ fontSize: 12, color: "#64748b" }}>{b.full_day ? "Full day" : `${b.start_time} – ${b.end_time}`} · {b.username}</div>
+                                {b.notes && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{b.notes}</div>}
+                              </div>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ fontSize: 11, background: s.bg, color: s.color, borderRadius: 99, padding: "2px 8px", fontWeight: 600 }}>{s.label}</span>
+                                {(isAdmin || b.username === user.username) && b.status !== "rejected" && (
+                                  <button onClick={() => { if (confirm("Cancel this booking?")) cancelBooking(b.id); }}
+                                    style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444" }}>Cancel</button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
