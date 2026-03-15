@@ -352,7 +352,8 @@
         }
       };
 
-      const handleMouseUp = async () => {
+      const handleMouseUp = async (e) => {
+        e.stopPropagation();
         if(creating) {
           const resource = resources.find(r=>r.id===creating.resourceId);
           const status = resource?.approval_required ? "pending" : "approved";
@@ -441,7 +442,7 @@
                               const span = b.full_day ? 48 : slotIndex(b.end_time)-slotIndex(b.start_time);
                               setDragging({...b, slotSpan:span});
                             }}
-                            onClick={(e)=>{e.stopPropagation(); setSelectedBooking(b);}}
+                            onClick={(e)=>{e.stopPropagation(); e.preventDefault(); setSelectedBooking(b);}}
                             style={{
                               position:"absolute",
                               top: getBookingTop(b),
