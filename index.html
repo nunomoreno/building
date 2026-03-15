@@ -31,15 +31,15 @@
     const api = {
       login: (u, p) => fetch(`${WORKER}/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p }) }).then(r => r.json()),
       register: (u, p, e) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p, email: e }) }).then(r => r.json()),
-      getProjects: () => fetch(`${WORKER}/db/projects`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      getProjects: () => fetch(`${WORKER}/projects`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       saveProject: (p) => p._id
-        ? fetch(`${WORKER}/db/projects/${p._id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json())
-        : fetch(`${WORKER}/db/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json()),
-      deleteProject: (id) => fetch(`${WORKER}/db/projects/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
-      log: (username, action, details) => fetch(`${WORKER}/db/logs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, action, details, timestamp: new Date().toISOString() }) }),
-      getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
-      getMembers: () => fetch(`${WORKER}/db/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
-      deleteMember: (id) => fetch(`${WORKER}/db/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
+        ? fetch(`${WORKER}/projects/${p._id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then(r => r.json())
+        : fetch(`${WORKER}/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then(r => r.json()),
+      deleteProject: (id) => fetch(`${WORKER}/projects/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
+      log: (username, action, details) => fetch(`${WORKER}/logs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, action, details, timestamp: new Date().toISOString() }) }),
+      getLogs: () => fetch(`${WORKER}/logs`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      getMembers: () => fetch(`${WORKER}/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      deleteMember: (id) => fetch(`${WORKER}/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
       notify: (actor, taskTitle, projectName, mentionsWithEmails) =>
         fetch(`${WORKER}/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actor, taskTitle, projectName, mentionsWithEmails }) }),
       ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
@@ -438,25 +438,7 @@
 
       useEffect(() => { if (user) loadData(); else setLoading(false); }, [user]);
 
-      // Polling
-      const projectsRef = useRef(projects);
-      useEffect(() => { projectsRef.current = projects; }, [projects]);
-      useEffect(() => {
-        if (!user) return;
-        const poll = async () => {
-          if (document.hidden) return;
-          try {
-            const data = await api.getProjects();
-            const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
-            if (JSON.stringify(p) !== JSON.stringify(projectsRef.current)) {
-              setProjects(p);
-              setActive(a => a || p[0]?.id || null);
-            }
-          } catch {}
-        };
-        const interval = setInterval(poll, 30000);
-        return () => clearInterval(interval);
-      }, [user]);
+
 
       const updateProject = async (updated) => {
         await api.saveProject(updated);
@@ -495,7 +477,7 @@
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
-            <span style={{ fontSize: 11, color: "#22c55e" }}>● Live (30s)</span>
+
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
               <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
