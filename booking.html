@@ -9,49 +9,52 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f8fafc; overflow: hidden; }
-    .slot { transition: background 0.1s; }
-    .slot:hover { background: #e0e7ff !important; }
-    .booking-block { cursor: grab; user-select: none; }
-    .booking-block:active { cursor: grabbing; }
+    body { font-family: system-ui, sans-serif; background: #f8fafc; }
+    .slot-row:hover { background: #eff6ff !important; cursor: pointer; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #f1f5f9; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef, useCallback } = React;
+    const { useState, useEffect, useRef } = React;
     const WORKER = "https://morning-mud-283c.moreno-a64.workers.dev";
-    const SLOT_H = 24; // px per 30min slot
-    const SLOTS = Array.from({ length: 48 }, (_, i) => ({ h: Math.floor(i/2), m: i%2===0?0:30, label: `${String(Math.floor(i/2)).padStart(2,"0")}:${i%2===0?"00":"30"}` }));
+    const SLOT_H = 28;
+    const SLOTS = Array.from({length:48},(_,i)=>({
+      h:Math.floor(i/2), m:i%2===0?0:30,
+      label:`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2===0?"00":"30"}`
+    }));
     const COLORS = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#06b6d4","#84cc16"];
+    const STATUS_COLOR = { pending:"#f59e0b", approved:"#10b981", rejected:"#ef4444" };
+    const STATUS_BG = { pending:"#fff7ed", approved:"#f0fdf4", rejected:"#fff5f5" };
+
+    const safeFetch = (url, opts) => fetch(url, opts).then(async r => {
+      const text = await r.text();
+      return text ? JSON.parse(text) : {};
+    });
 
     const api = {
-      login: (u,p) => fetch(`${WORKER}/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,password:p})}).then(r=>r.json()),
-      getResources: () => fetch(`${WORKER}/resources`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
+      login: (u,p) => safeFetch(`${WORKER}/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u,password:p})}),
+      getResources: () => safeFetch(`${WORKER}/resources`,{headers:{"Content-Type":"application/json"}}),
       saveResource: (r) => r.id
-        ? fetch(`${WORKER}/resources/${r.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)}).then(r=>r.json())
-        : fetch(`${WORKER}/resources`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)}).then(r=>r.json()),
-      deleteResource: (id) => fetch(`${WORKER}/resources/${id}`,{method:"DELETE",headers:{"Content-Type":"application/json"}}),
-      getBookings: (from,to) => fetch(`${WORKER}/bookings?from=${from}&to=${to}`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
-      saveBooking: (b) => fetch(`${WORKER}/bookings`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json()),
-      updateBooking: (id,data) => fetch(`${WORKER}/bookings/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
-      deleteBooking: (id) => fetch(`${WORKER}/bookings/${id}`,{method:"DELETE",headers:{"Content-Type":"application/json"}}),
-      getFields: () => fetch(`${WORKER}/settings/booking-fields`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
-      saveFields: (fields) => fetch(`${WORKER}/settings/booking-fields`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(r=>r.json()),
-      getMembers: () => fetch(`${WORKER}/members`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
-      updateMember: (id,data) => fetch(`${WORKER}/members/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
-      updateMember: (id,data) => fetch(`${WORKER}/members/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
+        ? safeFetch(`${WORKER}/resources/${r.id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)})
+        : safeFetch(`${WORKER}/resources`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(r)}),
+      deleteResource: (id) => safeFetch(`${WORKER}/resources/${id}`,{method:"DELETE",headers:{"Content-Type":"application/json"}}),
+      getBookings: (from,to,resourceId) => safeFetch(`${WORKER}/bookings?from=${from}&to=${to}${resourceId?`&resource_id=${resourceId}`:""}`,{headers:{"Content-Type":"application/json"}}),
+      saveBooking: (b) => safeFetch(`${WORKER}/bookings`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}),
+      updateBooking: (id,data) => safeFetch(`${WORKER}/bookings/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}),
+      deleteBooking: (id) => safeFetch(`${WORKER}/bookings/${id}`,{method:"DELETE",headers:{"Content-Type":"application/json"}}),
+      getSettings: (key) => safeFetch(`${WORKER}/settings/${key}`,{headers:{"Content-Type":"application/json"}}),
+      saveSettings: (key,val) => safeFetch(`${WORKER}/settings/${key}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(val)}),
+      getMembers: () => safeFetch(`${WORKER}/members`,{headers:{"Content-Type":"application/json"}}),
+      updateMember: (id,data) => safeFetch(`${WORKER}/members/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}),
     };
 
     const fmt = (d) => d.toISOString().split("T")[0];
     const addDays = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
-    const slotToMins = (s) => s.h*60+s.m;
     const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
-    const timeToMins = (t) => { const [h,m]=t.split(":").map(Number); return h*60+m; };
-    const slotIndex = (time) => { const m=timeToMins(time); return Math.floor(m/30); };
+    const slotIndex = (time) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/30); };
 
     // ── Login ────────────────────────────────────────────────────────────────
     function Login({onLogin}) {
@@ -80,16 +83,25 @@
       );
     }
 
-    // ── Booking Modal ────────────────────────────────────────────────────────
-    function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username}) {
-      const [meta, setMeta] = useState(booking.metadata||{});
-      const [notes, setNotes] = useState(booking.notes||"");
-      const [status, setStatus] = useState(booking.status||"pending");
+    // ── Booking Form Modal ───────────────────────────────────────────────────
+    function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username, initialSlot, initialDate}) {
+      const isNew = !booking?.id;
+      const [date, setDate] = useState(booking?.date || initialDate || fmt(new Date()));
+      const [startTime, setStartTime] = useState(booking?.start_time || (initialSlot!=null ? minsToTime(initialSlot*30) : "09:00"));
+      const [endTime, setEndTime] = useState(booking?.end_time || (initialSlot!=null ? minsToTime((initialSlot+2)*30) : "10:00"));
+      const [fullDay, setFullDay] = useState(booking?.full_day || false);
+      const [notes, setNotes] = useState(booking?.notes || "");
+      const [meta, setMeta] = useState(booking?.metadata || {});
+      const [status, setStatus] = useState(booking?.status || (resource?.approval_required?"pending":"approved"));
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
         setSaving(true);
-        await api.updateBooking(booking.id, { metadata: meta, notes, status });
+        if(isNew) {
+          await api.saveBooking({resource_id:resource.id, username, date, full_day:fullDay, start_time:fullDay?null:startTime, end_time:fullDay?null:endTime, notes, metadata:meta, status});
+        } else {
+          await api.updateBooking(booking.id, {date, full_day:fullDay, start_time:fullDay?null:startTime, end_time:fullDay?null:endTime, notes, metadata:meta, status});
+        }
         setSaving(false);
         onSave();
       };
@@ -100,23 +112,74 @@
         onDelete();
       };
 
-      const canEdit = isAdmin || booking.username === username;
+      const canEdit = isAdmin || !booking?.id || booking?.username === username;
 
       return (
-        <div style={{position:"fixed",inset:0,background:"#0008",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-          <div style={{background:"#fff",borderRadius:12,padding:24,width:420,maxHeight:"80vh",overflowY:"auto",boxShadow:"0 8px 32px #0004"}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:"fixed",inset:0,background:"#0008",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseDown={onClose}>
+          <div style={{background:"#fff",borderRadius:12,padding:24,width:440,maxHeight:"85vh",overflowY:"auto",boxShadow:"0 8px 32px #0004"}} onMouseDown={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
               <div>
-                <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{resource?.name}</div>
-                <div style={{fontSize:12,color:"#64748b"}}>{booking.date} · {booking.full_day?"Full day":`${booking.start_time}–${booking.end_time}`} · {booking.username}</div>
+                <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>{isNew?"New Booking":resource?.name}</div>
+                {!isNew&&<div style={{fontSize:12,color:"#64748b"}}>{booking.username}</div>}
+                {resource?.approval_required&&isNew&&<div style={{fontSize:11,color:"#ea580c",marginTop:2}}>⚠ Requires admin approval</div>}
               </div>
-              <button onClick={onClose} style={{fontSize:16,background:"none",border:"none",cursor:"pointer",color:"#94a3b8"}}>✕</button>
+              <button onClick={onClose} style={{fontSize:18,background:"none",border:"none",cursor:"pointer",color:"#94a3b8",lineHeight:1}}>✕</button>
             </div>
 
-            {isAdmin && (
-              <div style={{marginBottom:14}}>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>DATE</label>
+              <input type="date" value={date} onChange={e=>setDate(e.target.value)} disabled={!canEdit}
+                style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
+            </div>
+
+            {resource?.booking_type!=="fullday" && (
+              <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569",marginBottom:12,cursor:"pointer"}}>
+                <input type="checkbox" checked={fullDay} onChange={e=>setFullDay(e.target.checked)} disabled={!canEdit}/>
+                Full day
+              </label>
+            )}
+
+            {!fullDay && (
+              <div style={{display:"flex",gap:10,marginBottom:12}}>
+                <div style={{flex:1}}>
+                  <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>START</label>
+                  <input type="time" value={startTime} onChange={e=>setStartTime(e.target.value)} disabled={!canEdit}
+                    style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1"}}/>
+                </div>
+                <div style={{flex:1}}>
+                  <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>END</label>
+                  <input type="time" value={endTime} onChange={e=>setEndTime(e.target.value)} disabled={!canEdit}
+                    style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1"}}/>
+                </div>
+              </div>
+            )}
+
+            {fields.map(f=>(
+              <div key={f.id} style={{marginBottom:12}}>
+                <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>{f.label.toUpperCase()}</label>
+                {f.type==="dropdown"
+                  ? <select value={meta[f.id]||""} onChange={e=>setMeta({...meta,[f.id]:e.target.value})} disabled={!canEdit}
+                      style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1"}}>
+                      <option value="">Select…</option>
+                      {(f.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
+                    </select>
+                  : <input value={meta[f.id]||""} onChange={e=>setMeta({...meta,[f.id]:e.target.value})} disabled={!canEdit}
+                      style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
+                }
+              </div>
+            ))}
+
+            <div style={{marginBottom:16}}>
+              <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>NOTES</label>
+              <textarea value={notes} onChange={e=>setNotes(e.target.value)} disabled={!canEdit} rows={3}
+                style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1",resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+
+            {isAdmin && !isNew && (
+              <div style={{marginBottom:16}}>
                 <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>STATUS</label>
-                <select value={status} onChange={e=>setStatus(e.target.value)} style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1"}}>
+                <select value={status} onChange={e=>setStatus(e.target.value)}
+                  style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1"}}>
                   <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
@@ -124,33 +187,12 @@
               </div>
             )}
 
-            {fields.map(f => (
-              <div key={f.id} style={{marginBottom:12}}>
-                <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>{f.label.toUpperCase()}</label>
-                {f.type==="dropdown"
-                  ? <select value={meta[f.id]||""} onChange={e=>setMeta({...meta,[f.id]:e.target.value})} disabled={!canEdit}
-                      style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1"}}>
-                      <option value="">Select…</option>
-                      {(f.options||[]).map(o=><option key={o} value={o}>{o}</option>)}
-                    </select>
-                  : <input value={meta[f.id]||""} onChange={e=>setMeta({...meta,[f.id]:e.target.value})} disabled={!canEdit}
-                      style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
-                }
-              </div>
-            ))}
-
-            <div style={{marginBottom:16}}>
-              <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>NOTES</label>
-              <textarea value={notes} onChange={e=>setNotes(e.target.value)} disabled={!canEdit}
-                style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",resize:"vertical",minHeight:60,boxSizing:"border-box"}}/>
-            </div>
-
             {canEdit && (
               <div style={{display:"flex",gap:8}}>
-                <button onClick={save} disabled={saving} style={{flex:1,fontSize:13,padding:"8px",borderRadius:7,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer",fontWeight:600}}>
-                  {saving?"Saving…":"Save"}
+                <button onClick={save} disabled={saving} style={{flex:1,fontSize:13,padding:"9px",borderRadius:7,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer",fontWeight:600,opacity:saving?0.7:1}}>
+                  {saving?"Saving…":isNew?"Create Booking":"Save Changes"}
                 </button>
-                <button onClick={del} style={{fontSize:13,padding:"8px 14px",borderRadius:7,border:"1px solid #fecaca",background:"#fff5f5",color:"#ef4444",cursor:"pointer"}}>Delete</button>
+                {!isNew&&<button onClick={del} style={{fontSize:13,padding:"9px 14px",borderRadius:7,border:"1px solid #fecaca",background:"#fff5f5",color:"#ef4444",cursor:"pointer"}}>Delete</button>}
               </div>
             )}
           </div>
@@ -159,76 +201,80 @@
     }
 
     // ── Admin Panel ──────────────────────────────────────────────────────────
-    function AdminPanel({resources, members, fields, onUpdate, onClose}) {
+    function AdminPanel({resources, members, onUpdate, onClose}) {
       const [tab, setTab] = useState("resources");
       const [editRes, setEditRes] = useState(null);
-      const [editFields, setEditFields] = useState(fields);
+      const [allFields, setAllFields] = useState({});
       const [saving, setSaving] = useState(false);
+      const [selectedResId, setSelectedResId] = useState(null);
+
+      useEffect(()=>{
+        (async()=>{
+          const f = await api.getSettings("booking-fields") || {};
+          setAllFields(f);
+        })();
+      },[]);
+
+      const currentFields = selectedResId ? (allFields[selectedResId]||[]) : [];
+      const setCurrentFields = (fields) => setAllFields({...allFields,[selectedResId]:fields});
 
       const saveResource = async () => {
         if(!editRes?.name?.trim()) return;
         setSaving(true);
         await api.saveResource(editRes);
-        setSaving(false);
-        setEditRes(null);
-        onUpdate();
+        setSaving(false); setEditRes(null); onUpdate();
       };
 
       const saveFields = async () => {
         setSaving(true);
-        await api.saveFields(editFields);
-        setSaving(false);
-        onUpdate();
+        await api.saveSettings("booking-fields", allFields);
+        setSaving(false); onUpdate();
       };
 
-      const togglePerm = async (m, perm) => {
+      const togglePerm = async (m) => {
         const perms = m.permissions||[];
-        const updated = perms.includes(perm) ? perms.filter(p=>p!==perm) : [...perms,perm];
-        await api.updateMember(m.id, {permissions:updated});
+        const updated = perms.includes("bookings")?perms.filter(p=>p!=="bookings"):[...perms,"bookings"];
+        await api.updateMember(m.id,{permissions:updated});
         onUpdate();
       };
 
-      const addField = () => setEditFields([...editFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
-      const updateField = (id,key,val) => setEditFields(editFields.map(f=>f.id===id?{...f,[key]:val}:f));
-      const removeField = (id) => setEditFields(editFields.filter(f=>f.id!==id));
+      const addField = () => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
+      const updateField = (id,key,val) => setCurrentFields(currentFields.map(f=>f.id===id?{...f,[key]:val}:f));
+      const removeField = (id) => setCurrentFields(currentFields.filter(f=>f.id!==id));
 
       return (
-        <div style={{position:"fixed",inset:0,background:"#0008",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-          <div style={{background:"#fff",borderRadius:12,width:560,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 32px #0004"}} onClick={e=>e.stopPropagation()}>
+        <div style={{position:"fixed",inset:0,background:"#0008",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseDown={onClose}>
+          <div style={{background:"#fff",borderRadius:12,width:580,maxHeight:"85vh",display:"flex",flexDirection:"column"}} onMouseDown={e=>e.stopPropagation()}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 20px",borderBottom:"1px solid #e2e8f0"}}>
               <div style={{fontSize:15,fontWeight:700,color:"#0f172a"}}>⚙️ Admin</div>
-              <button onClick={onClose} style={{fontSize:16,background:"none",border:"none",cursor:"pointer",color:"#94a3b8"}}>✕</button>
+              <button onClick={onClose} style={{fontSize:18,background:"none",border:"none",cursor:"pointer",color:"#94a3b8"}}>✕</button>
             </div>
-            <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0"}}>
+            <div style={{display:"flex",borderBottom:"1px solid #e2e8f0"}}>
               {["resources","fields","permissions"].map(t=>(
-                <button key={t} onClick={()=>setTab(t)} style={{flex:1,fontSize:12,padding:"10px",border:"none",borderBottom:`2px solid ${tab===t?"#2563eb":"transparent"}`,background:"none",cursor:"pointer",color:tab===t?"#2563eb":"#64748b",fontWeight:tab===t?600:400,textTransform:"capitalize"}}>
-                  {t}
-                </button>
+                <button key={t} onClick={()=>setTab(t)} style={{flex:1,fontSize:12,padding:"10px",border:"none",borderBottom:`2px solid ${tab===t?"#2563eb":"transparent"}`,background:"none",cursor:"pointer",color:tab===t?"#2563eb":"#64748b",fontWeight:tab===t?600:400,textTransform:"capitalize"}}>{t}</button>
               ))}
             </div>
             <div style={{flex:1,overflowY:"auto",padding:20}}>
 
-              {tab==="resources" && (
+              {tab==="resources"&&(
                 <div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
                     <div style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>Resources</div>
-                    <button onClick={()=>setEditRes({name:"",description:"",booking_type:"timeslot",approval_required:false})}
+                    <button onClick={()=>setEditRes({name:"",description:"",booking_type:"both",approval_required:false})}
                       style={{fontSize:12,padding:"4px 12px",borderRadius:6,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>+ Add</button>
                   </div>
-                  {editRes && (
+                  {editRes&&(
                     <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:14,marginBottom:12}}>
                       <input value={editRes.name||""} onChange={e=>setEditRes({...editRes,name:e.target.value})} placeholder="Resource name"
                         style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8,boxSizing:"border-box"}}/>
                       <input value={editRes.description||""} onChange={e=>setEditRes({...editRes,description:e.target.value})} placeholder="Description"
                         style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8,boxSizing:"border-box"}}/>
-                      <div style={{display:"flex",gap:8,marginBottom:8}}>
-                        <select value={editRes.booking_type||"timeslot"} onChange={e=>setEditRes({...editRes,booking_type:e.target.value})}
-                          style={{flex:1,fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1"}}>
-                          <option value="timeslot">Time slots</option>
-                          <option value="fullday">Full days</option>
-                          <option value="both">Both</option>
-                        </select>
-                      </div>
+                      <select value={editRes.booking_type||"both"} onChange={e=>setEditRes({...editRes,booking_type:e.target.value})}
+                        style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8}}>
+                        <option value="timeslot">Time slots only</option>
+                        <option value="fullday">Full days only</option>
+                        <option value="both">Both</option>
+                      </select>
                       <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569",marginBottom:12,cursor:"pointer"}}>
                         <input type="checkbox" checked={editRes.approval_required||false} onChange={e=>setEditRes({...editRes,approval_required:e.target.checked})}/>
                         Requires admin approval
@@ -255,38 +301,51 @@
                 </div>
               )}
 
-              {tab==="fields" && (
+              {tab==="fields"&&(
                 <div>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                    <div style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>Booking Metadata Fields</div>
-                    <button onClick={addField} style={{fontSize:12,padding:"4px 12px",borderRadius:6,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>+ Add field</button>
+                  <div style={{fontSize:13,fontWeight:600,color:"#1e293b",marginBottom:12}}>Fields per Resource</div>
+                  <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+                    {resources.map(r=>(
+                      <button key={r.id} onClick={()=>setSelectedResId(r.id)}
+                        style={{fontSize:12,padding:"5px 12px",borderRadius:6,border:`1px solid ${selectedResId===r.id?"#2563eb":"#e2e8f0"}`,background:selectedResId===r.id?"#eff6ff":"#fff",color:selectedResId===r.id?"#2563eb":"#475569",cursor:"pointer"}}>
+                        {r.name}
+                      </button>
+                    ))}
                   </div>
-                  {editFields.map((f,i)=>(
-                    <div key={f.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:12,marginBottom:10}}>
-                      <div style={{display:"flex",gap:8,marginBottom:8}}>
-                        <input value={f.label} onChange={e=>updateField(f.id,"label",e.target.value)} placeholder="Field label"
-                          style={{flex:2,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1"}}/>
-                        <select value={f.type} onChange={e=>updateField(f.id,"type",e.target.value)}
-                          style={{flex:1,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1"}}>
-                          <option value="text">Text</option>
-                          <option value="dropdown">Dropdown</option>
-                        </select>
-                        <button onClick={()=>removeField(f.id)} style={{fontSize:12,padding:"2px 8px",borderRadius:4,border:"1px solid #fecaca",background:"#fff5f5",color:"#ef4444",cursor:"pointer"}}>✕</button>
+                  {selectedResId ? (
+                    <>
+                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+                        <div style={{fontSize:12,color:"#64748b"}}>Fields for <strong>{resources.find(r=>r.id===selectedResId)?.name}</strong></div>
+                        <button onClick={addField} style={{fontSize:12,padding:"3px 10px",borderRadius:6,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>+ Add field</button>
                       </div>
-                      {f.type==="dropdown" && (
-                        <input value={(f.options||[]).join(", ")} onChange={e=>updateField(f.id,"options",e.target.value.split(",").map(s=>s.trim()).filter(Boolean))}
-                          placeholder="Options: comma, separated, values"
-                          style={{width:"100%",fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
-                      )}
-                    </div>
-                  ))}
-                  <button onClick={saveFields} disabled={saving} style={{width:"100%",fontSize:13,padding:"8px",borderRadius:7,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer",fontWeight:600,marginTop:8}}>
-                    {saving?"Saving…":"Save Fields"}
-                  </button>
+                      {currentFields.map(f=>(
+                        <div key={f.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:12,marginBottom:8}}>
+                          <div style={{display:"flex",gap:8,marginBottom:f.type==="dropdown"?8:0}}>
+                            <input value={f.label} onChange={e=>updateField(f.id,"label",e.target.value)} placeholder="Field label"
+                              style={{flex:2,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1"}}/>
+                            <select value={f.type} onChange={e=>updateField(f.id,"type",e.target.value)}
+                              style={{flex:1,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1"}}>
+                              <option value="text">Text</option>
+                              <option value="dropdown">Dropdown</option>
+                            </select>
+                            <button onClick={()=>removeField(f.id)} style={{fontSize:12,padding:"2px 8px",borderRadius:4,border:"1px solid #fecaca",background:"#fff5f5",color:"#ef4444",cursor:"pointer"}}>✕</button>
+                          </div>
+                          {f.type==="dropdown"&&(
+                            <input value={(f.options||[]).join(", ")} onChange={e=>updateField(f.id,"options",e.target.value.split(",").map(s=>s.trim()).filter(Boolean))}
+                              placeholder="Options: comma, separated"
+                              style={{width:"100%",fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
+                          )}
+                        </div>
+                      ))}
+                      <button onClick={saveFields} disabled={saving} style={{width:"100%",fontSize:13,padding:"8px",borderRadius:7,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer",fontWeight:600,marginTop:8}}>
+                        {saving?"Saving…":"Save Fields"}
+                      </button>
+                    </>
+                  ) : <div style={{fontSize:12,color:"#94a3b8"}}>Select a resource above to configure its fields.</div>}
                 </div>
               )}
 
-              {tab==="permissions" && (
+              {tab==="permissions"&&(
                 <div>
                   <div style={{fontSize:13,fontWeight:600,color:"#1e293b",marginBottom:12}}>Booking Permissions</div>
                   {members.map(m=>(
@@ -296,179 +355,92 @@
                         {m.role==="admin"&&<span style={{marginLeft:6,fontSize:10,background:"#2563eb",color:"#fff",borderRadius:99,padding:"1px 7px"}}>admin</span>}
                       </div>
                       <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"#475569",cursor:"pointer"}}>
-                        <input type="checkbox" checked={m.role==="admin"||(m.permissions||[]).includes("bookings")} disabled={m.role==="admin"} onChange={()=>togglePerm(m,"bookings")}/>
+                        <input type="checkbox" checked={m.role==="admin"||(m.permissions||[]).includes("bookings")} disabled={m.role==="admin"} onChange={()=>togglePerm(m)}/>
                         Can book
                       </label>
                     </div>
                   ))}
                 </div>
               )}
-
             </div>
           </div>
         </div>
       );
     }
 
-    // ── Weekly Grid ──────────────────────────────────────────────────────────
-    function WeeklyGrid({weekStart, resources, bookings, fields, user, isAdmin, canBook, onRefresh}) {
-      const [dragging, setDragging] = useState(null);
-      const [dragOver, setDragOver] = useState(null);
-      const [creating, setCreating] = useState(null);
-      const [selectedBooking, setSelectedBooking] = useState(null);
-      const isDraggingRef = useRef(false);
-      const gridRef = useRef(null);
-
+    // ── Weekly Calendar ──────────────────────────────────────────────────────
+    function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh}) {
+      const [modal, setModal] = useState(null); // {booking, slot, date}
       const days = Array.from({length:7},(_,i)=>addDays(weekStart,i));
+      const color = "#3b82f6";
 
-      const bookingsForSlot = (resourceId, dateStr, slotIdx) => {
-        return bookings.filter(b => {
-          if(b.resource_id!==resourceId || b.date!==dateStr) return false;
-          if(b.full_day) return true;
-          const start = slotIndex(b.start_time);
-          const end = slotIndex(b.end_time);
-          return slotIdx>=start && slotIdx<end;
-        });
-      };
+      const dayBookings = (dateStr) => bookings.filter(b=>b.date===dateStr);
 
-      const getBookingTop = (b) => b.full_day ? 0 : slotIndex(b.start_time)*SLOT_H;
-      const getBookingHeight = (b) => {
-        if(b.full_day) return SLOTS.length*SLOT_H;
-        const start = slotIndex(b.start_time);
-        const end = slotIndex(b.end_time);
-        return Math.max((end-start)*SLOT_H, SLOT_H);
-      };
-
-      const STATUS_COLOR = { pending:"#f59e0b", approved:"#10b981", rejected:"#ef4444" };
-
-      const handleSlotMouseDown = (resourceId, dateStr, slotIdx, e) => {
-        if(!canBook) return;
-        e.preventDefault();
-        isDraggingRef.current = false;
-        setCreating({ resourceId, date: dateStr, startSlot: slotIdx, endSlot: slotIdx+1 });
-      };
-
-      const handleSlotMouseEnter = (resourceId, dateStr, slotIdx) => {
-        if(creating && creating.resourceId===resourceId && creating.date===dateStr) {
-          isDraggingRef.current = true;
-          setCreating(prev=>({...prev, endSlot: Math.max(slotIdx+1, prev.startSlot+1)}));
-        }
-      };
-
-      const handleMouseUp = async (e) => {
-        e.stopPropagation();
-        if(creating && isDraggingRef.current) {
-          const resource = resources.find(r=>r.id===creating.resourceId);
-          const status = resource?.approval_required ? "pending" : "approved";
-          await api.saveBooking({
-            resource_id: creating.resourceId,
-            username: user.username,
-            date: creating.date,
-            full_day: false,
-            start_time: minsToTime(creating.startSlot*30),
-            end_time: minsToTime(creating.endSlot*30),
-            notes: "",
-            metadata: {},
-            status
-          });
-          onRefresh();
-        }
-        if(dragging && dragOver) {
-          await api.updateBooking(dragging.id, {
-            date: dragOver.date,
-            resource_id: dragOver.resourceId,
-            start_time: minsToTime(dragOver.slotIdx*30),
-            end_time: minsToTime((dragOver.slotIdx + dragging.slotSpan)*30),
-          });
-          setDragging(null);
-          setDragOver(null);
-          onRefresh();
-        }
-        isDraggingRef.current = false;
-        setCreating(null);
+      const getTop = (b) => b.full_day ? 0 : slotIndex(b.start_time)*SLOT_H;
+      const getHeight = (b) => {
+        if(b.full_day) return 48*SLOT_H;
+        const s=slotIndex(b.start_time), e=slotIndex(b.end_time);
+        return Math.max((e-s)*SLOT_H,SLOT_H);
       };
 
       return (
-        <div style={{flex:1,overflowY:"auto",overflowX:"auto"}} onMouseUp={handleMouseUp} onMouseLeave={()=>{setCreating(null);setDragging(null);setDragOver(null);}}>
-          {selectedBooking && (
+        <div style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
+          {modal && (
             <BookingModal
-              booking={selectedBooking}
-              resource={resources.find(r=>r.id===selectedBooking.resource_id)}
+              booking={modal.booking||{}}
+              resource={resource}
               fields={fields}
               isAdmin={isAdmin}
               username={user.username}
-              onSave={()=>{setSelectedBooking(null);onRefresh();}}
-              onDelete={()=>{setSelectedBooking(null);onRefresh();}}
-              onClose={()=>setSelectedBooking(null)}
+              initialSlot={modal.slot}
+              initialDate={modal.date}
+              onSave={()=>{setModal(null);onRefresh();}}
+              onDelete={()=>{setModal(null);onRefresh();}}
+              onClose={()=>setModal(null)}
             />
           )}
 
-          <div style={{display:"grid",gridTemplateColumns:`60px repeat(${resources.length*7},minmax(80px,1fr))`,minWidth:`${60+resources.length*7*80}px`}}>
-            {/* Header row */}
-            <div style={{position:"sticky",top:0,zIndex:10,background:"#f8fafc",borderBottom:"2px solid #e2e8f0"}}/>
-            {resources.map((res,ri)=>
-              days.map((day,di)=>(
-                <div key={`h-${ri}-${di}`} style={{position:"sticky",top:0,zIndex:10,padding:"6px 4px",background:ri%2===0?"#f8fafc":"#f1f5f9",borderBottom:"2px solid #e2e8f0",borderLeft:"1px solid #e2e8f0",textAlign:"center"}}>
-                  {di===0&&<div style={{fontSize:10,fontWeight:700,color:COLORS[ri%COLORS.length],marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{res.name}</div>}
-                  <div style={{fontSize:11,fontWeight:600,color:"#1e293b"}}>{day.toLocaleDateString("en",{weekday:"short"})}</div>
-                  <div style={{fontSize:10,color:"#94a3b8"}}>{day.toLocaleDateString("en",{month:"short",day:"numeric"})}</div>
+          <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600,position:"sticky",top:0,zIndex:10,background:"#fff",borderBottom:"2px solid #e2e8f0"}}>
+            <div style={{padding:"8px 4px"}}/>
+            {days.map((day,i)=>{
+              const isToday = fmt(day)===fmt(new Date());
+              return (
+                <div key={i} style={{padding:"8px 4px",textAlign:"center",borderLeft:"1px solid #e2e8f0"}}>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>{day.toLocaleDateString("en",{weekday:"short"})}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:isToday?"#2563eb":"#1e293b",background:isToday?"#eff6ff":"transparent",borderRadius:"50%",width:26,height:26,lineHeight:"26px",margin:"2px auto 0"}}>{day.getDate()}</div>
                 </div>
-              ))
-            )}
+              );
+            })}
+          </div>
 
-            {/* Time slots */}
+          <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600}}>
             {SLOTS.map((slot,si)=>(
               <React.Fragment key={si}>
-                <div style={{height:SLOT_H,borderBottom:"1px solid #f1f5f9",padding:"0 6px",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingTop:1}}>
-                  {slot.m===0&&<span style={{fontSize:10,color:"#94a3b8",whiteSpace:"nowrap"}}>{slot.label}</span>}
+                <div style={{height:SLOT_H,borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:8,paddingTop:2}}>
+                  {slot.m===0&&<span style={{fontSize:10,color:"#94a3b8"}}>{slot.label}</span>}
                 </div>
-                {resources.map((res,ri)=>
-                  days.map((day,di)=>{
-                    const dateStr = fmt(day);
-                    const isCreating = creating && creating.resourceId===res.id && creating.date===dateStr && si>=creating.startSlot && si<creating.endSlot;
-                    const isDragOver = dragOver && dragOver.resourceId===res.id && dragOver.date===dateStr && si===dragOver.slotIdx;
-                    const dayBookingsForRes = si===0 ? bookings.filter(b=>b.resource_id===res.id&&b.date===dateStr) : [];
-
-                    return (
-                      <div key={`s-${ri}-${di}-${si}`}
-                        className="slot"
-                        style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",background:isCreating?"#bfdbfe":isDragOver?"#e0e7ff":ri%2===0?"#fff":"#fafafa",position:"relative",cursor:canBook?"crosshair":"default"}}
-                        onMouseDown={(e)=>handleSlotMouseDown(res.id,dateStr,si,e)}
-                        onMouseEnter={()=>{handleSlotMouseEnter(res.id,dateStr,si); if(dragging) setDragOver({resourceId:res.id,date:dateStr,slotIdx:si});}}
-                      >
-                        {/* Render bookings starting at this slot */}
-                        {si===0 && dayBookingsForRes.map(b=>(
-                          <div key={b.id}
-                            className="booking-block"
-                            draggable
-                            onDragStart={(e)=>{
-                              e.stopPropagation();
-                              const span = b.full_day ? 48 : slotIndex(b.end_time)-slotIndex(b.start_time);
-                              setDragging({...b, slotSpan:span});
-                            }}
-                            onClick={(e)=>{e.stopPropagation(); e.preventDefault(); setSelectedBooking(b);}}
-                            style={{
-                              position:"absolute",
-                              top: getBookingTop(b),
-                              left:2, right:2,
-                              height: getBookingHeight(b)-2,
-                              background: COLORS[ri%COLORS.length]+"dd",
-                              borderRadius:5,
-                              padding:"2px 5px",
-                              zIndex:5,
-                              overflow:"hidden",
-                              borderLeft:`3px solid ${STATUS_COLOR[b.status]||"#94a3b8"}`,
-                              boxShadow:"0 1px 3px #0002"
-                            }}>
-                            <div style={{fontSize:10,fontWeight:700,color:"#fff",lineHeight:1.3}}>{b.username}</div>
-                            {!b.full_day&&<div style={{fontSize:9,color:"#ffffffcc"}}>{b.start_time}–{b.end_time}</div>}
-                            {b.notes&&<div style={{fontSize:9,color:"#ffffffaa",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{b.notes}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })
-                )}
+                {days.map((day,di)=>{
+                  const dateStr=fmt(day);
+                  const dBookings = si===0 ? dayBookings(dateStr) : [];
+                  return (
+                    <div key={di} className="slot-row"
+                      style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",position:"relative",background:"#fff"}}
+                      onClick={()=>canBook&&setModal({booking:null,slot:si,date:dateStr})}>
+                      {si===0&&dBookings.map(b=>(
+                        <div key={b.id}
+                          style={{position:"absolute",top:getTop(b)+1,left:2,right:2,height:getHeight(b)-2,background:color+"22",borderLeft:`3px solid ${STATUS_COLOR[b.status]||"#94a3b8"}`,borderRadius:4,padding:"2px 6px",zIndex:5,overflow:"hidden",cursor:"pointer"}}
+                          onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
+                          <div style={{fontSize:10,fontWeight:700,color:"#1e293b",lineHeight:1.3}}>{b.username}</div>
+                          {!b.full_day&&<div style={{fontSize:9,color:"#64748b"}}>{b.start_time}–{b.end_time}</div>}
+                          {Object.entries(b.metadata||{}).slice(0,1).map(([k,v])=>(
+                            <div key={k} style={{fontSize:9,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{v}</div>
+                          ))}
+                          <div style={{position:"absolute",top:2,right:4,fontSize:9,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"1px 4px",fontWeight:600,textTransform:"capitalize"}}>{b.status}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </React.Fragment>
             ))}
           </div>
@@ -478,53 +450,58 @@
 
     // ── App ──────────────────────────────────────────────────────────────────
     function App() {
-      const [user, setUser] = useState(()=>{try{return JSON.parse(sessionStorage.getItem("kerno-user"))||null;}catch{return null;}});
-      const [resources, setResources] = useState([]);
-      const [bookings, setBookings] = useState([]);
-      const [members, setMembers] = useState([]);
-      const [fields, setFields] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [showAdmin, setShowAdmin] = useState(false);
-      const [weekStart, setWeekStart] = useState(()=>{
-        const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d;
-      });
+      const [user,setUser]=useState(()=>{try{return JSON.parse(sessionStorage.getItem("kerno-user"))||null;}catch{return null;}});
+      const [resources,setResources]=useState([]);
+      const [selectedRes,setSelectedRes]=useState(null);
+      const [bookings,setBookings]=useState([]);
+      const [members,setMembers]=useState([]);
+      const [allFields,setAllFields]=useState({});
+      const [loading,setLoading]=useState(true);
+      const [showAdmin,setShowAdmin]=useState(false);
+      const [weekStart,setWeekStart]=useState(()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);return d;});
 
       const handleLogin=(u,r,p)=>{const obj={username:u,role:r,permissions:p};sessionStorage.setItem("kerno-user",JSON.stringify(obj));setUser(obj);};
       const handleLogout=()=>{sessionStorage.removeItem("kerno-user");setUser(null);};
 
-      const isAdmin = user?.role==="admin";
-      const canBook = isAdmin||user?.permissions?.includes("bookings");
+      const isAdmin=user?.role==="admin";
+      const canBook=isAdmin||user?.permissions?.includes("bookings");
 
-      const loadData = async () => {
-        setLoading(true);
-        try {
-          const from = fmt(weekStart);
-          const to = fmt(addDays(weekStart,6));
-          const [r,b,m,f] = await Promise.all([api.getResources(), api.getBookings(from,to), api.getMembers(), api.getFields()]);
-          setResources(Array.isArray(r)?r:[]);
-          setBookings(Array.isArray(b)?b:[]);
-          setMembers(Array.isArray(m)?m:[]);
-          setFields(Array.isArray(f)?f:[]);
-        } catch(e){console.error(e);}
+      const loadBase = async () => {
+        const [r,m,f] = await Promise.all([api.getResources(), api.getMembers(), api.getSettings("booking-fields")]);
+        const resList = Array.isArray(r)?r:[];
+        setResources(resList);
+        setMembers(Array.isArray(m)?m:[]);
+        setAllFields(f&&typeof f==="object"?f:{});
+        if(!selectedRes&&resList.length) setSelectedRes(resList[0]);
         setLoading(false);
       };
 
-      useEffect(()=>{if(user) loadData(); else setLoading(false);},[user,weekStart]);
+      const loadBookings = async () => {
+        if(!selectedRes) return;
+        const from=fmt(weekStart), to=fmt(addDays(weekStart,6));
+        const b = await api.getBookings(from,to);
+        setBookings(Array.isArray(b)?b.filter(bk=>bk.resource_id===selectedRes.id):[]);
+      };
+
+      useEffect(()=>{if(user) loadBase(); else setLoading(false);},[user]);
+      useEffect(()=>{if(selectedRes) loadBookings();},[selectedRes,weekStart]);
 
       if(!user) return <Login onLogin={handleLogin}/>;
+      if(loading) return <div style={{padding:32,color:"#64748b"}}>Loading…</div>;
 
-      const weekLabel = `${weekStart.toLocaleDateString("en",{month:"short",day:"numeric"})} – ${addDays(weekStart,6).toLocaleDateString("en",{month:"short",day:"numeric",year:"numeric"})}`;
+      const currentFields = selectedRes ? (allFields[selectedRes.id]||[]) : [];
+      const weekLabel=`${weekStart.toLocaleDateString("en",{month:"short",day:"numeric"})} – ${addDays(weekStart,6).toLocaleDateString("en",{month:"short",day:"numeric",year:"numeric"})}`;
 
       return (
-        <div style={{fontFamily:"system-ui,sans-serif",height:"100vh",display:"flex",flexDirection:"column",background:"#f8fafc"}}>
-          {showAdmin && <AdminPanel resources={resources} members={members} fields={fields} onUpdate={()=>{loadData();}} onClose={()=>setShowAdmin(false)}/>}
+        <div style={{fontFamily:"system-ui,sans-serif",height:"100vh",display:"flex",flexDirection:"column"}}>
+          {showAdmin&&<AdminPanel resources={resources} members={members} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}/>}
 
           {/* Header */}
           <div style={{background:"#0f172a",padding:"10px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
             <a href="index.html" style={{fontSize:15,fontWeight:700,color:"#fff",textDecoration:"none"}}>⚙️ Kerno</a>
             <span style={{color:"#475569"}}>›</span>
             <span style={{fontSize:13,color:"#94a3b8"}}>Bookings</span>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:16}}>
               <button onClick={()=>setWeekStart(addDays(weekStart,-7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>‹</button>
               <span style={{fontSize:12,color:"#f1f5f9",fontWeight:600,minWidth:180,textAlign:"center"}}>{weekLabel}</span>
               <button onClick={()=>setWeekStart(addDays(weekStart,7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>›</button>
@@ -537,34 +514,40 @@
             </div>
           </div>
 
-          {/* Legend */}
-          <div style={{display:"flex",gap:16,padding:"6px 20px",background:"#fff",borderBottom:"1px solid #e2e8f0",flexShrink:0,alignItems:"center"}}>
-            {resources.map((r,i)=>(
-              <div key={r.id} style={{display:"flex",alignItems:"center",gap:5,fontSize:11}}>
-                <div style={{width:10,height:10,borderRadius:2,background:COLORS[i%COLORS.length]}}/>
-                <span style={{color:"#475569"}}>{r.name}</span>
-              </div>
-            ))}
-            <div style={{marginLeft:"auto",display:"flex",gap:12}}>
-              {[["pending","#f59e0b"],["approved","#10b981"],["rejected","#ef4444"]].map(([s,c])=>(
-                <div key={s} style={{display:"flex",alignItems:"center",gap:4,fontSize:11}}>
-                  <div style={{width:3,height:12,borderRadius:1,background:c}}/>
-                  <span style={{color:"#94a3b8",textTransform:"capitalize"}}>{s}</span>
+          <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+            {/* Sidebar */}
+            <div style={{width:200,minWidth:200,background:"#1e293b",padding:"12px 0",overflowY:"auto",flexShrink:0}}>
+              <div style={{padding:"4px 14px 8px",fontSize:11,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:.5}}>Resources</div>
+              {resources.length===0&&<div style={{padding:"8px 14px",fontSize:12,color:"#475569"}}>No resources yet.</div>}
+              {resources.map((r,i)=>(
+                <div key={r.id} onClick={()=>setSelectedRes(r)}
+                  style={{padding:"10px 14px",cursor:"pointer",borderLeft:`3px solid ${selectedRes?.id===r.id?COLORS[i%COLORS.length]:"transparent"}`,background:selectedRes?.id===r.id?"#334155":"transparent"}}>
+                  <div style={{fontSize:12,fontWeight:600,color:selectedRes?.id===r.id?"#f1f5f9":"#94a3b8"}}>{r.name}</div>
+                  {r.description&&<div style={{fontSize:11,color:"#475569",marginTop:2}}>{r.description}</div>}
+                  <div style={{fontSize:10,color:r.approval_required?"#ea580c":"#22c55e",marginTop:3}}>
+                    {r.approval_required?"⚠ Approval required":"✓ Auto-confirm"}
+                  </div>
                 </div>
               ))}
-              {canBook&&<span style={{fontSize:11,color:"#94a3b8"}}>· Click & drag to create</span>}
             </div>
-          </div>
 
-          {loading ? <div style={{padding:32,color:"#64748b"}}>Loading…</div> :
-            resources.length===0 ? (
-              <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:14}}>
-                {isAdmin ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} style={{color:"#2563eb",background:"none",border:"none",cursor:"pointer",fontSize:14}}>Add one in Admin →</button></span> : "No resources available."}
-              </div>
-            ) : (
-              <WeeklyGrid weekStart={weekStart} resources={resources} bookings={bookings} fields={fields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadData}/>
-            )
-          }
+            {/* Calendar */}
+            {selectedRes
+              ? <WeeklyCalendar
+                  resource={selectedRes}
+                  weekStart={weekStart}
+                  bookings={bookings}
+                  fields={currentFields}
+                  user={user}
+                  isAdmin={isAdmin}
+                  canBook={canBook}
+                  onRefresh={loadBookings}
+                />
+              : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:14}}>
+                  {isAdmin?<span>No resources yet. <button onClick={()=>setShowAdmin(true)} style={{color:"#2563eb",background:"none",border:"none",cursor:"pointer",fontSize:14}}>Add one →</button></span>:"No resources available."}
+                </div>
+            }
+          </div>
         </div>
       );
     }
