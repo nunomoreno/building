@@ -40,7 +40,8 @@
       getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       getMembers: () => fetch(`${WORKER}/db/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       deleteMember: (id) => fetch(`${WORKER}/db/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
-      notify: (actor, taskTitle, projectName, mentions) => fetch(`${WORKER}/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "mention", actor, taskTitle, projectName, mentions }) }),
+      notify: (actor, taskTitle, projectName, mentionsWithEmails) =>
+        fetch(`${WORKER}/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ actor, taskTitle, projectName, mentionsWithEmails }) }),
       ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
     };
 
@@ -166,6 +167,7 @@
     // ── Users Panel ──────────────────────────────────────────────────────────
     function UsersPanel() {
       const [members, setMembers] = useState([]);
+      const membersRef = useRef([]);
       const [loading, setLoading] = useState(true);
       const [newUser, setNewUser] = useState("");
       const [newPass, setNewPass] = useState("");
@@ -289,7 +291,7 @@
     }
 
     // ── Board ────────────────────────────────────────────────────────────────
-    function Board({ project, onUpdate, username, members }) {
+    function Board({ project, onUpdate, username, members, membersRef }) {
       const [editing, setEditing] = useState(null);
       const [draft, setDraft] = useState("");
       const [addingTo, setAddingTo] = useState(null);
@@ -311,16 +313,20 @@
         const t = project.tasks.find(t => t.id === editing.id);
         await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
         api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
-        if (editing.field === "notes") {
-          const mentions = extractMentions(draft);
-          if (mentions.length) {
-            const key = `${project.id}-${editing.id}`;
-            clearTimeout(mentionTimers.current[key]);
-            mentionTimers.current[key] = setTimeout(() => {
-              api.notify(username, t.title, project.name, mentions);
-            }, 30000);
+          if (editing.field === "notes") {
+            const mentions = extractMentions(draft);
+            if (mentions.length) {
+              const key = `${project.id}-${editing.id}`;
+              clearTimeout(mentionTimers.current[key]);
+              mentionTimers.current[key] = setTimeout(() => {
+                const mentionsWithEmails = mentions.map(u => ({
+                  username: u,
+                  email: membersRef.current.find(m => m.username === u)?.email || null
+                }));
+                api.notify(username, t.title, project.name, mentionsWithEmails);
+              }, 30000);
+            }
           }
-        }
         setEditing(null);
       };
 
@@ -422,8 +428,10 @@
           const [data, m] = await Promise.all([api.getProjects(), api.getMembers()]);
           const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
           setProjects(p);
-          setMembers(Array.isArray(m) ? m.map(u => u.username) : []);
-          setActive(a => a || p[0]?.id || null);
+          const memberList = Array.isArray(m) ? m : [];
+          setMembers(memberList.map(u => u.username));
+          // Store full member info including emails
+          membersRef.current = memberList;
         } catch { setProjects([]); }
         setLoading(false);
       };
@@ -524,7 +532,7 @@
             <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
               {activeProject
                 ? <><h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                    <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} /></>
+                    <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} /></>
                 : <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
               }
             </div>
