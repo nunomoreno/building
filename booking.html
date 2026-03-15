@@ -39,7 +39,8 @@
       saveBooking: (b) => fetch(`${WORKER}/bookings`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)}).then(r=>r.json()),
       updateBooking: (id,data) => fetch(`${WORKER}/bookings/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
       deleteBooking: (id) => fetch(`${WORKER}/bookings/${id}`,{method:"DELETE",headers:{"Content-Type":"application/json"}}),
-      getMembers: () => fetch(`${WORKER}/members`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
+      getFields: () => fetch(`${WORKER}/settings/booking-fields`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
+      saveFields: (fields) => fetch(`${WORKER}/settings/booking-fields`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(r=>r.json()),
       updateMember: (id,data) => fetch(`${WORKER}/members/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
     };
 
@@ -173,8 +174,7 @@
 
       const saveFields = async () => {
         setSaving(true);
-        // Store fields as a special resource metadata
-        await fetch(`${WORKER}/db-fields`, {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({fields:editFields})});
+        await api.saveFields(editFields);
         setSaving(false);
         onUpdate();
       };
@@ -493,10 +493,11 @@
         try {
           const from = fmt(weekStart);
           const to = fmt(addDays(weekStart,6));
-          const [r,b,m] = await Promise.all([api.getResources(), api.getBookings(from,to), api.getMembers()]);
+          const [r,b,m,f] = await Promise.all([api.getResources(), api.getBookings(from,to), api.getMembers(), api.getFields()]);
           setResources(Array.isArray(r)?r:[]);
           setBookings(Array.isArray(b)?b:[]);
           setMembers(Array.isArray(m)?m:[]);
+          setFields(Array.isArray(f)?f:[]);
         } catch(e){console.error(e);}
         setLoading(false);
       };
