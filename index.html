@@ -37,7 +37,9 @@
         : fetch(`${WORKER}/db/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: p }) }).then(r => r.json()),
       deleteProject: (id) => fetch(`${WORKER}/db/projects/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
       log: (username, action, details) => fetch(`${WORKER}/db/logs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, action, details, timestamp: new Date().toISOString() }) }),
-      getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      getMembers: () => fetch(`${WORKER}/db/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
+      addMember: (username, password) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }) }).then(r => r.json()),
+      deleteMember: (id) => fetch(`${WORKER}/db/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
       ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
     };
 
@@ -52,10 +54,9 @@
       const submit = async () => {
         if (!username.trim() || !password.trim()) return;
         setLoading(true); setError("");
-        const fn = mode === "login" ? api.login : api.register;
-        const res = await fn(username.trim(), password.trim());
-        if (res.error) setError(res.error);
-        else onLogin(res.username);
+        const res = await api.login(username.trim(), password.trim());
+        if (res.error) setError("Invalid username or password.");
+        else onLogin(res.username, res.role);
         setLoading(false);
       };
 
@@ -63,7 +64,7 @@
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a" }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "36px 40px", width: 320, boxShadow: "0 4px 24px #0004" }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>📋 Building Issues</div>
-            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24 }}>{mode === "login" ? "Sign in to continue" : "Create a new account"}</div>
+            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24 }}>Sign in to continue</div>
             <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username"
               style={{ width: "100%", fontSize: 13, padding: "9px 12px", borderRadius: 7, border: "1px solid #cbd5e1", marginBottom: 10, outline: "none" }} />
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password"
@@ -74,9 +75,8 @@
               style={{ width: "100%", fontSize: 14, padding: "10px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: loading ? 0.7 : 1 }}>
               {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
             </button>
-            <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: "#64748b" }}>
-              {mode === "login" ? <>No account? <span onClick={() => { setMode("register"); setError(""); }} style={{ color: "#2563eb", cursor: "pointer" }}>Register</span></> 
-                               : <>Have an account? <span onClick={() => { setMode("login"); setError(""); }} style={{ color: "#2563eb", cursor: "pointer" }}>Sign in</span></>}
+            <div style={{ marginTop: 14, textAlign: "center", fontSize: 12, color: "#94a3b8" }}>
+              Contact your administrator to get access.
             </div>
           </div>
         </div>
@@ -299,14 +299,14 @@
         const p = { id, name: newProjectName.trim(), tasks: [] };
         const res = await api.saveProject(p);
         setProjects(prev => [...prev, { ...p, _id: res._id }]);
-        api.log(user, "add_project", `Created project "${p.name}"`);
+        api.log(user.username, "add_project", `Created project "${p.name}"`);
         setActive(id); setNewProjectName(""); setAddingProject(false);
       };
 
       const deleteProject = async (id) => {
         const p = projects.find(p => p.id === id);
         if (p?._id) await api.deleteProject(p._id);
-        api.log(user, "delete_project", `Deleted project "${p?.name}"`);
+        api.log(user.username, "delete_project", `Deleted project "${p?.name}"`);
         const updated = projects.filter(p => p.id !== id);
         setProjects(updated);
         if (active === id) setActive(updated[0]?.id || null);
@@ -325,8 +325,9 @@
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user}</span>
+              <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
               <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
+              {isAdmin && <button onClick={() => setPanel(panel === "users" ? null : "users")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "users" ? "#2563eb" : "#1e293b", color: panel === "users" ? "#fff" : "#94a3b8", cursor: "pointer" }}>👥 Users</button>}
               <button onClick={() => setPanel(panel === "ai" ? null : "ai")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "ai" ? "#2563eb" : "#1e293b", color: panel === "ai" ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI</button>
               <button onClick={handleLogout} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>Sign out</button>
             </div>
@@ -364,8 +365,9 @@
 
             {panel && (
               <div style={{ width: 320, minWidth: 320, borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
-                {panel === "ai" && <AIChat projects={projects} onRefresh={loadData} username={user} />}
+                {panel === "ai" && <AIChat projects={projects} onRefresh={loadData} username={user.username} />}
                 {panel === "log" && <AuditLog />}
+                {panel === "users" && isAdmin && <UsersPanel />}
               </div>
             )}
           </div>
