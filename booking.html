@@ -316,6 +316,7 @@
       const [dragOver, setDragOver] = useState(null);
       const [creating, setCreating] = useState(null);
       const [selectedBooking, setSelectedBooking] = useState(null);
+      const isDraggingRef = useRef(false);
       const gridRef = useRef(null);
 
       const days = Array.from({length:7},(_,i)=>addDays(weekStart,i));
@@ -343,18 +344,20 @@
       const handleSlotMouseDown = (resourceId, dateStr, slotIdx, e) => {
         if(!canBook) return;
         e.preventDefault();
+        isDraggingRef.current = false;
         setCreating({ resourceId, date: dateStr, startSlot: slotIdx, endSlot: slotIdx+1 });
       };
 
       const handleSlotMouseEnter = (resourceId, dateStr, slotIdx) => {
         if(creating && creating.resourceId===resourceId && creating.date===dateStr) {
+          isDraggingRef.current = true;
           setCreating(prev=>({...prev, endSlot: Math.max(slotIdx+1, prev.startSlot+1)}));
         }
       };
 
       const handleMouseUp = async (e) => {
         e.stopPropagation();
-        if(creating) {
+        if(creating && isDraggingRef.current) {
           const resource = resources.find(r=>r.id===creating.resourceId);
           const status = resource?.approval_required ? "pending" : "approved";
           await api.saveBooking({
@@ -368,7 +371,6 @@
             metadata: {},
             status
           });
-          setCreating(null);
           onRefresh();
         }
         if(dragging && dragOver) {
@@ -382,6 +384,8 @@
           setDragOver(null);
           onRefresh();
         }
+        isDraggingRef.current = false;
+        setCreating(null);
       };
 
       return (
