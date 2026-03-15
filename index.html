@@ -26,6 +26,18 @@
       "Done":        { bg: "#f0fdf4", border: "#86efac", badge: "#16a34a" },
     };
 
+    const SEED_PROJECTS = [
+      {
+        id: "proj-benches",
+        name: "Benches",
+        tasks: [
+          { id: 1, col: "To Do", title: "Ask building engineers about the AC separation", notes: "HVAC is shared with no pressure differential needed. Main concern is how airflow behaves across the glass partition and door — check with Kottermann and building engineers whether the shared system will distribute air evenly across the mixed lab area." },
+          { id: 2, col: "To Do", title: "Speak with David to check the labs", notes: "" },
+          { id: 3, col: "In Progress", title: "Ask Kottermann how would it be a mix lab", notes: "Ask for different layout options" },
+        ]
+      }
+    ];
+
     const RESTDB_URL = "https://bulding-a424.restdb.io/rest/projects";
     const RESTDB_KEY = "93feb58282378b2272fab38a13cc64c7b42bf";
     const HEADERS = {
@@ -40,7 +52,7 @@
         try {
           const res = await fetch(RESTDB_URL, { headers: HEADERS });
           const data = await res.json();
-          // data is an array of records, each with _id and project fields
+          if (!data.length) return SEED_PROJECTS;
           return data.map(r => ({ ...r.project, _id: r._id }));
         } catch (e) { console.error("Load error", e); return []; }
       },
