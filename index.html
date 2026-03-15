@@ -40,7 +40,8 @@
       getLogs: () => fetch(`${WORKER}/db/logs?sort={"timestamp":-1}&max=50`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       getMembers: () => fetch(`${WORKER}/db/members`, { headers: { "Content-Type": "application/json" } }).then(r => r.json()),
       deleteMember: (id) => fetch(`${WORKER}/db/members/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" } }),
-      ai: (body) => fetch(`${WORKER}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json()),
+      notify: (type, actor, taskTitle, projectName, mentions, allMembers) =>
+        fetch(`${WORKER}/notify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, actor, taskTitle, projectName, mentions, allMembers }) }),
     };
 
     // ── Login ────────────────────────────────────────────────────────────────
@@ -229,7 +230,7 @@
     }
 
     // ── Board ────────────────────────────────────────────────────────────────
-    function Board({ project, onUpdate, username }) {
+    function Board({ project, onUpdate, username, members }) {
       const [editing, setEditing] = useState(null);
       const [draft, setDraft] = useState("");
       const [addingTo, setAddingTo] = useState(null);
@@ -246,8 +247,12 @@
       const commitEdit = async () => {
         if (!editing) return;
         const t = project.tasks.find(t => t.id === editing.id);
-        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) });
+        const updated = { ...project, tasks: project.tasks.map(t => t.id === editing.id ? { ...t, [editing.field]: draft } : t) };
+        await onUpdate(updated);
         api.log(username, "update_task", `Updated ${editing.field} of "${t.title}" in ${project.name}`);
+        // Send notifications
+        const mentions = editing.field === "notes" ? extractMentions(draft) : [];
+        api.notify("task_change", username, t.title, project.name, mentions, members);
         setEditing(null);
       };
       const deleteTask = async (id) => {
@@ -260,6 +265,7 @@
         const task = { id: Date.now(), col, title: newTitle.trim(), notes: "" };
         await onUpdate({ ...project, tasks: [...project.tasks, task] });
         api.log(username, "add_task", `Added "${task.title}" to ${project.name} as ${col}`);
+        api.notify("task_change", username, task.title, project.name, [], members);
         setNewTitle(""); setAddingTo(null);
       };
 
@@ -282,7 +288,7 @@
                         : <div onClick={() => startEdit(task.id, "title", task.title)} style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
                       }
                       {editing?.id === task.id && editing.field === "notes"
-                        ? <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
+                        ? <MentionTextarea members={members} value={draft} onChange={setDraft} onBlur={commitEdit} onKeyDown={e => { if (e.key === "Escape") setEditing(null); }} style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
                         : <div onClick={() => startEdit(task.id, "notes", task.notes || "")} style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>{task.notes || <em>add note…</em>}</div>
                       }
                       <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
@@ -314,6 +320,7 @@
     function App() {
       const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem("bi-user")) || null; } catch { return null; } });
       const [projects, setProjects] = useState([]);
+      const [members, setMembers] = useState([]);
       const [active, setActive] = useState(null);
       const [loading, setLoading] = useState(true);
       const [addingProject, setAddingProject] = useState(false);
@@ -330,11 +337,35 @@
           const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
           setProjects(p);
           setActive(a => a || p[0]?.id || null);
+          // Load members for @mentions
+          const m = await api.getMembers();
+          setMembers(Array.isArray(m) ? m.map(u => u.username) : []);
         } catch { setProjects([]); }
         setLoading(false);
       };
 
       useEffect(() => { if (user) loadData(); else setLoading(false); }, [user]);
+
+      // ── Polling ────────────────────────────────────────────────────────────
+      const projectsRef = useRef(projects);
+      useEffect(() => { projectsRef.current = projects; }, [projects]);
+
+      useEffect(() => {
+        if (!user) return;
+        const poll = async () => {
+          if (document.hidden) return;
+          try {
+            const data = await api.getProjects();
+            const p = Array.isArray(data) ? data.map(r => ({ ...r.project, _id: r._id })) : [];
+            if (JSON.stringify(p) !== JSON.stringify(projectsRef.current)) {
+              setProjects(p);
+              setActive(a => a || p[0]?.id || null);
+            }
+          } catch {}
+        };
+        const interval = setInterval(poll, 5000);
+        return () => clearInterval(interval);
+      }, [user]);
 
       const updateProject = async (updated) => {
         await api.saveProject(updated);
@@ -373,6 +404,7 @@
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
+            <span style={{ fontSize: 11, color: "#22c55e" }}>● Live</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
               <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
@@ -407,7 +439,7 @@
             <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
               {activeProject
                 ? <><h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                    <Board project={activeProject} onUpdate={updateProject} username={user.username} /></>
+                    <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} /></>
                 : <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
               }
             </div>
