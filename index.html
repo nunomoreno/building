@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Building Issues</title>
+      <title>Kerno</title>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -111,7 +111,7 @@
       return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f172a" }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: "36px 40px", width: 320, boxShadow: "0 4px 24px #0004" }}>
-            <div style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>📋 Building Issues</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>⚙️ Kerno</div>
             <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24 }}>Sign in to continue</div>
             <input value={username} onChange={e => setUsername(e.target.value)} placeholder="Username"
               style={{ width: "100%", fontSize: 13, padding: "9px 12px", borderRadius: 7, border: "1px solid #cbd5e1", marginBottom: 10, outline: "none" }} />
@@ -463,7 +463,7 @@
       return (
         <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>📋 Building Issues</span>
+            <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>⚙️ Kerno</span>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
