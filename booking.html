@@ -41,6 +41,8 @@
       deleteBooking: (id) => fetch(`${WORKER}/bookings/${id}`,{method:"DELETE",headers:{"Content-Type":"application/json"}}),
       getFields: () => fetch(`${WORKER}/settings/booking-fields`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
       saveFields: (fields) => fetch(`${WORKER}/settings/booking-fields`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(fields)}).then(r=>r.json()),
+      getMembers: () => fetch(`${WORKER}/members`,{headers:{"Content-Type":"application/json"}}).then(r=>r.json()),
+      updateMember: (id,data) => fetch(`${WORKER}/members/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
       updateMember: (id,data) => fetch(`${WORKER}/members/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)}).then(r=>r.json()),
     };
 
