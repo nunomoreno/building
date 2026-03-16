@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerno — Requests</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f8fafc; }
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { useState, useEffect } = React;
+
+  const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
+  const SESSION_KEY = "kerno_session";
+
+  const STATUS_COLOR = { pending: "#f59e0b", approved: "#16a34a", rejected: "#ef4444" };
+  const STATUS_BG    = { pending: "#fff7ed", approved: "#f0fdf4", rejected: "#fff5f5" };
+
+  // ── Session ────────────────────────────────────────────────────────────────
+  function getSession() {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (!s || Date.now() > new Date(s.expires).getTime()) {
+      localStorage.removeItem(SESSION_KEY);
+      window.location.href = "index.html?expired=1";
+      return null;
+    }
+    return s;
+  }
+
+  const authHeaders = () => ({
+    "Content-Type": "application/json",
+    "X-Session-Token": getSession()?.token || "",
+  });
+
+  const apiFetch = async (path, opts = {}) => {
+    const res = await fetch(`${WORKER}${path}`, {
+      ...opts, headers: { ...authHeaders(), ...(opts.headers || {}) },
+    });
+    if (res.status === 401) { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html?expired=1"; return null; }
+    return res.json().catch(() => ({}));
+  };
+
+  const api = {
+    getRequestTypes: ()       => apiFetch("/settings/request-types"),
+    saveRequestTypes: (val)   => apiFetch("/settings/request-types", { method: "POST", body: JSON.stringify(val) }),
+    getRequests:     ()       => apiFetch("/requests"),
+    submitRequest:   (body)   => apiFetch("/requests", { method: "POST", body: JSON.stringify(body) }),
+    reviewRequest:   (id, body) => apiFetch(`/requests/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  };
+
+  // ── Field renderer ─────────────────────────────────────────────────────────
+  function FieldInput({ field, value, onChange, disabled }) {
+    if (field.type === "dropdown") return (
+      <select value={value || ""} onChange={e => onChange(e.target.value)} disabled={disabled}
+        style={{ width: "100%", fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }}>
+        <option value="">Select…</option>
+        {(field.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+
+    if (field.type === "multiselect") {
+      const selected = Array.isArray(value) ? value : [];
+      return (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {(field.options || []).map(o => {
+            const active = selected.includes(o);
+            return (
+              <button key={o} type="button" disabled={disabled}
+                onClick={() => onChange(active ? selected.filter(x => x !== o) : [...selected, o])}
+                style={{ fontSize: 12, padding: "4px 10px", borderRadius: 99, border: `1px solid ${active ? "#2563eb" : "#e2e8f0"}`, background: active ? "#eff6ff" : "#fff", color: active ? "#2563eb" : "#64748b", cursor: disabled ? "default" : "pointer", fontWeight: active ? 600 : 400 }}>
+                {o}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <input value={value || ""} onChange={e => onChange(e.target.value)} disabled={disabled}
+        style={{ width: "100%", fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+    );
+  }
+
+  // ── Submit form ────────────────────────────────────────────────────────────
+  function RequestForm({ user, requestTypes, onSubmitted }) {
+    const typeKeys = Object.keys(requestTypes || {});
+    const [type,     setType]     = useState(typeKeys[0] || "");
+    const [meta,     setMeta]     = useState({});
+    const [notes,    setNotes]    = useState("");
+    const [saving,   setSaving]   = useState(false);
+    const [success,  setSuccess]  = useState(false);
+    const [error,    setError]    = useState(null);
+
+    const typeConfig = requestTypes?.[type];
+    const fields     = typeConfig?.fields || [];
+
+    const handleTypeChange = (t) => { setType(t); setMeta({}); setError(null); };
+
+    const submit = async () => {
+      setError(null);
+      // Validate required fields (all fields are considered required)
+      for (const f of fields) {
+        const v = meta[f.id];
+        const empty = !v || (Array.isArray(v) && v.length === 0) || v === "";
+        if (empty) { setError(`Please fill in "${f.label}"`); return; }
+      }
+      setSaving(true);
+      const res = await api.submitRequest({
+        type,
+        metadata: meta,
+        notes,
+        email: user.email || null,
+      });
+      setSaving(false);
+      if (res?.error) { setError(res.error); return; }
+      setSuccess(true);
+      setTimeout(() => { setSuccess(false); setMeta({}); setNotes(""); onSubmitted(); }, 2500);
+    };
+
+    return (
+      <div style={{ maxWidth: 560, margin: "0 auto", background: "#fff", borderRadius: 12, border: "1px solid #e2e8f0", padding: 28 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>New Request</div>
+        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20 }}>Submit a service request to the platforms team.</div>
+
+        {/* Request type tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          {typeKeys.map(k => (
+            <button key={k} onClick={() => handleTypeChange(k)}
+              style={{ fontSize: 13, padding: "6px 16px", borderRadius: 99, border: `1.5px solid ${type === k ? "#2563eb" : "#e2e8f0"}`, background: type === k ? "#eff6ff" : "#fff", color: type === k ? "#2563eb" : "#475569", cursor: "pointer", fontWeight: type === k ? 700 : 400 }}>
+              {requestTypes[k].label}
+            </button>
+          ))}
+        </div>
+
+        {/* Dynamic fields */}
+        {fields.map(f => (
+          <div key={f.id} style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: .4 }}>{f.label}</label>
+            <FieldInput field={f} value={meta[f.id]} onChange={v => setMeta({ ...meta, [f.id]: v })} disabled={saving} />
+          </div>
+        ))}
+
+        {/* Notes */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: .4 }}>Additional Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={saving} rows={3}
+            placeholder="Any additional context, deadlines, or special requirements…"
+            style={{ width: "100%", fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", resize: "vertical", boxSizing: "border-box" }} />
+        </div>
+
+        {error   && <div style={{ fontSize: 12, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", marginBottom: 14 }}>⚠ {error}</div>}
+        {success && <div style={{ fontSize: 12, color: "#16a34a", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 6, padding: "8px 12px", marginBottom: 14 }}>✅ Request submitted successfully!</div>}
+
+        <button onClick={submit} disabled={saving || success}
+          style={{ width: "100%", fontSize: 14, padding: "10px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+          {saving ? "Submitting…" : "Submit Request"}
+        </button>
+      </div>
+    );
+  }
+
+  // ── My requests ────────────────────────────────────────────────────────────
+  function MyRequests({ requests, requestTypes }) {
+    if (!requests.length) return <div style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", padding: "32px 0" }}>You haven't submitted any requests yet.</div>;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {requests.map(r => {
+          const typeLabel = requestTypes?.[r.type]?.label || r.type;
+          const fields    = requestTypes?.[r.type]?.fields || [];
+          return (
+            <div key={r.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "14px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{typeLabel}</span>
+                  <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 99, padding: "3px 10px", background: STATUS_BG[r.status], color: STATUS_COLOR[r.status], textTransform: "capitalize" }}>{r.status}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#475569", display: "flex", flexWrap: "wrap", gap: "4px 16px" }}>
+                {fields.map(f => {
+                  const v = r.metadata?.[f.id];
+                  if (!v || (Array.isArray(v) && !v.length)) return null;
+                  return <span key={f.id}><strong>{f.label}:</strong> {Array.isArray(v) ? v.join(", ") : v}</span>;
+                })}
+              </div>
+              {r.notes && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>{r.notes}</div>}
+              {r.reviewed_by && <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>Reviewed by {r.reviewed_by} · {new Date(r.reviewed_at).toLocaleDateString("en-GB")}</div>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ── Admin queue ────────────────────────────────────────────────────────────
+  function AdminQueue({ requests, requestTypes, onRefresh }) {
+    const [filter,    setFilter]    = useState("pending");
+    const [reviewing, setReviewing] = useState(null); // request being reviewed
+    const [reason,    setReason]    = useState("");
+    const [saving,    setSaving]    = useState(false);
+    const [error,     setError]     = useState(null);
+
+    const visible = requests.filter(r => filter === "all" ? true : r.status === filter);
+
+    const review = async (status) => {
+      setSaving(true); setError(null);
+      const res = await api.reviewRequest(reviewing.id, { status, rejection_reason: reason });
+      setSaving(false);
+      if (res?.error) { setError(res.error); return; }
+      setReviewing(null); setReason("");
+      onRefresh();
+    };
+
+    return (
+      <div>
+        {/* Filter tabs */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+          {["pending", "approved", "rejected", "all"].map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, border: `1px solid ${filter === f ? "#2563eb" : "#e2e8f0"}`, background: filter === f ? "#eff6ff" : "#fff", color: filter === f ? "#2563eb" : "#475569", cursor: "pointer", fontWeight: filter === f ? 600 : 400, textTransform: "capitalize" }}>
+              {f} {f !== "all" && <span style={{ marginLeft: 3, fontSize: 10, background: filter === f ? "#2563eb" : "#e2e8f0", color: filter === f ? "#fff" : "#64748b", borderRadius: 99, padding: "1px 5px" }}>{requests.filter(r => r.status === f).length}</span>}
+            </button>
+          ))}
+        </div>
+
+        {visible.length === 0 && <div style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", padding: "32px 0" }}>No {filter === "all" ? "" : filter} requests.</div>}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {visible.map(r => {
+            const typeLabel = requestTypes?.[r.type]?.label || r.type;
+            const fields    = requestTypes?.[r.type]?.fields || [];
+            return (
+              <div key={r.id} style={{ background: "#fff", border: `1px solid ${r.status === "pending" ? "#fed7aa" : "#e2e8f0"}`, borderRadius: 10, padding: "14px 16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{typeLabel}</span>
+                    <span style={{ fontSize: 12, color: "#64748b", marginLeft: 8 }}>by <strong>{r.username}</strong></span>
+                    <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 99, padding: "3px 10px", background: STATUS_BG[r.status], color: STATUS_COLOR[r.status], textTransform: "capitalize" }}>{r.status}</span>
+                </div>
+
+                {/* Metadata */}
+                <div style={{ fontSize: 12, color: "#475569", display: "flex", flexDirection: "column", gap: 3, marginBottom: 8 }}>
+                  {fields.map(f => {
+                    const v = r.metadata?.[f.id];
+                    if (!v || (Array.isArray(v) && !v.length)) return null;
+                    return <div key={f.id}><strong style={{ color: "#1e293b" }}>{f.label}:</strong> {Array.isArray(v) ? v.join(", ") : v}</div>;
+                  })}
+                  {r.notes && <div style={{ color: "#64748b", marginTop: 4 }}><strong>Notes:</strong> {r.notes}</div>}
+                  {r.email  && <div style={{ color: "#94a3b8", fontSize: 11 }}>📧 {r.email}</div>}
+                </div>
+
+                {r.status === "pending" && (
+                  reviewing?.id === r.id ? (
+                    <div style={{ marginTop: 8, padding: "12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                      <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2}
+                        placeholder="Rejection reason (optional)…"
+                        style={{ width: "100%", fontSize: 12, padding: "6px 8px", borderRadius: 5, border: "1px solid #cbd5e1", resize: "none", boxSizing: "border-box", marginBottom: 8 }} />
+                      {error && <div style={{ fontSize: 11, color: "#dc2626", marginBottom: 8 }}>⚠ {error}</div>}
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button onClick={() => review("approved")} disabled={saving}
+                          style={{ flex: 1, fontSize: 12, padding: "6px", borderRadius: 6, background: "#16a34a", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+                          {saving ? "…" : "✅ Approve"}
+                        </button>
+                        <button onClick={() => review("rejected")} disabled={saving}
+                          style={{ flex: 1, fontSize: 12, padding: "6px", borderRadius: 6, background: "#ef4444", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}>
+                          {saving ? "…" : "❌ Reject"}
+                        </button>
+                        <button onClick={() => { setReviewing(null); setReason(""); setError(null); }}
+                          style={{ fontSize: 12, padding: "6px 10px", borderRadius: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setReviewing(r); setReason(""); setError(null); }}
+                      style={{ fontSize: 12, padding: "5px 14px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, marginTop: 4 }}>
+                      Review →
+                    </button>
+                  )
+                )}
+
+                {r.reviewed_by && (
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+                    Reviewed by {r.reviewed_by} · {new Date(r.reviewed_at).toLocaleDateString("en-GB")}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Admin config panel ─────────────────────────────────────────────────────
+  function ConfigPanel({ requestTypes, onSaved }) {
+    const [types,   setTypes]   = useState(() => JSON.parse(JSON.stringify(requestTypes || {})));
+    const [selType, setSelType] = useState(Object.keys(requestTypes || {})[0] || "");
+    const [saving,  setSaving]  = useState(false);
+    const [newKey,  setNewKey]  = useState("");
+
+    const cfg    = types[selType] || { label: "", approver_role: "admin", fields: [] };
+    const setcfg = (c) => setTypes({ ...types, [selType]: c });
+
+    const addType = () => {
+      const k = newKey.trim().toLowerCase().replace(/\s+/g, "_");
+      if (!k || types[k]) return;
+      setTypes({ ...types, [k]: { label: newKey.trim(), approver_role: "admin", fields: [] } });
+      setSelType(k); setNewKey("");
+    };
+
+    const addField = () => setcfg({ ...cfg, fields: [...cfg.fields, { id: `f${Date.now()}`, label: "New Field", type: "text", options: [] }] });
+    const updField = (id, key, val) => setcfg({ ...cfg, fields: cfg.fields.map(f => f.id === id ? { ...f, [key]: val } : f) });
+    const delField = (id) => setcfg({ ...cfg, fields: cfg.fields.filter(f => f.id !== id) });
+
+    const save = async () => {
+      setSaving(true);
+      await api.saveRequestTypes(types);
+      setSaving(false); onSaved(types);
+    };
+
+    return (
+      <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 24 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 16 }}>⚙️ Configure Request Types</div>
+
+        {/* Type selector */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+          {Object.keys(types).map(k => (
+            <button key={k} onClick={() => setSelType(k)}
+              style={{ fontSize: 12, padding: "4px 12px", borderRadius: 99, border: `1px solid ${selType === k ? "#2563eb" : "#e2e8f0"}`, background: selType === k ? "#eff6ff" : "#fff", color: selType === k ? "#2563eb" : "#475569", cursor: "pointer" }}>
+              {types[k].label || k}
+            </button>
+          ))}
+          <div style={{ display: "flex", gap: 4 }}>
+            <input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="New type…"
+              style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid #cbd5e1", width: 100 }}
+              onKeyDown={e => e.key === "Enter" && addType()} />
+            <button onClick={addType} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>+</button>
+          </div>
+        </div>
+
+        {selType && (
+          <>
+            {/* Type settings */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>LABEL</label>
+                <input value={cfg.label} onChange={e => setcfg({ ...cfg, label: e.target.value })}
+                  style={{ width: "100%", fontSize: 13, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>APPROVER ROLE</label>
+                <input value={cfg.approver_role} onChange={e => setcfg({ ...cfg, approver_role: e.target.value })}
+                  style={{ width: "100%", fontSize: 13, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+              </div>
+            </div>
+
+            {/* Fields */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>Fields</div>
+              <button onClick={addField} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>+ Add field</button>
+            </div>
+            {cfg.fields.map(f => (
+              <div key={f.id} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: f.type !== "text" ? 6 : 0 }}>
+                  <input value={f.label} onChange={e => updField(f.id, "label", e.target.value)} placeholder="Label"
+                    style={{ flex: 2, fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #cbd5e1" }} />
+                  <select value={f.type} onChange={e => updField(f.id, "type", e.target.value)}
+                    style={{ flex: 1, fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #cbd5e1" }}>
+                    <option value="text">Text</option>
+                    <option value="dropdown">Dropdown</option>
+                    <option value="multiselect">Multiselect</option>
+                  </select>
+                  <button onClick={() => delField(f.id)}
+                    style={{ fontSize: 12, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>✕</button>
+                </div>
+                {(f.type === "dropdown" || f.type === "multiselect") && (
+                  <input value={(f.options || []).join(", ")} placeholder="Options: comma, separated"
+                    onChange={e => updField(f.id, "options", e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
+                    style={{ width: "100%", fontSize: 12, padding: "4px 7px", borderRadius: 5, border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+                )}
+              </div>
+            ))}
+          </>
+        )}
+
+        <button onClick={save} disabled={saving}
+          style={{ width: "100%", fontSize: 13, padding: "9px", borderRadius: 7, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600, marginTop: 12, opacity: saving ? 0.7 : 1 }}>
+          {saving ? "Saving…" : "Save Configuration"}
+        </button>
+      </div>
+    );
+  }
+
+  // ── App ────────────────────────────────────────────────────────────────────
+  function App() {
+    const [user] = useState(() => {
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      if (!s || Date.now() > new Date(s.expires).getTime()) {
+        localStorage.removeItem(SESSION_KEY); window.location.href = "index.html?expired=1"; return null;
+      }
+      return { username: s.username, role: s.role, token: s.token };
+    });
+
+    const [tab,          setTab]          = useState("submit"); // submit | mine | queue | config
+    const [requestTypes, setRequestTypes] = useState({});
+    const [requests,     setRequests]     = useState([]);
+    const [loading,      setLoading]      = useState(true);
+    const [loadError,    setLoadError]    = useState(null);
+
+    const isAdmin = user?.role === "admin";
+
+    const loadAll = async () => {
+      setLoadError(null);
+      try {
+        const [types, reqs] = await Promise.all([api.getRequestTypes(), api.getRequests()]);
+        setRequestTypes(types && typeof types === "object" && !types.error ? types : {});
+        setRequests(Array.isArray(reqs) ? reqs : []);
+      } catch { setLoadError("Could not load data. Please refresh."); }
+      setLoading(false);
+    };
+
+    useEffect(() => { if (user) loadAll(); else setLoading(false); }, []);
+
+    const handleLogout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+
+    if (!user)     return null;
+    if (loading)   return <div style={{ padding: 32, color: "#64748b" }}>Loading…</div>;
+    if (loadError) return (
+      <div style={{ padding: 32, display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ color: "#ef4444" }}>{loadError}</div>
+        <button onClick={loadAll} style={{ fontSize: 13, padding: "6px 14px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Retry</button>
+      </div>
+    );
+
+    const myRequests      = requests.filter(r => r.username === user.username);
+    const pendingCount    = requests.filter(r => r.status === "pending").length;
+
+    const tabs = [
+      { key: "submit", label: "📝 New Request" },
+      { key: "mine",   label: `My Requests${myRequests.length ? ` (${myRequests.length})` : ""}` },
+      ...(isAdmin ? [
+        { key: "queue",  label: `📥 Review Queue${pendingCount ? ` · ${pendingCount} pending` : ""}` },
+        { key: "config", label: "⚙️ Configure" },
+      ] : []),
+    ];
+
+    return (
+      <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
+        {/* Navbar */}
+        <div style={{ background: "#0f172a", padding: "10px 24px", display: "flex", alignItems: "center", gap: 12 }}>
+          <a href="dashboard.html" style={{ fontSize: 15, fontWeight: 700, color: "#fff", textDecoration: "none" }}>⚙️ Kerno</a>
+          <span style={{ color: "#475569" }}>›</span>
+          <span style={{ fontSize: 13, color: "#94a3b8" }}>Requests</span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+            <a href="kanban.html"  style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", textDecoration: "none" }}>📋 Kanban</a>
+            <a href="booking.html" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", textDecoration: "none" }}>📅 Bookings</a>
+            <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}</span>
+            <button onClick={handleLogout} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>Sign out</button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "0 24px", display: "flex", gap: 0 }}>
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              style={{ fontSize: 13, padding: "12px 18px", border: "none", borderBottom: `2px solid ${tab === t.key ? "#2563eb" : "transparent"}`, background: "none", cursor: "pointer", color: tab === t.key ? "#2563eb" : "#64748b", fontWeight: tab === t.key ? 600 : 400 }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 24px" }}>
+          {tab === "submit" && <RequestForm user={user} requestTypes={requestTypes} onSubmitted={() => { loadAll(); setTab("mine"); }} />}
+          {tab === "mine"   && <MyRequests requests={myRequests} requestTypes={requestTypes} />}
+          {tab === "queue"  && isAdmin && <AdminQueue requests={requests} requestTypes={requestTypes} onRefresh={loadAll} />}
+          {tab === "config" && isAdmin && <ConfigPanel requestTypes={requestTypes} onSaved={(t) => { setRequestTypes(t); }} />}
+        </div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
