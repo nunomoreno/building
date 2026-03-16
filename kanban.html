@@ -348,16 +348,23 @@
     }
 
     // ── AI Chat ──────────────────────────────────────────────────────────────
-    function AIChat({ projects, onRefresh, username }) {
-      const [messages, setMessages] = useState([]);
-      const [input,    setInput]    = useState("");
-      const [asking,   setAsking]   = useState(false);
-      const [error,    setError]    = useState(null);
+    function AIChat({ scope, onRefresh, username }) {
+      const [messages,      setMessages]      = useState([]);
+      const [input,         setInput]         = useState("");
+      const [asking,        setAsking]        = useState(false);
+      const [error,         setError]         = useState(null);
+      const [scopedProjects,setScopedProjects]= useState([]);
       const bottomRef = useRef(null);
+
+      // Fetch projects filtered to the current scope every time the panel opens or scope changes
+      useEffect(() => {
+        api.getProjects(scope).then(data => setScopedProjects(Array.isArray(data) ? data : []));
+      }, [scope]);
+
       useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, asking]);
 
       const executeAction = async (action) => {
-        const record = projects.find(r => r.id === action.projectId);
+        const record = scopedProjects.find(r => r.id === action.projectId);
         if (!record) return "❌ Project not found.";
         let updatedTasks = [...(record.tasks || [])];
         let logDetails = "";
@@ -380,7 +387,7 @@
         try {
           const result = await api.ai({
             model: "claude-sonnet-4-20250514", max_tokens: 1000,
-            system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(projects, null, 2)}\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId.`,
+            system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(scopedProjects, null, 2)}\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId.`,
             messages: newMessages,
           });
           if (!result) { setError("No response — please try again."); setAsking(false); return; }
@@ -691,7 +698,7 @@
 
             {panel && (
               <div style={{ width: 320, minWidth: 320, borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
-                {panel === "ai"    && <AIChat projects={projects} onRefresh={loadData} username={user.username} />}
+                {panel === "ai"    && <AIChat scope={scope} onRefresh={loadData} username={user.username} />}
                 {panel === "log"   && <AuditLog />}
                 {panel === "users" && isAdmin && <UsersPanel />}
               </div>
