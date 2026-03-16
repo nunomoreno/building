@@ -13,31 +13,27 @@
     .nav-btn { font-size: 11px; padding: 4px 12px; border-radius: 5px; border: 1px solid #334155; background: #1e293b; color: #94a3b8; cursor: pointer; text-decoration: none; font-family: inherit; }
     .nav-btn:hover { background: #334155; color: #f1f5f9; }
     .nav-user { font-size: 12px; color: #64748b; }
-
     .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
     .greeting { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
     .greeting-sub { font-size: 13px; color: #64748b; margin-bottom: 32px; }
 
-    /* Nav cards */
-    .nav-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 36px; }
-    .nav-card { display: flex; align-items: center; gap: 16px; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; text-decoration: none; transition: border-color .15s, box-shadow .15s; cursor: pointer; }
+    .nav-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 36px; }
+    .nav-card { display: flex; align-items: center; gap: 16px; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
     .nav-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px #2563eb11; }
     .nav-card-icon { font-size: 28px; }
     .nav-card-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 2px; }
     .nav-card-desc  { font-size: 12px; color: #64748b; }
 
-    /* Stat grid */
     .section-title { font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
-    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 36px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 36px; }
     .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; }
     .stat-value { font-size: 28px; font-weight: 700; color: #0f172a; line-height: 1; margin-bottom: 6px; }
     .stat-label { font-size: 12px; color: #64748b; }
-    .stat-value.blue   { color: #2563eb; }
-    .stat-value.orange { color: #ea580c; }
-    .stat-value.green  { color: #16a34a; }
-    .stat-value.yellow { color: #ca8a04; }
+    .stat-sub   { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .stat-value.blue  { color: #2563eb; }
+    .stat-value.green { color: #16a34a; }
+    .stat-value.slate { color: #475569; }
 
-    /* Two-col layout */
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
     .panel-header { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 700; color: #0f172a; display: flex; justify-content: space-between; align-items: center; }
@@ -46,29 +42,29 @@
     .panel-link:hover { text-decoration: underline; }
     .empty { font-size: 12px; color: #94a3b8; padding: 12px 0; }
 
-    /* Blocked task item */
     .blocked-item { padding: 8px 10px; border-radius: 7px; border: 1px solid #fed7aa; background: #fff7ed; margin-bottom: 6px; }
     .blocked-title { font-size: 12px; font-weight: 600; color: #9a3412; }
     .blocked-proj  { font-size: 11px; color: #c2410c; margin-top: 1px; }
 
-    /* Booking item */
-    .booking-item { padding: 8px 10px; border-radius: 7px; border: 1px solid #e2e8f0; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: flex-start; }
-    .booking-name { font-size: 12px; font-weight: 600; color: #1e293b; }
-    .booking-meta { font-size: 11px; color: #64748b; margin-top: 1px; }
+    .request-item { padding: 8px 10px; border-radius: 7px; border: 1px solid #e2e8f0; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .request-name { font-size: 12px; font-weight: 600; color: #1e293b; }
+    .request-meta { font-size: 11px; color: #64748b; margin-top: 1px; }
     .status-badge { font-size: 10px; font-weight: 600; border-radius: 99px; padding: 2px 8px; text-transform: capitalize; flex-shrink: 0; }
     .status-pending  { background: #fff7ed; color: #ea580c; }
     .status-approved { background: #f0fdf4; color: #16a34a; }
     .status-rejected { background: #fff5f5; color: #ef4444; }
 
-    /* Log item */
+    .member-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; }
+    .member-item:last-child { border-bottom: none; }
+    .member-avatar { width: 28px; height: 28px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #475569; flex-shrink: 0; }
+    .member-name { font-size: 12px; font-weight: 600; color: #1e293b; }
+    .member-role { font-size: 10px; color: #94a3b8; }
+
     .log-item { font-size: 11px; color: #475569; padding: 5px 0; border-bottom: 1px solid #f1f5f9; display: flex; gap: 8px; }
     .log-item:last-child { border-bottom: none; }
     .log-user   { font-weight: 600; color: #1e293b; flex-shrink: 0; }
     .log-action { color: #2563eb; font-weight: 600; flex-shrink: 0; }
     .log-time   { color: #94a3b8; margin-left: auto; flex-shrink: 0; }
-
-    .skeleton { background: #f1f5f9; border-radius: 4px; animation: pulse 1.2s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
   </style>
 </head>
 <body>
@@ -77,8 +73,9 @@
   <a href="dashboard.html" class="navbar-logo">⚙️ Kerno</a>
   <span style="font-size:12px;color:#475569">CaixaResearch Core Facilities</span>
   <div class="navbar-right">
-    <a href="kanban.html"  class="nav-btn">📋 Kanban</a>
-    <a href="booking.html" class="nav-btn">📅 Bookings</a>
+    <a href="kanban.html"   class="nav-btn">📋 Kanban</a>
+    <a href="booking.html"  class="nav-btn">📅 Bookings</a>
+    <a href="requests.html" class="nav-btn">📝 Requests</a>
     <span class="nav-user" id="nav-user"></span>
     <button class="nav-btn" id="logout-btn">Sign out</button>
   </div>
@@ -86,7 +83,7 @@
 
 <div class="page">
   <div class="greeting" id="greeting">Good morning</div>
-  <div class="greeting-sub" id="greeting-sub">Here's what's happening at the platforms today.</div>
+  <div class="greeting-sub">Here's what's happening at the platforms today.</div>
 
   <!-- Nav cards -->
   <div class="nav-cards">
@@ -104,33 +101,50 @@
         <div class="nav-card-desc">Book equipment and facilities for your experiments</div>
       </div>
     </a>
+    <a href="requests.html" class="nav-card">
+      <div class="nav-card-icon">📝</div>
+      <div>
+        <div class="nav-card-title">Service Requests</div>
+        <div class="nav-card-desc">Submit and track genomics, sorting and other requests</div>
+      </div>
+    </a>
   </div>
 
   <!-- Stats -->
   <div class="section-title">Overview</div>
   <div class="stats">
-    <div class="stat"><div class="stat-value blue" id="stat-projects">—</div><div class="stat-label">Active projects</div></div>
-    <div class="stat"><div class="stat-value orange" id="stat-blocked">—</div><div class="stat-label">Blocked tasks</div></div>
-    <div class="stat"><div class="stat-value green" id="stat-bookings">—</div><div class="stat-label">Bookings this week</div></div>
-    <div class="stat"><div class="stat-value yellow" id="stat-pending">—</div><div class="stat-label">Pending approvals</div></div>
+    <div class="stat">
+      <div class="stat-value blue" id="stat-projects">—</div>
+      <div class="stat-label">Active projects</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value green" id="stat-members">—</div>
+      <div class="stat-label">Team members</div>
+      <div class="stat-sub" id="stat-members-sub"></div>
+    </div>
+    <div class="stat" id="stat-requests-box">
+      <div class="stat-value slate" id="stat-requests">—</div>
+      <div class="stat-label">Total requests</div>
+      <div class="stat-sub" id="stat-requests-sub"></div>
+    </div>
   </div>
 
-  <!-- Two-col panels -->
+  <!-- Panels -->
   <div class="two-col">
     <div class="panel">
       <div class="panel-header">
-        🚧 Blocked Tasks
-        <a href="kanban.html" class="panel-link">View board →</a>
+        👥 Team
+        <a href="#" class="panel-link" id="admin-users-link" style="display:none">Manage →</a>
       </div>
-      <div class="panel-body" id="panel-blocked"><div class="empty">Loading…</div></div>
+      <div class="panel-body" id="panel-members"><div class="empty">Loading…</div></div>
     </div>
 
     <div class="panel">
       <div class="panel-header">
-        📅 This Week's Bookings
-        <a href="booking.html" class="panel-link">View calendar →</a>
+        📝 Recent Requests
+        <a href="requests.html" class="panel-link">View all →</a>
       </div>
-      <div class="panel-body" id="panel-bookings"><div class="empty">Loading…</div></div>
+      <div class="panel-body" id="panel-requests"><div class="empty">Loading…</div></div>
     </div>
 
     <div class="panel" style="grid-column: 1 / -1;">
@@ -147,7 +161,6 @@
   const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
   const SESSION_KEY = "kerno_session";
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
   const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
   if (!session || Date.now() > new Date(session.expires).getTime()) {
     localStorage.removeItem(SESSION_KEY);
@@ -155,16 +168,12 @@
   }
   const { username, role, token } = session;
 
-  // ── Greeting ──────────────────────────────────────────────────────────────
-  const hour = new Date().getHours();
+  const hour  = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   document.getElementById("greeting").textContent = `${greet}, ${username} 👋`;
   document.getElementById("nav-user").textContent = `👤 ${username}${role === "admin" ? " (admin)" : ""}`;
+  if (role === "admin") document.getElementById("admin-users-link").style.display = "inline";
 
-  // Hide admin-only booking approval stat for non-admins
-  if (role !== "admin") document.getElementById("stat-pending").closest(".stat").style.display = "none";
-
-  // ── Auth fetch helper ─────────────────────────────────────────────────────
   async function apiFetch(path) {
     const res = await fetch(`${WORKER}${path}`, {
       headers: { "Content-Type": "application/json", "X-Session-Token": token }
@@ -173,76 +182,72 @@
     return res.json();
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  const fmt = d => d.toISOString().split("T")[0];
-  const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
-
-  function weekBounds() {
-    const now = new Date();
-    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7)); mon.setHours(0,0,0,0);
-    return { from: fmt(mon), to: fmt(addDays(mon, 6)) };
+  function esc(str) {
+    return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
-  // ── Load data ─────────────────────────────────────────────────────────────
-  async function load() {
-    const { from, to } = weekBounds();
+  const STATUS_BG    = { pending:"#fff7ed", approved:"#f0fdf4", rejected:"#fff5f5" };
+  const STATUS_COLOR = { pending:"#ea580c", approved:"#16a34a", rejected:"#ef4444" };
 
-    const [projects, bookingsRaw, logs] = await Promise.all([
+  async function load() {
+    const [projects, members, requests, logs] = await Promise.all([
       apiFetch("/projects"),
-      apiFetch(`/bookings?from=${from}&to=${to}`),
+      apiFetch("/members"),
+      apiFetch("/requests"),
       apiFetch("/logs?limit=20"),
     ]);
 
-    // ── Stats ────────────────────────────────────────────────────────────────
     const projectList = Array.isArray(projects) ? projects : [];
-    const bookings    = Array.isArray(bookingsRaw) ? bookingsRaw : [];
-    const logList     = Array.isArray(logs) ? logs : [];
+    const memberList  = Array.isArray(members)  ? members  : [];
+    const requestList = Array.isArray(requests) ? requests : [];
+    const logList     = Array.isArray(logs)     ? logs     : [];
 
-    const blocked = projectList.flatMap(p => (p.tasks || []).filter(t => t.col === "Blocked"));
-    const pending  = bookings.filter(b => b.status === "pending");
+    const pendingReqs = requestList.filter(r => r.status === "pending");
+    const adminCount  = memberList.filter(m => m.role === "admin").length;
 
-    document.getElementById("stat-projects").textContent = projectList.length;
-    document.getElementById("stat-blocked").textContent  = blocked.length;
-    document.getElementById("stat-bookings").textContent = bookings.length;
-    document.getElementById("stat-pending").textContent  = pending.length;
-
-    // ── Blocked panel ────────────────────────────────────────────────────────
-    const blockedEl = document.getElementById("panel-blocked");
-    if (blocked.length === 0) {
-      blockedEl.innerHTML = `<div class="empty">No blocked tasks 🎉</div>`;
-    } else {
-      blockedEl.innerHTML = blocked.map(t => {
-        const proj = projectList.find(p => (p.tasks || []).some(tk => tk.id === t.id));
-        return `<div class="blocked-item">
-          <div class="blocked-title">${esc(t.title)}</div>
-          <div class="blocked-proj">in ${esc(proj?.name || "—")}</div>
-        </div>`;
-      }).join("");
+    // ── Stats ──────────────────────────────────────────────────────────────
+    document.getElementById("stat-projects").textContent  = projectList.length;
+    document.getElementById("stat-members").textContent   = memberList.length;
+    document.getElementById("stat-members-sub").textContent = `${adminCount} admin${adminCount !== 1 ? "s" : ""}`;
+    document.getElementById("stat-requests").textContent  = requestList.length;
+    if (pendingReqs.length) {
+      document.getElementById("stat-requests-sub").textContent = `${pendingReqs.length} pending approval`;
+      document.getElementById("stat-requests-sub").style.color = "#ea580c";
     }
 
-    // ── Bookings panel ───────────────────────────────────────────────────────
-    const bookingsEl = document.getElementById("panel-bookings");
-    if (bookings.length === 0) {
-      bookingsEl.innerHTML = `<div class="empty">No bookings this week.</div>`;
+    // ── Members panel ──────────────────────────────────────────────────────
+    const membersEl = document.getElementById("panel-members");
+    if (!memberList.length) {
+      membersEl.innerHTML = `<div class="empty">No team members yet.</div>`;
     } else {
-      // Sort by date then start_time
-      const sorted = [...bookings].sort((a, b) => {
-        const d = a.date.localeCompare(b.date);
-        return d !== 0 ? d : (a.start_time || "").localeCompare(b.start_time || "");
-      });
-      bookingsEl.innerHTML = sorted.map(b => `
-        <div class="booking-item">
+      membersEl.innerHTML = memberList.map(m => `
+        <div class="member-item">
+          <div class="member-avatar">${esc(m.username[0].toUpperCase())}</div>
           <div>
-            <div class="booking-name">${esc(b.username)}</div>
-            <div class="booking-meta">${esc(b.date)} · ${b.full_day ? "Full day" : `${b.start_time || ""} – ${b.end_time || ""}`}</div>
+            <div class="member-name">${esc(m.username)}</div>
+            <div class="member-role">${m.role === "admin" ? "Admin" : "User"}${m.email ? ` · ${esc(m.email)}` : ""}</div>
           </div>
-          <span class="status-badge status-${b.status}">${b.status}</span>
         </div>`).join("");
     }
 
-    // ── Logs panel ───────────────────────────────────────────────────────────
+    // ── Requests panel ─────────────────────────────────────────────────────
+    const requestsEl = document.getElementById("panel-requests");
+    if (!requestList.length) {
+      requestsEl.innerHTML = `<div class="empty">No requests yet.</div>`;
+    } else {
+      requestsEl.innerHTML = requestList.slice(0, 8).map(r => `
+        <div class="request-item">
+          <div>
+            <div class="request-name">${esc(r.type.charAt(0).toUpperCase() + r.type.slice(1))} — ${esc(r.username)}</div>
+            <div class="request-meta">${new Date(r.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</div>
+          </div>
+          <span class="status-badge status-${r.status}">${r.status}</span>
+        </div>`).join("");
+    }
+
+    // ── Logs panel ─────────────────────────────────────────────────────────
     const logsEl = document.getElementById("panel-logs");
-    if (logList.length === 0) {
+    if (!logList.length) {
       logsEl.innerHTML = `<div class="empty">No activity yet.</div>`;
     } else {
       logsEl.innerHTML = logList.map(l => `
@@ -253,10 +258,6 @@
           <span class="log-time">${new Date(l.timestamp).toLocaleString("en", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
         </div>`).join("");
     }
-  }
-
-  function esc(str) {
-    return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
   document.getElementById("logout-btn").addEventListener("click", () => {
