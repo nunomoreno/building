@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerno — Sign in</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: #fff; border-radius: 12px; padding: 36px 40px; width: 320px; box-shadow: 0 4px 24px #0004; }
+    .logo { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .sub  { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+    input { width: 100%; font-size: 13px; padding: 9px 12px; border-radius: 7px; border: 1px solid #cbd5e1; margin-bottom: 10px; outline: none; font-family: inherit; }
+    input:focus { border-color: #93c5fd; }
+    .btn  { width: 100%; font-size: 14px; padding: 10px; border-radius: 7px; background: #2563eb; color: #fff; border: none; cursor: pointer; font-weight: 600; font-family: inherit; }
+    .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+    .err  { font-size: 12px; color: #ef4444; margin-bottom: 12px; }
+    .warn { font-size: 12px; color: #92400e; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 10px; margin-bottom: 14px; }
+    .hint { margin-top: 14px; text-align: center; font-size: 12px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">⚙️ Kerno</div>
+    <div class="sub">CaixaResearch Core Facilities</div>
+    <div id="expired-banner" class="warn" style="display:none">Your session has expired. Please sign in again.</div>
+    <input id="username" placeholder="Username" autocomplete="username" />
+    <input id="password" placeholder="Password" type="password" autocomplete="current-password" />
+    <div id="error" class="err" style="display:none"></div>
+    <button id="btn" class="btn">Sign in</button>
+    <div class="hint">Contact your administrator to get access.</div>
+  </div>
+
+  <script>
+    const WORKER = "https://morning-mud-283c.moreno-a64.workers.dev";
+    const SESSION_KEY = "kerno_session";
+
+    // If already logged in and session valid, skip straight to dashboard
+    const existing = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (existing && Date.now() < new Date(existing.expires).getTime()) {
+      window.location.href = "dashboard.html";
+    }
+
+    // Show expiry banner if redirected here after session expired
+    if (new URLSearchParams(location.search).get("expired") === "1") {
+      document.getElementById("expired-banner").style.display = "block";
+    }
+
+    const btn      = document.getElementById("btn");
+    const errEl    = document.getElementById("error");
+    const usernameEl = document.getElementById("username");
+    const passwordEl = document.getElementById("password");
+
+    async function login() {
+      const username = usernameEl.value.trim();
+      const password = passwordEl.value.trim();
+      if (!username || !password) return;
+
+      btn.disabled = true;
+      btn.textContent = "Please wait…";
+      errEl.style.display = "none";
+
+      try {
+        const res  = await fetch(`${WORKER}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          errEl.textContent = "Invalid username or password.";
+          errEl.style.display = "block";
+        } else {
+          localStorage.setItem(SESSION_KEY, JSON.stringify({
+            token:    data.token,
+            expires:  data.expires,
+            username: data.username,
+            role:     data.role,
+          }));
+          // Redirect: admins → dashboard, users → bookings
+          window.location.href = data.role === "admin" ? "dashboard.html" : "booking.html";
+        }
+      } catch {
+        errEl.textContent = "Network error — please try again.";
+        errEl.style.display = "block";
+      }
+
+      btn.disabled = false;
+      btn.textContent = "Sign in";
+    }
+
+    btn.addEventListener("click", login);
+    passwordEl.addEventListener("keydown", e => e.key === "Enter" && login());
+  </script>
+</body>
+</html>
