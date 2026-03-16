@@ -80,7 +80,7 @@
       removeGroupMember:(gid,mid)   => apiFetch(`/groups/${gid}/members/${mid}`, { method: "DELETE" }),
       notify:        (actor, taskTitle, projectName, mentionsWithEmails) =>
                                   apiFetch("/notify", { method: "POST", body: JSON.stringify({ actor, taskTitle, projectName, mentionsWithEmails }) }),
-      ai:            (body, groupScope) => apiFetch(`/ai${groupScope ? "?scope=group" : ""}`, { method: "POST", body: JSON.stringify(body) }),
+      ai:            (body)    => apiFetch("/ai", { method: "POST", body: JSON.stringify(body) }),
     };
 
     function extractMentions(text) {
@@ -348,7 +348,7 @@
     }
 
     // ── AI Chat ──────────────────────────────────────────────────────────────
-    function AIChat({ projects, onRefresh, username, groupScope }) {
+    function AIChat({ projects, onRefresh, username }) {
       const [messages, setMessages] = useState([]);
       const [input,    setInput]    = useState("");
       const [asking,   setAsking]   = useState(false);
@@ -382,7 +382,7 @@
             model: "claude-sonnet-4-20250514", max_tokens: 1000,
             system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(projects, null, 2)}\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId.`,
             messages: newMessages,
-          }, groupScope);
+          });
           if (!result) { setError("No response — please try again."); setAsking(false); return; }
           let reply = result.content?.[0]?.text || "No response.";
           const actionMatch = reply.match(/<ACTION>(.*?)<\/ACTION>/s);
@@ -691,7 +691,7 @@
 
             {panel && (
               <div style={{ width: 320, minWidth: 320, borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
-                {panel === "ai"    && <AIChat projects={projects} onRefresh={loadData} username={user.username} groupScope={scope === "group"} />}
+                {panel === "ai"    && <AIChat projects={projects} onRefresh={loadData} username={user.username} />}
                 {panel === "log"   && <AuditLog />}
                 {panel === "users" && isAdmin && <UsersPanel />}
               </div>
