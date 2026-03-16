@@ -578,7 +578,8 @@
               <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Today</button>
             </div>
             <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
-              <a href="kanban.html" style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📋 Kanban</a>
+              <a href="kanban.html"   style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📋 Kanban</a>
+              <a href="requests.html" style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📝 Requests</a>
               {isAdmin && <button onClick={()=>setShowAdmin(true)} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>⚙ Admin</button>}
               <span style={{fontSize:12,color:"#64748b"}}>👤 {user.username}</span>
               <button onClick={handleLogout} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Sign out</button>
