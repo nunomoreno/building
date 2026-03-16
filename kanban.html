@@ -27,7 +27,8 @@
     };
 
     const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
-    const SESSION_KEY = "kerno_session";
+    const SESSION_KEY  = "kerno_session";
+    const SCOPES       = ["mine", "mentioned", "group"];
 
     // ── Session ──────────────────────────────────────────────────────────────
     function getSession() {
@@ -61,7 +62,7 @@
 
     const api = {
       register:      (u, p, e) => fetch(`${WORKER}/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: u, password: p, email: e }) }).then(r => r.json()),
-      getProjects:   ()        => apiFetch("/projects"),
+      getProjects:   (scope)   => apiFetch(`/projects${scope ? `?scope=${scope}` : ""}`),
       saveProject:   (p)       => p._id
         ? apiFetch(`/projects/${p._id}`, { method: "PUT",    body: JSON.stringify(p) })
         : apiFetch("/projects",           { method: "POST",   body: JSON.stringify(p) }),
@@ -70,9 +71,16 @@
       getLogs:       ()        => apiFetch("/logs"),
       getMembers:    ()        => apiFetch("/members"),
       deleteMember:  (id)      => apiFetch(`/members/${id}`,   { method: "DELETE" }),
+      getGroups:     ()        => apiFetch("/groups"),
+      saveGroup:     (g)       => g.id
+        ? apiFetch(`/groups/${g.id}`, { method: "PUT",    body: JSON.stringify(g) })
+        : apiFetch("/groups",          { method: "POST",   body: JSON.stringify(g) }),
+      deleteGroup:   (id)      => apiFetch(`/groups/${id}`,    { method: "DELETE" }),
+      addGroupMember:(gid,mid,role) => apiFetch(`/groups/${gid}/members`, { method: "POST", body: JSON.stringify({ member_id: mid, role }) }),
+      removeGroupMember:(gid,mid)   => apiFetch(`/groups/${gid}/members/${mid}`, { method: "DELETE" }),
       notify:        (actor, taskTitle, projectName, mentionsWithEmails) =>
                                   apiFetch("/notify", { method: "POST", body: JSON.stringify({ actor, taskTitle, projectName, mentionsWithEmails }) }),
-      ai:            (body)    => apiFetch("/ai", { method: "POST", body: JSON.stringify(body) }),
+      ai:            (body, groupScope) => apiFetch(`/ai${groupScope ? "?scope=group" : ""}`, { method: "POST", body: JSON.stringify(body) }),
     };
 
     function extractMentions(text) {
@@ -156,19 +164,25 @@
       );
     }
 
-    // ── Users Panel ──────────────────────────────────────────────────────────
+    // ── Users & Groups Panel ─────────────────────────────────────────────────
     function UsersPanel() {
+      const [tab,      setTab]      = useState("users");
       const [members,  setMembers]  = useState([]);
+      const [groups,   setGroups]   = useState([]);
       const [loading,  setLoading]  = useState(true);
       const [newUser,  setNewUser]  = useState("");
       const [newPass,  setNewPass]  = useState("");
       const [newEmail, setNewEmail] = useState("");
       const [error,    setError]    = useState("");
       const [saving,   setSaving]   = useState(false);
+      // Group editing
+      const [editGroup,    setEditGroup]    = useState(null); // null | group obj
+      const [newGroupName, setNewGroupName] = useState("");
 
       const load = async () => {
-        const data = await api.getMembers();
-        setMembers(Array.isArray(data) ? data : []);
+        const [m, g] = await Promise.all([api.getMembers(), api.getGroups()]);
+        setMembers(Array.isArray(m) ? m : []);
+        setGroups(Array.isArray(g) ? g : []);
         setLoading(false);
       };
       useEffect(() => { load(); }, []);
@@ -184,44 +198,157 @@
 
       const removeMember = async (id, username) => {
         if (!confirm(`Remove user "${username}"?`)) return;
-        const res = await api.deleteMember(id);
-        if (res?.status === 403) { setError("Only admins can remove users."); return; }
-        await load();
+        await api.deleteMember(id); await load();
       };
+
+      const saveGroup = async () => {
+        if (!editGroup?.name?.trim()) return;
+        setSaving(true);
+        await api.saveGroup(editGroup);
+        setSaving(false); setEditGroup(null); await load();
+      };
+
+      const deleteGroup = async (id, name) => {
+        if (!confirm(`Delete group "${name}"? Members will be unassigned.`)) return;
+        await api.deleteGroup(id); await load();
+      };
+
+      const assignMember = async (groupId, memberId, role) => {
+        await api.addGroupMember(groupId, memberId, role); await load();
+      };
+
+      const unassignMember = async (groupId, memberId) => {
+        await api.removeGroupMember(groupId, memberId); await load();
+      };
+
+      const GROUP_ROLES = ["member", "leader", "manager"];
 
       return (
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>👥 Users</div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
-            {loading ? <div style={{ color: "#94a3b8", fontSize: 12 }}>Loading…</div> : members.map((m, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: "#fff", borderRadius: 7, border: "1px solid #e2e8f0", marginBottom: 8, fontSize: 13 }}>
-                <div>
-                  <span style={{ fontWeight: 600, color: "#1e293b" }}>{m.username}</span>
-                  {m.role === "admin" && <span style={{ marginLeft: 6, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 7px" }}>admin</span>}
-                  {m.email && <div style={{ fontSize: 11, color: "#94a3b8" }}>{m.email}</div>}
-                </div>
-                {m.role !== "admin" && (
-                  <button onClick={() => removeMember(m.id, m.username)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
-                )}
-              </div>
-            ))}
-            <div style={{ marginTop: 16, borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Add new user</div>
-              <input value={newUser}  onChange={e => setNewUser(e.target.value)}  placeholder="Username"                    style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
-              <input type="password" value={newPass}  onChange={e => setNewPass(e.target.value)}  placeholder="Password"   style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
-              <input type="email"    value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email (for notifications)" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
-              {error && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 6 }}>{error}</div>}
-              <button onClick={addMember} disabled={saving} style={{ width: "100%", fontSize: 12, padding: "6px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
-                {saving ? "Adding…" : "Add user"}
+          <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff", fontSize: 13, fontWeight: 700, color: "#0f172a" }}>👥 Users & Groups</div>
+          {/* Sub-tabs */}
+          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
+            {["users", "groups"].map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                style={{ flex: 1, fontSize: 12, padding: "7px", border: "none", borderBottom: `2px solid ${tab === t ? "#2563eb" : "transparent"}`, background: "none", cursor: "pointer", color: tab === t ? "#2563eb" : "#64748b", fontWeight: tab === t ? 600 : 400, textTransform: "capitalize" }}>
+                {t}
               </button>
-            </div>
+            ))}
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+            {loading ? <div style={{ color: "#94a3b8", fontSize: 12 }}>Loading…</div> : tab === "users" ? (
+              <>
+                {members.map((m, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: "#fff", borderRadius: 7, border: "1px solid #e2e8f0", marginBottom: 8, fontSize: 13 }}>
+                    <div>
+                      <span style={{ fontWeight: 600, color: "#1e293b" }}>{m.username}</span>
+                      {m.role === "admin" && <span style={{ marginLeft: 6, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 7px" }}>admin</span>}
+                      {m.group_id && (
+                        <span style={{ marginLeft: 6, fontSize: 10, background: "#f0fdf4", color: "#16a34a", borderRadius: 99, padding: "1px 7px", border: "1px solid #86efac" }}>
+                          {groups.find(g => g.id === m.group_id)?.name || "group"} · {m.group_role}
+                        </span>
+                      )}
+                      {m.email && <div style={{ fontSize: 11, color: "#94a3b8" }}>{m.email}</div>}
+                    </div>
+                    {m.role !== "admin" && (
+                      <button onClick={() => removeMember(m.id, m.username)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
+                    )}
+                  </div>
+                ))}
+                <div style={{ marginTop: 16, borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 8 }}>Add new user</div>
+                  <input value={newUser}  onChange={e => setNewUser(e.target.value)}  placeholder="Username" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
+                  <input type="password" value={newPass}  onChange={e => setNewPass(e.target.value)}  placeholder="Password" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
+                  <input type="email"    value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email" style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+                  {error && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 6 }}>{error}</div>}
+                  <button onClick={addMember} disabled={saving} style={{ width: "100%", fontSize: 12, padding: "6px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                    {saving ? "Adding…" : "Add user"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Group list */}
+                {groups.map(g => (
+                  <div key={g.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, marginBottom: 10, overflow: "hidden" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "1px solid #f1f5f9" }}>
+                      <div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{g.name}</span>
+                        {g.description && <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 8 }}>{g.description}</span>}
+                        <span style={{ fontSize: 11, color: "#64748b", marginLeft: 8 }}>{(g.members||[]).length} member{(g.members||[]).length !== 1 ? "s" : ""}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        <button onClick={() => setEditGroup(g)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", color: "#475569" }}>Edit</button>
+                        <button onClick={() => deleteGroup(g.id, g.name)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444" }}>Delete</button>
+                      </div>
+                    </div>
+                    {/* Members in group */}
+                    <div style={{ padding: "6px 12px" }}>
+                      {(g.members || []).map(m => (
+                        <div key={m.member_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", fontSize: 12 }}>
+                          <span style={{ color: "#1e293b", fontWeight: 500 }}>{m.username}</span>
+                          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                            <select value={m.role} onChange={e => assignMember(g.id, m.member_id, e.target.value)}
+                              style={{ fontSize: 11, padding: "2px 5px", borderRadius: 4, border: "1px solid #e2e8f0" }}>
+                              {GROUP_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                            <button onClick={() => unassignMember(g.id, m.member_id)} style={{ fontSize: 11, padding: "1px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444" }}>✕</button>
+                          </div>
+                        </div>
+                      ))}
+                      {/* Add member to group */}
+                      <div style={{ marginTop: 6, display: "flex", gap: 5 }}>
+                        <select id={`add-member-${g.id}`} defaultValue=""
+                          style={{ flex: 1, fontSize: 11, padding: "3px 6px", borderRadius: 5, border: "1px solid #cbd5e1" }}>
+                          <option value="" disabled>Add member…</option>
+                          {members.filter(m => !g.members?.find(gm => gm.member_id === m.id)).map(m => (
+                            <option key={m.id} value={m.id}>{m.username}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => {
+                          const sel = document.getElementById(`add-member-${g.id}`);
+                          if (sel.value) { assignMember(g.id, sel.value, "member"); sel.value = ""; }
+                        }} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Edit group form */}
+                {editGroup && (
+                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 10 }}>
+                    <input value={editGroup.name || ""} onChange={e => setEditGroup({ ...editGroup, name: e.target.value })} placeholder="Group name"
+                      style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
+                    <input value={editGroup.description || ""} onChange={e => setEditGroup({ ...editGroup, description: e.target.value })} placeholder="Description (optional)"
+                      style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={saveGroup} disabled={saving} style={{ fontSize: 12, padding: "4px 14px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
+                      <button onClick={() => setEditGroup(null)} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* New group */}
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 6 }}>New group</div>
+                  <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Group name"
+                    onKeyDown={e => { if (e.key === "Enter" && newGroupName.trim()) { api.saveGroup({ name: newGroupName.trim() }).then(() => { setNewGroupName(""); load(); }); } }}
+                    style={{ width: "100%", fontSize: 12, padding: "6px 9px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 6, boxSizing: "border-box" }} />
+                  <button onClick={() => { if (newGroupName.trim()) api.saveGroup({ name: newGroupName.trim() }).then(() => { setNewGroupName(""); load(); }); }}
+                    style={{ width: "100%", fontSize: 12, padding: "6px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                    Create group
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       );
     }
 
     // ── AI Chat ──────────────────────────────────────────────────────────────
-    function AIChat({ projects, onRefresh, username }) {
+    function AIChat({ projects, onRefresh, username, groupScope }) {
       const [messages, setMessages] = useState([]);
       const [input,    setInput]    = useState("");
       const [asking,   setAsking]   = useState(false);
@@ -255,7 +382,7 @@
             model: "claude-sonnet-4-20250514", max_tokens: 1000,
             system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(projects, null, 2)}\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId.`,
             messages: newMessages,
-          });
+          }, groupScope);
           if (!result) { setError("No response — please try again."); setAsking(false); return; }
           let reply = result.content?.[0]?.text || "No response.";
           const actionMatch = reply.match(/<ACTION>(.*?)<\/ACTION>/s);
@@ -426,7 +553,7 @@
           window.location.href = "index.html?expired=1";
           return null;
         }
-        return { username: s.username, role: s.role, token: s.token };
+        return { username: s.username, role: s.role, token: s.token, group_id: s.group_id, group_role: s.group_role };
       });
 
       const [projects,        setProjects]        = useState([]);
@@ -438,6 +565,8 @@
       const [addingProject,   setAddingProject]   = useState(false);
       const [newProjectName,  setNewProjectName]  = useState("");
       const [panel,           setPanel]           = useState(null);
+      const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
+      const [scope, setScope] = useState("mine");
 
       const handleLogout = () => {
         localStorage.removeItem(SESSION_KEY);
@@ -447,7 +576,10 @@
       const loadData = async () => {
         setLoading(true); setLoadError(null);
         try {
-          const [data, m] = await Promise.all([api.getProjects(), api.getMembers()]);
+          const [data, m] = await Promise.all([
+            api.getProjects(scope),
+            api.getMembers(),
+          ]);
           const p = Array.isArray(data) ? data : [];
           setProjects(p);
           const memberList = Array.isArray(m) ? m : [];
@@ -460,7 +592,7 @@
         setLoading(false);
       };
 
-      useEffect(() => { if (user) loadData(); else setLoading(false); }, []);
+      useEffect(() => { if (user) loadData(); else setLoading(false); }, [scope]);
 
       const updateProject = async (updated) => {
         await api.saveProject(updated);
@@ -505,6 +637,15 @@
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
             <a href="dashboard.html" style={{ fontSize: 16, fontWeight: 700, color: "#fff", textDecoration: "none" }}>⚙️ Kerno</a>
             <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
+            {/* Scope toggle */}
+            <div style={{ display: "flex", gap: 4, marginLeft: 8, background: "#1e293b", borderRadius: 6, padding: 3 }}>
+              {[["mine","👤 Mine"], ["mentioned","@ Mentioned"], ...(isElevated ? [["group","👥 Group"]] : [])].map(([s, label]) => (
+                <button key={s} onClick={() => setScope(s)}
+                  style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: scope === s ? "#2563eb" : "transparent", color: scope === s ? "#fff" : "#64748b", cursor: "pointer", fontWeight: scope === s ? 600 : 400 }}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
               <a href="booking.html"  style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", textDecoration: "none" }}>📅 Bookings</a>
@@ -550,7 +691,7 @@
 
             {panel && (
               <div style={{ width: 320, minWidth: 320, borderLeft: "1px solid #e2e8f0", display: "flex", flexDirection: "column" }}>
-                {panel === "ai"    && <AIChat projects={projects} onRefresh={loadData} username={user.username} />}
+                {panel === "ai"    && <AIChat projects={projects} onRefresh={loadData} username={user.username} groupScope={scope === "group"} />}
                 {panel === "log"   && <AuditLog />}
                 {panel === "users" && isAdmin && <UsersPanel />}
               </div>
