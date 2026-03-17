@@ -493,6 +493,11 @@
     function Board({ project, onUpdate, username, members, membersRef, currentUser }) {
       const isOwner = !project.owner_username || project.owner_username === currentUser?.username || currentUser?.role === "admin";
       const canEditTask = (task) => isOwner || task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase();
+
+      // Non-owners only see tasks assigned to them
+      const visibleTasks = isOwner
+        ? project.tasks
+        : project.tasks.filter(t => t.assignee?.toLowerCase() === currentUser?.username?.toLowerCase());
       const [editing,   setEditing]   = useState(null);
       const [draft,     setDraft]     = useState("");
       const [addingTo,  setAddingTo]  = useState(null);
@@ -555,7 +560,7 @@
           {saving && <div style={{ position: "absolute", top: -28, right: 0, fontSize: 11, color: "#94a3b8" }}>Saving…</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
             {COLUMNS.map(col => {
-              const s = COL_STYLE[col], colTasks = project.tasks.filter(t => t.col === col);
+              const s = COL_STYLE[col], colTasks = visibleTasks.filter(t => t.col === col);
               return (
                 <div key={col} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 10, padding: "10px 10px 8px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
