@@ -130,7 +130,29 @@
       );
     }
 
-    // ── Audit Log ────────────────────────────────────────────────────────────
+    // ── Navbar ───────────────────────────────────────────────────────────────
+    function Navbar({ user }) {
+      const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+      const isAdmin = user.role === "admin";
+      const btn = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
+      const active = { ...btn, background:"#2563eb", color:"#fff", border:"1px solid #2563eb" };
+      return (
+        <div style={{ background:"#0f172a", padding:"10px 24px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+          <a href="dashboard.html" style={{ fontSize:15, fontWeight:700, color:"#fff", textDecoration:"none" }}>⚙️ Kerno</a>
+          <span style={{ color:"#475569" }}>›</span>
+          <span style={{ fontSize:13, color:"#94a3b8" }}>Kanban</span>
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+            <a href="kanban.html"   style={active}>📋 Kanban</a>
+            <a href="booking.html"  style={btn}>📅 Bookings</a>
+            <a href="requests.html" style={btn}>📝 Requests</a>
+            {isAdmin && <a href="users.html" style={btn}>👥 Users</a>}
+            <span style={{ fontSize:12, color:"#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft:5, fontSize:10, background:"#2563eb", color:"#fff", borderRadius:99, padding:"1px 6px" }}>admin</span>}</span>
+            <a href="profile.html" style={btn}>🔑 Password</a>
+            <button onClick={logout} style={btn}>Sign out</button>
+          </div>
+        </div>
+      );
+    }
     function AuditLog() {
       const [logs,    setLogs]    = useState([]);
       const [loading, setLoading] = useState(true);
@@ -642,8 +664,7 @@
       return (
         <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
           <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-            <a href="dashboard.html" style={{ fontSize: 16, fontWeight: 700, color: "#fff", textDecoration: "none" }}>⚙️ Kerno</a>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
+            <Navbar user={user} />
             {/* Scope toggle */}
             <div style={{ display: "flex", gap: 4, marginLeft: 8, background: "#1e293b", borderRadius: 6, padding: 3 }}>
               {[["mine","👤 Mine"], ["mentioned","@ Mentioned"], ...(isElevated ? [["group","👥 Group"]] : [])].map(([s, label]) => (
@@ -653,15 +674,7 @@
                 </button>
               ))}
             </div>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft: 5, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "1px 6px" }}>admin</span>}</span>
-              <a href="booking.html"  style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", textDecoration: "none" }}>📅 Bookings</a>
-              <a href="requests.html" style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", textDecoration: "none" }}>📝 Requests</a>
-              {isAdmin && <button onClick={() => setPanel(panel === "users" ? null : "users")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "users" ? "#2563eb" : "#1e293b", color: panel === "users" ? "#fff" : "#94a3b8", cursor: "pointer" }}>👥 Users</button>}
-              <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "log" ? "#2563eb" : "#1e293b", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
-              <button onClick={() => setPanel(panel === "ai" ? null : "ai")} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: panel === "ai" ? "#2563eb" : "#1e293b", color: panel === "ai" ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI</button>
-              <button onClick={handleLogout} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "1px solid #334155", background: "#1e293b", color: "#94a3b8", cursor: "pointer" }}>Sign out</button>
-            </div>
+            <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 8 }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
           </div>
 
           <div style={{ display: "flex", height: "calc(100vh - 49px)" }}>
