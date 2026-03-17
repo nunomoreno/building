@@ -22,14 +22,29 @@
 
     const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
     const SESSION_KEY = "kerno_session";
-    const SLOT_H  = 28;
-    const SLOTS   = Array.from({length:48},(_,i)=>({
-      h:Math.floor(i/2), m:i%2===0?0:30,
-      label:`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2===0?"00":"30"}`
-    }));
+    const SLOT_H      = 28;
     const COLORS       = ["#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#06b6d4","#84cc16"];
     const STATUS_COLOR = { pending:"#f59e0b", approved:"#10b981", rejected:"#ef4444" };
     const STATUS_BG    = { pending:"#fff7ed", approved:"#f0fdf4", rejected:"#fff5f5" };
+
+    const SLOT_DURATIONS = [
+      { label: "30 min",      value: 30  },
+      { label: "1 hour",      value: 60  },
+      { label: "2 hours",     value: 120 },
+      { label: "4 hours",     value: 240 },
+      { label: "Full day only", value: 0 },
+    ];
+
+    function getSlots(slotMinutes) {
+      const mins  = slotMinutes || 30;
+      const count = Math.floor((24 * 60) / mins);
+      return Array.from({ length: count }, (_, i) => {
+        const total = i * mins;
+        const h = Math.floor(total / 60);
+        const m = total % 60;
+        return { h, m, mins, label: `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}` };
+      });
+    }
 
     // ── Session ──────────────────────────────────────────────────────────────
     function getSession() {
@@ -42,22 +57,16 @@
       return s;
     }
 
-    // ── API ──────────────────────────────────────────────────────────────────
     const authHeaders = () => ({
       "Content-Type": "application/json",
       "X-Session-Token": getSession()?.token || "",
     });
 
     const safeFetch = async (url, opts = {}) => {
-      const res  = await fetch(url, opts);
-      if (res.status === 401) {
-        localStorage.removeItem(SESSION_KEY);
-        window.location.href = "index.html?expired=1";
-        return null;
-      }
+      const res = await fetch(url, opts);
+      if (res.status === 401) { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html?expired=1"; return null; }
       const text = await res.text();
-      try { return text ? JSON.parse(text) : {}; }
-      catch { return {}; }
+      try { return text ? JSON.parse(text) : {}; } catch { return {}; }
     };
 
     const api = {
@@ -66,7 +75,7 @@
         ? safeFetch(`${WORKER}/resources/${r.id}`, { method:"PUT",    headers: authHeaders(), body: JSON.stringify(r) })
         : safeFetch(`${WORKER}/resources`,         { method:"POST",   headers: authHeaders(), body: JSON.stringify(r) }),
       deleteResource:(id)      => safeFetch(`${WORKER}/resources/${id}`,  { method:"DELETE", headers: authHeaders() }),
-      getBookings:   (from,to) => safeFetch(`${WORKER}/bookings?limit=200`,{ headers: authHeaders() }),
+      getBookings:   ()        => safeFetch(`${WORKER}/bookings?limit=200`, { headers: authHeaders() }),
       saveBooking:   (b)       => safeFetch(`${WORKER}/bookings`,         { method:"POST",   headers: authHeaders(), body: JSON.stringify(b) }),
       updateBooking: (id,data) => safeFetch(`${WORKER}/bookings/${id}`,   { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
       deleteBooking: (id)      => safeFetch(`${WORKER}/bookings/${id}`,   { method:"DELETE", headers: authHeaders() }),
@@ -76,9 +85,14 @@
       updateMember:  (id,data) => safeFetch(`${WORKER}/members/${id}`,    { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
     };
 
+    const fmt        = (d) => d.toISOString().split("T")[0];
+    const addDays    = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
+    const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
+    const slotIndex  = (time, slotMins=30) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/slotMins); };
+
     // ── Options tag editor ───────────────────────────────────────────────────
     function OptionsEditor({ options, onChange }) {
-      const [input, setInput] = React.useState("");
+      const [input, setInput] = useState("");
       const add = () => {
         const v = input.trim();
         if (!v || options.includes(v)) return;
@@ -111,7 +125,7 @@
     function Navbar({ user }) {
       const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
       const isAdmin = user.role === "admin";
-      const btn = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
+      const btn    = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
       const active = { ...btn, background:"#2563eb", color:"#fff", border:"1px solid #2563eb" };
       return (
         <div style={{ background:"#0f172a", padding:"10px 24px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
@@ -130,20 +144,21 @@
         </div>
       );
     }
-    const addDays  = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
-    const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
-    const slotIndex  = (time) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/30); };
 
     // ── Booking Form Modal ───────────────────────────────────────────────────
     function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username, initialSlot, initialDate}) {
-      const isNew = !booking?.id;
-      const [date,      setDate]      = useState(booking?.date       || initialDate || fmt(new Date()));
-      const [startTime, setStartTime] = useState(booking?.start_time || (initialSlot!=null ? minsToTime(initialSlot*30)   : "09:00"));
-      const [endTime,   setEndTime]   = useState(booking?.end_time   || (initialSlot!=null ? minsToTime((initialSlot+2)*30) : "10:00"));
-      const [fullDay,   setFullDay]   = useState(booking?.full_day   || false);
-      const [notes,     setNotes]     = useState(booking?.notes      || "");
-      const [meta,      setMeta]      = useState(booking?.metadata   || {});
-      const [status,    setStatus]    = useState(booking?.status     || (resource?.approval_required ? "pending" : "approved"));
+      const isNew     = !booking?.id;
+      const slotMins  = resource?.slot_duration || 30;
+      const defaultStart = initialSlot != null ? minsToTime(initialSlot * slotMins) : (booking?.start_time || "09:00");
+      const defaultEnd   = initialSlot != null ? minsToTime((initialSlot + 1) * slotMins) : (booking?.end_time || minsToTime(slotMins === 0 ? 60 : slotMins));
+
+      const [date,      setDate]      = useState(booking?.date      || initialDate || fmt(new Date()));
+      const [startTime, setStartTime] = useState(defaultStart);
+      const [endTime,   setEndTime]   = useState(defaultEnd);
+      const [fullDay,   setFullDay]   = useState(booking?.full_day  || slotMins === 0);
+      const [notes,     setNotes]     = useState(booking?.notes     || "");
+      const [meta,      setMeta]      = useState(booking?.metadata  || {});
+      const [status,    setStatus]    = useState(booking?.status    || (resource?.approval_required ? "pending" : "approved"));
       const [saving,    setSaving]    = useState(false);
       const [saveError, setSaveError] = useState(null);
 
@@ -156,25 +171,17 @@
           end_time:   fullDay ? null : endTime,
           notes, metadata: meta, status,
         };
-        const res = isNew
-          ? await api.saveBooking(payload)
-          : await api.updateBooking(booking.id, payload);
-
+        const res = isNew ? await api.saveBooking(payload) : await api.updateBooking(booking.id, payload);
         if (res?.error || res?.code === "OVERLAP") {
-          setSaveError(res?.code === "OVERLAP"
-            ? "This time slot is already booked — please choose another."
-            : res.error || "Could not save booking.");
-          setSaving(false);
-          return;
+          setSaveError(res?.code === "OVERLAP" ? "This time slot is already booked — please choose another." : res.error || "Could not save booking.");
+          setSaving(false); return;
         }
-        setSaving(false);
-        onSave();
+        setSaving(false); onSave();
       };
 
       const del = async () => {
         if (!confirm("Delete this booking?")) return;
-        await api.deleteBooking(booking.id);
-        onDelete();
+        await api.deleteBooking(booking.id); onDelete();
       };
 
       const canEdit = isAdmin || !booking?.id || booking?.username === username;
@@ -197,14 +204,14 @@
                 style={{width:"100%",fontSize:13,padding:"7px 10px",borderRadius:6,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
             </div>
 
-            {resource?.booking_type!=="fullday" && (
+            {resource?.booking_type!=="fullday" && slotMins !== 0 && (
               <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569",marginBottom:12,cursor:"pointer"}}>
                 <input type="checkbox" checked={fullDay} onChange={e=>setFullDay(e.target.checked)} disabled={!canEdit}/>
                 Full day
               </label>
             )}
 
-            {!fullDay && (
+            {!fullDay && slotMins !== 0 && (
               <div style={{display:"flex",gap:10,marginBottom:12}}>
                 <div style={{flex:1}}>
                   <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>START</label>
@@ -273,17 +280,14 @@
 
     // ── Admin Panel ──────────────────────────────────────────────────────────
     function AdminPanel({resources, members, onUpdate, onClose}) {
-      const [tab,          setTab]          = useState("resources");
-      const [editRes,      setEditRes]      = useState(null);
-      const [allFields,    setAllFields]    = useState({});
-      const [saving,       setSaving]       = useState(false);
-      const [selectedResId,setSelectedResId]= useState(null);
+      const [tab,          setTab]           = useState("resources");
+      const [editRes,      setEditRes]       = useState(null);
+      const [allFields,    setAllFields]     = useState({});
+      const [saving,       setSaving]        = useState(false);
+      const [selectedResId,setSelectedResId] = useState(null);
 
       useEffect(()=>{
-        (async()=>{
-          const f = await api.getSettings("booking-fields") || {};
-          setAllFields(f);
-        })();
+        (async()=>{ const f = await api.getSettings("booking-fields") || {}; setAllFields(f); })();
       },[]);
 
       const currentFields    = selectedResId ? (allFields[selectedResId]||[]) : [];
@@ -291,27 +295,19 @@
 
       const saveResource = async () => {
         if(!editRes?.name?.trim()) return;
-        setSaving(true);
-        await api.saveResource(editRes);
-        setSaving(false); setEditRes(null); onUpdate();
+        setSaving(true); await api.saveResource(editRes); setSaving(false); setEditRes(null); onUpdate();
       };
-
       const saveFields = async () => {
-        setSaving(true);
-        await api.saveSettings("booking-fields", allFields);
-        setSaving(false); onUpdate();
+        setSaving(true); await api.saveSettings("booking-fields", allFields); setSaving(false); onUpdate();
       };
-
       const togglePerm = async (m) => {
         const perms   = m.permissions||[];
         const updated = perms.includes("bookings") ? perms.filter(p=>p!=="bookings") : [...perms,"bookings"];
-        await api.updateMember(m.id,{permissions:updated});
-        onUpdate();
+        await api.updateMember(m.id,{permissions:updated}); onUpdate();
       };
-
-      const addField    = ()        => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
-      const updateField = (id,k,v)  => setCurrentFields(currentFields.map(f=>f.id===id?{...f,[k]:v}:f));
-      const removeField = (id)      => setCurrentFields(currentFields.filter(f=>f.id!==id));
+      const addField    = ()       => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
+      const updateField = (id,k,v) => setCurrentFields(currentFields.map(f=>f.id===id?{...f,[k]:v}:f));
+      const removeField = (id)     => setCurrentFields(currentFields.filter(f=>f.id!==id));
 
       return (
         <div style={{position:"fixed",inset:0,background:"#0008",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseDown={onClose}>
@@ -331,7 +327,7 @@
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
                     <div style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>Resources</div>
-                    <button onClick={()=>setEditRes({name:"",description:"",booking_type:"both",approval_required:false})}
+                    <button onClick={()=>setEditRes({name:"",description:"",booking_type:"both",slot_duration:30,approval_required:false})}
                       style={{fontSize:12,padding:"4px 12px",borderRadius:6,background:"#2563eb",color:"#fff",border:"none",cursor:"pointer"}}>+ Add</button>
                   </div>
                   {editRes&&(
@@ -340,6 +336,7 @@
                         style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8,boxSizing:"border-box"}}/>
                       <input value={editRes.description||""} onChange={e=>setEditRes({...editRes,description:e.target.value})} placeholder="Description"
                         style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8,boxSizing:"border-box"}}/>
+                      <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>BOOKING TYPE</label>
                       <select value={editRes.booking_type||"both"} onChange={e=>setEditRes({...editRes,booking_type:e.target.value})}
                         style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8}}>
                         <option value="timeslot">Time slots only</option>
@@ -349,7 +346,7 @@
                       <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>SLOT DURATION</label>
                       <select value={editRes.slot_duration ?? 30} onChange={e=>setEditRes({...editRes,slot_duration:Number(e.target.value)})}
                         style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8}}>
-                        {SLOT_DURATIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                        {SLOT_DURATIONS.map(d=><option key={d.value} value={d.value}>{d.label}</option>)}
                       </select>
                       <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569",marginBottom:12,cursor:"pointer"}}>
                         <input type="checkbox" checked={editRes.approval_required||false} onChange={e=>setEditRes({...editRes,approval_required:e.target.checked})}/>
@@ -365,7 +362,7 @@
                     <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:"#fff",borderRadius:8,border:"1px solid #e2e8f0",marginBottom:8}}>
                       <div>
                         <span style={{fontSize:13,fontWeight:600,color:"#1e293b"}}>{r.name}</span>
-                        <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>{r.booking_type} · {r.approval_required?"approval":"auto"}</span>
+                        <span style={{fontSize:11,color:"#94a3b8",marginLeft:8}}>{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"}</span>
                       </div>
                       <div style={{display:"flex",gap:6}}>
                         <button onClick={()=>setEditRes(r)} style={{fontSize:11,padding:"2px 8px",borderRadius:4,border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"pointer",color:"#475569"}}>Edit</button>
@@ -396,7 +393,7 @@
                       </div>
                       {currentFields.map(f=>(
                         <div key={f.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:12,marginBottom:8}}>
-                          <div style={{display:"flex",gap:8,marginBottom:f.type==="dropdown"?8:0}}>
+                          <div style={{display:"flex",gap:8,marginBottom:f.type!=="text"?8:0}}>
                             <input value={f.label} onChange={e=>updateField(f.id,"label",e.target.value)} placeholder="Field label"
                               style={{flex:2,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1"}}/>
                             <select value={f.type} onChange={e=>updateField(f.id,"type",e.target.value)}
@@ -407,9 +404,7 @@
                             <button onClick={()=>removeField(f.id)} style={{fontSize:12,padding:"2px 8px",borderRadius:4,border:"1px solid #fecaca",background:"#fff5f5",color:"#ef4444",cursor:"pointer"}}>✕</button>
                           </div>
                           {f.type==="dropdown"&&(
-                            <input value={(f.options||[]).join(", ")} onChange={e=>updateField(f.id,"options",e.target.value.split(",").map(s=>s.trim()).filter(Boolean))}
-                              placeholder="Options: comma, separated"
-                              style={{width:"100%",fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
+                            <OptionsEditor options={f.options||[]} onChange={opts=>updateField(f.id,"options",opts)}/>
                           )}
                         </div>
                       ))}
@@ -447,28 +442,31 @@
     // ── Weekly Calendar ──────────────────────────────────────────────────────
     function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh}) {
       const [modal, setModal] = useState(null);
-      const days  = Array.from({length:7},(_,i)=>addDays(weekStart,i));
-      const color = "#3b82f6";
+      const days        = Array.from({length:7},(_,i)=>addDays(weekStart,i));
+      const color       = "#3b82f6";
+      const slotMins    = resource?.slot_duration || 30;
+      const SLOTS       = slotMins === 0 ? [] : getSlots(slotMins);
+      const fullDayOnly = slotMins === 0 || resource?.booking_type === "fullday";
 
-      const dayBookings = (dateStr) => bookings.filter(b=>b.date===dateStr);
-      const getTop      = (b) => b.full_day ? 0 : slotIndex(b.start_time)*SLOT_H;
-      const getHeight   = (b) => {
-        if(b.full_day) return 48*SLOT_H;
-        const s=slotIndex(b.start_time), e=slotIndex(b.end_time);
-        return Math.max((e-s)*SLOT_H, SLOT_H);
+      const getTop = (b) => {
+        if (b.full_day) return 0;
+        const [h,m] = b.start_time.split(":").map(Number);
+        return Math.floor((h*60+m)/slotMins) * SLOT_H;
+      };
+      const getHeight = (b) => {
+        if (b.full_day) return SLOTS.length * SLOT_H;
+        const [sh,sm] = b.start_time.split(":").map(Number);
+        const [eh,em] = b.end_time.split(":").map(Number);
+        return Math.max(((eh*60+em)-(sh*60+sm))/slotMins, 1) * SLOT_H;
       };
 
       return (
         <div style={{flex:1,overflowY:"auto",overflowX:"auto"}}>
           {modal && (
             <BookingModal
-              booking={modal.booking||{}}
-              resource={resource}
-              fields={fields}
-              isAdmin={isAdmin}
-              username={user.username}
-              initialSlot={modal.slot}
-              initialDate={modal.date}
+              booking={modal.booking||{}} resource={resource} fields={fields}
+              isAdmin={isAdmin} username={user.username}
+              initialSlot={modal.slot} initialDate={modal.date}
               onSave={()=>{setModal(null);onRefresh();}}
               onDelete={()=>{setModal(null);onRefresh();}}
               onClose={()=>setModal(null)}
@@ -493,11 +491,12 @@
           <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600,borderBottom:"2px solid #e2e8f0",background:"#f8fafc"}}>
             <div style={{padding:"4px 8px",fontSize:10,color:"#94a3b8",display:"flex",alignItems:"center"}}>All day</div>
             {days.map((day,di)=>{
-              const dateStr         = fmt(day);
-              const fullDayBookings = bookings.filter(b=>b.date===dateStr&&b.full_day);
+              const dateStr = fmt(day);
+              const fdBookings = bookings.filter(b=>b.date===dateStr&&b.full_day);
               return (
-                <div key={di} style={{borderLeft:"1px solid #e2e8f0",minHeight:24,padding:"2px 3px"}}>
-                  {fullDayBookings.map(b=>(
+                <div key={di} style={{borderLeft:"1px solid #e2e8f0",minHeight:24,padding:"2px 3px"}}
+                  onClick={()=>fullDayOnly&&canBook&&setModal({booking:null,slot:null,date:dateStr})}>
+                  {fdBookings.map(b=>(
                     <div key={b.id}
                       style={{fontSize:10,fontWeight:600,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"2px 6px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}
                       onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
@@ -509,51 +508,50 @@
             })}
           </div>
 
-          {/* Time grid */}
-          <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600}}>
-            {SLOTS.map((slot,si)=>(
-              <React.Fragment key={si}>
-                <div style={{height:SLOT_H,borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:8,paddingTop:2}}>
-                  {slot.m===0&&<span style={{fontSize:10,color:"#94a3b8"}}>{slot.label}</span>}
-                </div>
-                {days.map((day,di)=>{
-                  const dateStr  = fmt(day);
-                  const dBookings = si===0 ? dayBookings(dateStr) : [];
-                  return (
-                    <div key={di} className="slot-row"
-                      style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",position:"relative",background:"#fff"}}
-                      onClick={()=>canBook&&setModal({booking:null,slot:si,date:dateStr})}>
-                      {si===0&&dBookings.filter(b=>!b.full_day).map(b=>(
-                        <div key={b.id}
-                          style={{position:"absolute",top:getTop(b)+1,left:2,right:2,height:getHeight(b)-2,background:color+"22",borderLeft:`3px solid ${STATUS_COLOR[b.status]||"#94a3b8"}`,borderRadius:4,padding:"2px 6px",zIndex:5,overflow:"hidden",cursor:"pointer"}}
-                          onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
-                          <div style={{fontSize:10,fontWeight:700,color:"#1e293b",lineHeight:1.3}}>{b.username}</div>
-                          {!b.full_day&&<div style={{fontSize:9,color:"#64748b"}}>{b.start_time}–{b.end_time}</div>}
-                          {Object.entries(b.metadata||{}).slice(0,1).map(([k,v])=>(
-                            <div key={k} style={{fontSize:9,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{v}</div>
-                          ))}
-                          <div style={{position:"absolute",top:2,right:4,fontSize:9,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"1px 4px",fontWeight:600,textTransform:"capitalize"}}>{b.status}</div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
+          {/* Time grid — hidden for full-day-only resources */}
+          {!fullDayOnly && (
+            <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600}}>
+              {SLOTS.map((slot,si)=>(
+                <React.Fragment key={si}>
+                  <div style={{height:SLOT_H,borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:8,paddingTop:2}}>
+                    {slot.m===0&&<span style={{fontSize:10,color:"#94a3b8"}}>{slot.label}</span>}
+                  </div>
+                  {days.map((day,di)=>{
+                    const dateStr   = fmt(day);
+                    const dBookings = si===0 ? bookings.filter(b=>b.date===dateStr&&!b.full_day) : [];
+                    return (
+                      <div key={di} className="slot-row"
+                        style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",position:"relative",background:"#fff"}}
+                        onClick={()=>canBook&&setModal({booking:null,slot:si,date:dateStr})}>
+                        {si===0&&dBookings.map(b=>(
+                          <div key={b.id}
+                            style={{position:"absolute",top:getTop(b)+1,left:2,right:2,height:getHeight(b)-2,background:color+"22",borderLeft:`3px solid ${STATUS_COLOR[b.status]||"#94a3b8"}`,borderRadius:4,padding:"2px 6px",zIndex:5,overflow:"hidden",cursor:"pointer"}}
+                            onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
+                            <div style={{fontSize:10,fontWeight:700,color:"#1e293b",lineHeight:1.3}}>{b.username}</div>
+                            <div style={{fontSize:9,color:"#64748b"}}>{b.start_time}–{b.end_time}</div>
+                            {Object.entries(b.metadata||{}).slice(0,1).map(([k,v])=>(
+                              <div key={k} style={{fontSize:9,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{v}</div>
+                            ))}
+                            <div style={{position:"absolute",top:2,right:4,fontSize:9,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"1px 4px",fontWeight:600,textTransform:"capitalize"}}>{b.status}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
 
     // ── App ──────────────────────────────────────────────────────────────────
     function App() {
-      // Read session from localStorage — redirect to login if missing/expired
       const [user] = useState(() => {
         const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
         if (!s || Date.now() > new Date(s.expires).getTime()) {
-          localStorage.removeItem(SESSION_KEY);
-          window.location.href = "index.html?expired=1";
-          return null;
+          localStorage.removeItem(SESSION_KEY); window.location.href = "index.html?expired=1"; return null;
         }
         return { username: s.username, role: s.role, token: s.token };
       });
@@ -570,13 +568,8 @@
         const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d;
       });
 
-      const handleLogout = () => {
-        localStorage.removeItem(SESSION_KEY);
-        window.location.href = "index.html";
-      };
-
       const isAdmin = user?.role === "admin";
-      const canBook = isAdmin || user?.permissions?.includes("bookings") || true; // adjust as needed
+      const canBook = true;
 
       const loadBase = async () => {
         setLoadError(null);
@@ -588,28 +581,22 @@
           setAllFields(f && typeof f==="object" ? f : {});
           setSelectedRes(s => s || resList[0] || null);
           setLoading(false);
-        } catch {
-          setLoadError("Could not load data. Please refresh.");
-          setLoading(false);
-        }
+        } catch { setLoadError("Could not load data. Please refresh."); setLoading(false); }
       };
 
       const loadBookings = async () => {
         if (!selectedRes) return;
         try {
-          const from = fmt(weekStart), to = fmt(addDays(weekStart,6));
-          const b = await api.getBookings(from, to);
+          const b = await api.getBookings();
           setBookings(Array.isArray(b) ? b.filter(bk=>bk.resource_id===selectedRes.id) : []);
-        } catch {
-          setBookings([]);
-        }
+        } catch { setBookings([]); }
       };
 
       useEffect(()=>{ if(user) loadBase(); else setLoading(false); }, []);
       useEffect(()=>{ if(selectedRes) loadBookings(); }, [selectedRes, weekStart]);
 
-      if (!user)    return null; // redirecting
-      if (loading)  return <div style={{padding:32,color:"#64748b"}}>Loading…</div>;
+      if (!user)     return null;
+      if (loading)   return <div style={{padding:32,color:"#64748b"}}>Loading…</div>;
       if (loadError) return (
         <div style={{padding:32,display:"flex",flexDirection:"column",gap:12,alignItems:"flex-start"}}>
           <div style={{color:"#ef4444"}}>{loadError}</div>
@@ -624,28 +611,16 @@
         <div style={{fontFamily:"system-ui,sans-serif",height:"100vh",display:"flex",flexDirection:"column"}}>
           {showAdmin && <AdminPanel resources={resources} members={members} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}/>}
 
-          {/* Header */}
-          <div style={{background:"#0f172a",padding:"10px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
-            <a href="dashboard.html" style={{fontSize:15,fontWeight:700,color:"#fff",textDecoration:"none"}}>⚙️ Kerno</a>
-            <span style={{color:"#475569"}}>›</span>
-            <span style={{fontSize:13,color:"#94a3b8"}}>Bookings</span>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:16}}>
-              <button onClick={()=>setWeekStart(addDays(weekStart,-7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>‹</button>
-              <span style={{fontSize:12,color:"#f1f5f9",fontWeight:600,minWidth:180,textAlign:"center"}}>{weekLabel}</span>
-              <button onClick={()=>setWeekStart(addDays(weekStart,7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>›</button>
-              <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Today</button>
-            </div>
-            <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
-              <a href="kanban.html"   style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📋 Kanban</a>
-              <a href="requests.html" style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📝 Requests</a>
-              {isAdmin && <button onClick={()=>setShowAdmin(true)} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>⚙ Admin</button>}
-              <span style={{fontSize:12,color:"#64748b"}}>👤 {user.username}</span>
-              <button onClick={handleLogout} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Sign out</button>
-            </div>
+          <Navbar user={user} />
+          <div style={{background:"#0f172a",padding:"6px 24px",display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+            <button onClick={()=>setWeekStart(addDays(weekStart,-7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>‹</button>
+            <span style={{fontSize:12,color:"#f1f5f9",fontWeight:600,minWidth:180,textAlign:"center"}}>{weekLabel}</span>
+            <button onClick={()=>setWeekStart(addDays(weekStart,7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>›</button>
+            <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Today</button>
+            {isAdmin && <button onClick={()=>setShowAdmin(true)} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",marginLeft:8}}>⚙ Admin</button>}
           </div>
 
           <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-            {/* Sidebar */}
             <div style={{width:200,minWidth:200,background:"#1e293b",padding:"12px 0",overflowY:"auto",flexShrink:0}}>
               <div style={{padding:"4px 14px 8px",fontSize:11,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:.5}}>Resources</div>
               {resources.length===0 && <div style={{padding:"8px 14px",fontSize:12,color:"#475569"}}>No resources yet.</div>}
@@ -655,7 +630,7 @@
                   <div style={{fontSize:12,fontWeight:600,color:selectedRes?.id===r.id?"#f1f5f9":"#94a3b8"}}>{r.name}</div>
                   {r.description&&<div style={{fontSize:11,color:"#475569",marginTop:2}}>{r.description}</div>}
                   <div style={{fontSize:10,color:"#64748b",marginTop:2}}>
-                    {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label || "30 min"}
+                    {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"}
                   </div>
                   <div style={{fontSize:10,color:r.approval_required?"#ea580c":"#22c55e",marginTop:2}}>
                     {r.approval_required?"⚠ Approval required":"✓ Auto-confirm"}
@@ -664,22 +639,11 @@
               ))}
             </div>
 
-            {/* Calendar */}
             {selectedRes
-              ? <WeeklyCalendar
-                  resource={selectedRes}
-                  weekStart={weekStart}
-                  bookings={bookings}
-                  fields={currentFields}
-                  user={user}
-                  isAdmin={isAdmin}
-                  canBook={canBook}
-                  onRefresh={loadBookings}
-                />
+              ? <WeeklyCalendar resource={selectedRes} weekStart={weekStart} bookings={bookings}
+                  fields={currentFields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadBookings}/>
               : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:14}}>
-                  {isAdmin
-                    ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} style={{color:"#2563eb",background:"none",border:"none",cursor:"pointer",fontSize:14}}>Add one →</button></span>
-                    : "No resources available."}
+                  {isAdmin ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} style={{color:"#2563eb",background:"none",border:"none",cursor:"pointer",fontSize:14}}>Add one →</button></span> : "No resources available."}
                 </div>
             }
           </div>
