@@ -1,0 +1,84 @@
+// ── Standard navbar links (same across all pages) ────────────────────────────
+// Pages:        dashboard  kanban  booking  requests  users(admin)  profile
+// Current page gets the "active" highlight (background:#2563eb, color:#fff)
+//
+// Plain JS pages (dashboard, profile): use buildNavbar() below
+// React pages (kanban, booking, requests, users): use <Navbar> component below
+
+// ── Plain JS version ─────────────────────────────────────────────────────────
+function buildNavbar(session, currentPage, currentLabel) {
+  const isAdmin = session.role === "admin";
+  const btn  = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none;cursor:pointer;font-family:inherit";
+  const active = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none";
+
+  return `
+  <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
+    <span style="color:#475569">›</span>
+    <span style="font-size:13px;color:#94a3b8">${currentLabel}</span>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <a href="kanban.html"   style="${currentPage==="kanban"   ? active : btn}">📋 Kanban</a>
+      <a href="booking.html"  style="${currentPage==="booking"  ? active : btn}">📅 Bookings</a>
+      <a href="requests.html" style="${currentPage==="requests" ? active : btn}">📝 Requests</a>
+      ${isAdmin ? `<a href="users.html" style="${currentPage==="users" ? active : btn}">👥 Users</a>` : ""}
+      <span style="font-size:12px;color:#64748b">👤 ${session.username}${isAdmin ? `<span style="margin-left:5px;font-size:10px;background:#2563eb;color:#fff;border-radius:99px;padding:1px 6px">admin</span>` : ""}</span>
+      <a href="profile.html"  style="${currentPage==="profile"  ? active : btn}">🔑 Password</a>
+      <button onclick="localStorage.removeItem('kerno_session');window.location.href='index.html'"
+        style="${btn}">Sign out</button>
+    </div>
+  </div>`;
+}
+
+// Usage in plain JS pages:
+// document.getElementById("navbar").innerHTML = buildNavbar(session, "dashboard", "Dashboard");
+
+// ── React version ─────────────────────────────────────────────────────────────
+function Navbar({ user, currentPage, currentLabel }) {
+  const logout = () => { localStorage.removeItem("kerno_session"); window.location.href = "index.html"; };
+  const isAdmin = user.role === "admin";
+
+  const btn = {
+    fontSize:11, padding:"4px 10px", borderRadius:5,
+    border:"1px solid #334155", background:"#1e293b",
+    color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit"
+  };
+  const active = { ...btn, background:"#2563eb", color:"#fff", border:"1px solid #2563eb" };
+  const s = (page) => page === currentPage ? active : btn;
+
+  return (
+    <div style={{ background:"#0f172a", padding:"10px 24px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+      <a href="dashboard.html" style={{ fontSize:15, fontWeight:700, color:"#fff", textDecoration:"none" }}>⚙️ Kerno</a>
+      <span style={{ color:"#475569" }}>›</span>
+      <span style={{ fontSize:13, color:"#94a3b8" }}>{currentLabel}</span>
+      <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+        <a href="kanban.html"   style={s("kanban")}>📋 Kanban</a>
+        <a href="booking.html"  style={s("booking")}>📅 Bookings</a>
+        <a href="requests.html" style={s("requests")}>📝 Requests</a>
+        {isAdmin && <a href="users.html" style={s("users")}>👥 Users</a>}
+        <span style={{ fontSize:12, color:"#64748b" }}>
+          👤 {user.username}
+          {isAdmin && <span style={{ marginLeft:5, fontSize:10, background:"#2563eb", color:"#fff", borderRadius:99, padding:"1px 6px" }}>admin</span>}
+        </span>
+        <a href="profile.html"  style={s("profile")}>🔑 Password</a>
+        <button onClick={logout} style={btn}>Sign out</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared password strength checker (copy into users.html script block) ─────
+function checkPasswordStrength(pwd) {
+  if (!pwd || pwd.length < 10)       return "At least 10 characters required";
+  if (!/[A-Z]/.test(pwd))            return "Add an uppercase letter";
+  if (!/[a-z]/.test(pwd))            return "Add a lowercase letter";
+  if (!/[0-9]/.test(pwd))            return "Add a number";
+  if (!/[^A-Za-z0-9]/.test(pwd))    return "Add a special character";
+  return null;
+}
+// Call before doReset(): const err = checkPasswordStrength(resetPwd); if (err) { setResetMsg(err); return; }
+
+// Usage in React pages:
+// <Navbar user={user} currentPage="kanban" currentLabel="Kanban" />
+// <Navbar user={user} currentPage="booking" currentLabel="Bookings" />
+// <Navbar user={user} currentPage="requests" currentLabel="Requests" />
+// <Navbar user={user} currentPage="users" currentLabel="Users & Groups" />
