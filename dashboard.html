@@ -7,12 +7,6 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; min-height: 100vh; }
-    .navbar { background: #0f172a; padding: 14px 28px; display: flex; align-items: center; gap: 16px; }
-    .navbar-logo { font-size: 16px; font-weight: 700; color: #fff; text-decoration: none; }
-    .navbar-right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-    .nav-btn { font-size: 11px; padding: 4px 12px; border-radius: 5px; border: 1px solid #334155; background: #1e293b; color: #94a3b8; cursor: pointer; text-decoration: none; font-family: inherit; }
-    .nav-btn:hover { background: #334155; color: #f1f5f9; }
-    .nav-user { font-size: 12px; color: #64748b; }
     .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
     .greeting { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
     .greeting-sub { font-size: 13px; color: #64748b; margin-bottom: 32px; }
@@ -42,10 +36,6 @@
     .panel-link:hover { text-decoration: underline; }
     .empty { font-size: 12px; color: #94a3b8; padding: 12px 0; }
 
-    .blocked-item { padding: 8px 10px; border-radius: 7px; border: 1px solid #fed7aa; background: #fff7ed; margin-bottom: 6px; }
-    .blocked-title { font-size: 12px; font-weight: 600; color: #9a3412; }
-    .blocked-proj  { font-size: 11px; color: #c2410c; margin-top: 1px; }
-
     .request-item { padding: 8px 10px; border-radius: 7px; border: 1px solid #e2e8f0; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
     .request-name { font-size: 12px; font-weight: 600; color: #1e293b; }
     .request-meta { font-size: 11px; color: #64748b; margin-top: 1px; }
@@ -72,31 +62,22 @@
 <div id="navbar"></div>
 
 <div class="page">
-  <div class="greeting" id="greeting">Good morning</div>
-  <div class="greeting-sub">Here's what's happening at the platforms today.</div>
+  <div class="greeting"     id="greeting">Good morning</div>
+  <div class="greeting-sub" id="greeting-sub">Here's what's happening at the platforms today.</div>
 
   <!-- Nav cards -->
   <div class="nav-cards">
     <a href="kanban.html" class="nav-card">
       <div class="nav-card-icon">📋</div>
-      <div>
-        <div class="nav-card-title">Kanban Board</div>
-        <div class="nav-card-desc">Manage projects, tasks and track progress</div>
-      </div>
+      <div><div class="nav-card-title">Kanban Board</div><div class="nav-card-desc">Manage projects, tasks and track progress</div></div>
     </a>
     <a href="booking.html" class="nav-card">
       <div class="nav-card-icon">📅</div>
-      <div>
-        <div class="nav-card-title">Resource Bookings</div>
-        <div class="nav-card-desc">Book equipment and facilities for your experiments</div>
-      </div>
+      <div><div class="nav-card-title">Resource Bookings</div><div class="nav-card-desc">Book equipment and facilities for your experiments</div></div>
     </a>
     <a href="requests.html" class="nav-card">
       <div class="nav-card-icon">📝</div>
-      <div>
-        <div class="nav-card-title">Service Requests</div>
-        <div class="nav-card-desc">Submit and track genomics, sorting and other requests</div>
-      </div>
+      <div><div class="nav-card-title">Service Requests</div><div class="nav-card-desc">Submit and track genomics, sorting and other requests</div></div>
     </a>
   </div>
 
@@ -112,7 +93,7 @@
       <div class="stat-label">Team members</div>
       <div class="stat-sub" id="stat-members-sub"></div>
     </div>
-    <div class="stat" id="stat-requests-box">
+    <div class="stat">
       <div class="stat-value slate" id="stat-requests">—</div>
       <div class="stat-label">Total requests</div>
       <div class="stat-sub" id="stat-requests-sub"></div>
@@ -124,7 +105,7 @@
     <div class="panel">
       <div class="panel-header">
         👥 Team
-        <a href="#" class="panel-link" id="admin-users-link" style="display:none">Manage →</a>
+        <a href="users.html" class="panel-link" id="admin-users-link" style="display:none">Manage →</a>
       </div>
       <div class="panel-body" id="panel-members"><div class="empty">Loading…</div></div>
     </div>
@@ -158,32 +139,37 @@
   }
   const { username, role, token } = session;
 
+  // ── Greeting ───────────────────────────────────────────────────────────────
   const hour  = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  document.getElementById("greeting").textContent = `${greet}, ${username} 👋`;
+  document.getElementById("greeting").textContent     = `${greet}, ${username} 👋`;
+  document.getElementById("greeting-sub").textContent = "Here's what's happening at the platforms today.";
 
-  // Navbar
-  function buildNavbar(s) {
-    const isAdmin = s.role === "admin";
+  // ── Navbar ─────────────────────────────────────────────────────────────────
+  (function buildNavbar() {
+    const isAdmin = role === "admin";
     const btn    = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none;cursor:pointer;font-family:inherit";
     const active = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none";
-    return `
-    <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px;flex-shrink:0">
-      <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
-      <span style="color:#475569;font-size:12px">CaixaResearch Core Facilities</span>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-        <a href="kanban.html"   style="${btn}">📋 Kanban</a>
-        <a href="booking.html"  style="${btn}">📅 Bookings</a>
-        <a href="requests.html" style="${btn}">📝 Requests</a>
-        ${isAdmin ? `<a href="users.html" style="${btn}">👥 Users</a>` : ""}
-        <span style="font-size:12px;color:#64748b">👤 ${s.username}${isAdmin ? `<span style="margin-left:5px;font-size:10px;background:#2563eb;color:#fff;border-radius:99px;padding:1px 6px">admin</span>` : ""}</span>
-        <a href="profile.html" style="${btn}">🔑 Password</a>
-        <button onclick="localStorage.removeItem('kerno_session');window.location.href='index.html'" style="${btn}">Sign out</button>
-      </div>
-    </div>`;
-  }
-  document.getElementById("navbar").innerHTML = buildNavbar(session);
+    document.getElementById("navbar").innerHTML = `
+      <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+        <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
+        <span style="color:#475569;font-size:12px">CaixaResearch Core Facilities</span>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <a href="kanban.html"   style="${btn}">📋 Kanban</a>
+          <a href="booking.html"  style="${btn}">📅 Bookings</a>
+          <a href="requests.html" style="${btn}">📝 Requests</a>
+          ${isAdmin ? `<a href="users.html" style="${btn}">👥 Users</a>` : ""}
+          <span style="font-size:12px;color:#64748b">👤 ${username}${isAdmin ? `<span style="margin-left:5px;font-size:10px;background:#2563eb;color:#fff;border-radius:99px;padding:1px 6px">admin</span>` : ""}</span>
+          <a href="profile.html" style="${btn}">🔑 Password</a>
+          <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'" style="${btn}">Sign out</button>
+        </div>
+      </div>`;
 
+    // Show "Manage →" link in Team panel for admins
+    if (isAdmin) document.getElementById("admin-users-link").style.display = "inline";
+  })();
+
+  // ── API ────────────────────────────────────────────────────────────────────
   async function apiFetch(path) {
     const res = await fetch(`${WORKER}${path}`, {
       headers: { "Content-Type": "application/json", "X-Session-Token": token }
@@ -196,9 +182,7 @@
     return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
 
-  const STATUS_BG    = { pending:"#fff7ed", approved:"#f0fdf4", rejected:"#fff5f5" };
-  const STATUS_COLOR = { pending:"#ea580c", approved:"#16a34a", rejected:"#ef4444" };
-
+  // ── Load ───────────────────────────────────────────────────────────────────
   async function load() {
     const [projects, members, requests, logs] = await Promise.all([
       apiFetch("/projects"),
@@ -215,59 +199,53 @@
     const pendingReqs = requestList.filter(r => r.status === "pending");
     const adminCount  = memberList.filter(m => m.role === "admin").length;
 
-    // ── Stats ──────────────────────────────────────────────────────────────
-    document.getElementById("stat-projects").textContent  = projectList.length;
-    document.getElementById("stat-members").textContent   = memberList.length;
+    // Stats
+    document.getElementById("stat-projects").textContent    = projectList.length;
+    document.getElementById("stat-members").textContent     = memberList.length;
     document.getElementById("stat-members-sub").textContent = `${adminCount} admin${adminCount !== 1 ? "s" : ""}`;
-    document.getElementById("stat-requests").textContent  = requestList.length;
+    document.getElementById("stat-requests").textContent    = requestList.length;
     if (pendingReqs.length) {
       document.getElementById("stat-requests-sub").textContent = `${pendingReqs.length} pending approval`;
       document.getElementById("stat-requests-sub").style.color = "#ea580c";
     }
 
-    // ── Members panel ──────────────────────────────────────────────────────
+    // Team panel
     const membersEl = document.getElementById("panel-members");
-    if (!memberList.length) {
-      membersEl.innerHTML = `<div class="empty">No team members yet.</div>`;
-    } else {
-      membersEl.innerHTML = memberList.map(m => `
-        <div class="member-item">
-          <div class="member-avatar">${esc(m.username[0].toUpperCase())}</div>
-          <div>
-            <div class="member-name">${esc(m.username)}</div>
-            <div class="member-role">${m.role === "admin" ? "Admin" : "User"}${m.email ? ` · ${esc(m.email)}` : ""}</div>
-          </div>
-        </div>`).join("");
-    }
+    membersEl.innerHTML = memberList.length
+      ? memberList.map(m => `
+          <div class="member-item">
+            <div class="member-avatar">${esc(m.username[0].toUpperCase())}</div>
+            <div>
+              <div class="member-name">${esc(m.username)}</div>
+              <div class="member-role">${m.role === "admin" ? "Admin" : "User"}${m.email ? ` · ${esc(m.email)}` : ""}</div>
+            </div>
+          </div>`).join("")
+      : `<div class="empty">No team members yet.</div>`;
 
-    // ── Requests panel ─────────────────────────────────────────────────────
+    // Requests panel
     const requestsEl = document.getElementById("panel-requests");
-    if (!requestList.length) {
-      requestsEl.innerHTML = `<div class="empty">No requests yet.</div>`;
-    } else {
-      requestsEl.innerHTML = requestList.slice(0, 8).map(r => `
-        <div class="request-item">
-          <div>
-            <div class="request-name">${esc(r.type.charAt(0).toUpperCase() + r.type.slice(1))} — ${esc(r.username)}</div>
-            <div class="request-meta">${new Date(r.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</div>
-          </div>
-          <span class="status-badge status-${r.status}">${r.status}</span>
-        </div>`).join("");
-    }
+    requestsEl.innerHTML = requestList.length
+      ? requestList.slice(0, 8).map(r => `
+          <div class="request-item">
+            <div>
+              <div class="request-name">${esc(r.type.charAt(0).toUpperCase() + r.type.slice(1))} — ${esc(r.username)}</div>
+              <div class="request-meta">${new Date(r.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</div>
+            </div>
+            <span class="status-badge status-${r.status}">${r.status}</span>
+          </div>`).join("")
+      : `<div class="empty">No requests yet.</div>`;
 
-    // ── Logs panel ─────────────────────────────────────────────────────────
+    // Logs panel
     const logsEl = document.getElementById("panel-logs");
-    if (!logList.length) {
-      logsEl.innerHTML = `<div class="empty">No activity yet.</div>`;
-    } else {
-      logsEl.innerHTML = logList.map(l => `
-        <div class="log-item">
-          <span class="log-user">${esc(l.username)}</span>
-          <span class="log-action">${esc(l.action)}</span>
-          <span style="color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.details || "")}</span>
-          <span class="log-time">${new Date(l.timestamp).toLocaleString("en", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
-        </div>`).join("");
-    }
+    logsEl.innerHTML = logList.length
+      ? logList.map(l => `
+          <div class="log-item">
+            <span class="log-user">${esc(l.username)}</span>
+            <span class="log-action">${esc(l.action)}</span>
+            <span style="color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.details || "")}</span>
+            <span class="log-time">${new Date(l.timestamp).toLocaleString("en", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+          </div>`).join("")
+      : `<div class="empty">No activity yet.</div>`;
   }
 
   load();
