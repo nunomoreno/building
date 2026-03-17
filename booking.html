@@ -107,7 +107,29 @@
       );
     }
 
-    const fmt      = (d) => d.toISOString().split("T")[0];
+    // ── Navbar ───────────────────────────────────────────────────────────────
+    function Navbar({ user }) {
+      const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+      const isAdmin = user.role === "admin";
+      const btn = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
+      const active = { ...btn, background:"#2563eb", color:"#fff", border:"1px solid #2563eb" };
+      return (
+        <div style={{ background:"#0f172a", padding:"10px 24px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+          <a href="dashboard.html" style={{ fontSize:15, fontWeight:700, color:"#fff", textDecoration:"none" }}>⚙️ Kerno</a>
+          <span style={{ color:"#475569" }}>›</span>
+          <span style={{ fontSize:13, color:"#94a3b8" }}>Bookings</span>
+          <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+            <a href="kanban.html"   style={btn}>📋 Kanban</a>
+            <a href="booking.html"  style={active}>📅 Bookings</a>
+            <a href="requests.html" style={btn}>📝 Requests</a>
+            {isAdmin && <a href="users.html" style={btn}>👥 Users</a>}
+            <span style={{ fontSize:12, color:"#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft:5, fontSize:10, background:"#2563eb", color:"#fff", borderRadius:99, padding:"1px 6px" }}>admin</span>}</span>
+            <a href="profile.html" style={btn}>🔑 Password</a>
+            <button onClick={logout} style={btn}>Sign out</button>
+          </div>
+        </div>
+      );
+    }
     const addDays  = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
     const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
     const slotIndex  = (time) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/30); };
