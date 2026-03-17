@@ -597,7 +597,7 @@
                                   await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === task.id ? { ...t, assignee } : t) });
                                   api.log(username, "assign_task", `Assigned "${task.title}" to ${assignee || "nobody"} in ${project.name}`);
                                 }}
-                                style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 5, border: "1px solid #e2e8f0", background: task.assignee ? "#f0fdf4" : "#f8fafc", color: task.assignee ? "#16a34a" : "#94a3b8", cursor: "pointer" }}>
+                                style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 5, border: "1px solid #e2e8f0", background: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#f0fdf4" : "#f8fafc", color: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#16a34a" : "#94a3b8", cursor: "pointer" }}>
                                 <option value="">Unassigned</option>
                                 {members.map(m => <option key={m} value={m}>{m}</option>)}
                               </select>
