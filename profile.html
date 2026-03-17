@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerno — My Profile</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f8fafc; }
+  </style>
+</head>
+<body>
+<div id="navbar"></div>
+<div style="max-width:480px;margin:48px auto;padding:0 24px">
+  <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:4px">My Profile</div>
+  <div style="font-size:13px;color:#64748b;margin-bottom:28px">Update your password.</div>
+
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px">
+    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:16px">Change Password</div>
+
+    <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Current Password</label>
+    <input id="current-pwd" type="password" placeholder="Current password"
+      style="width:100%;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:14px;font-family:inherit"/>
+
+    <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">New Password</label>
+    <input id="new-pwd" type="password" placeholder="New password"
+      style="width:100%;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:6px;font-family:inherit"/>
+    <div id="strength-bar" style="height:4px;border-radius:2px;background:#e2e8f0;margin-bottom:4px;overflow:hidden">
+      <div id="strength-fill" style="height:100%;width:0%;transition:width .2s,background .2s"></div>
+    </div>
+    <div id="strength-label" style="font-size:11px;color:#94a3b8;margin-bottom:10px"></div>
+
+    <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Confirm New Password</label>
+    <input id="confirm-pwd" type="password" placeholder="Confirm new password"
+      style="width:100%;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:20px;font-family:inherit"/>
+
+    <div id="msg" style="font-size:12px;margin-bottom:14px;display:none"></div>
+
+    <button id="save-btn"
+      style="width:100%;font-size:14px;padding:10px;border-radius:7px;background:#2563eb;color:#fff;border:none;cursor:pointer;font-weight:600;font-family:inherit">
+      Update Password
+    </button>
+  </div>
+</div>
+
+<script>
+  const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
+  const SESSION_KEY = "kerno_session";
+
+  const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+  if (!session || Date.now() > new Date(session.expires).getTime()) {
+    localStorage.removeItem(SESSION_KEY);
+    window.location.href = "index.html?expired=1";
+  }
+
+  // Inject navbar
+  document.getElementById("navbar").innerHTML = buildNavbar(session);
+
+  function buildNavbar(s) {
+    const isAdmin = s.role === "admin";
+    return `
+    <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px">
+      <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
+      <span style="color:#475569">›</span>
+      <span style="font-size:13px;color:#94a3b8">My Profile</span>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <a href="kanban.html"   style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">📋 Kanban</a>
+        <a href="booking.html"  style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">📅 Bookings</a>
+        <a href="requests.html" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">📝 Requests</a>
+        ${isAdmin ? `<a href="users.html" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">👥 Users</a>` : ""}
+        <span style="font-size:12px;color:#64748b">👤 ${s.username}</span>
+        <a href="profile.html" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none">🔑 Password</a>
+        <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer;font-family:inherit">Sign out</button>
+      </div>
+    </div>`;
+  }
+
+  // ── Password strength meter ───────────────────────────────────────────────
+  function scorePassword(pwd) {
+    if (!pwd) return { score: 0, label: "", color: "" };
+    let score = 0;
+    if (pwd.length >= 10) score++;
+    if (pwd.length >= 14) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[a-z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    if (score <= 2) return { score, pct: 20,  label: "Too weak",  color: "#ef4444" };
+    if (score <= 3) return { score, pct: 40,  label: "Weak",      color: "#f97316" };
+    if (score <= 4) return { score, pct: 65,  label: "Fair",      color: "#eab308" };
+    if (score <= 5) return { score, pct: 85,  label: "Strong",    color: "#22c55e" };
+    return             { score, pct: 100, label: "Very strong", color: "#16a34a" };
+  }
+
+  document.getElementById("new-pwd").addEventListener("input", e => {
+    const { pct, label, color } = scorePassword(e.target.value);
+    document.getElementById("strength-fill").style.width      = e.target.value ? `${pct}%` : "0%";
+    document.getElementById("strength-fill").style.background = color;
+    document.getElementById("strength-label").textContent     = label;
+    document.getElementById("strength-label").style.color     = color || "#94a3b8";
+  });
+
+  const msg     = document.getElementById("msg");
+  const saveBtn = document.getElementById("save-btn");
+
+  function showMsg(text, isError) {
+    msg.textContent = text;
+    msg.style.color = isError ? "#ef4444" : "#16a34a";
+    msg.style.background = isError ? "#fef2f2" : "#f0fdf4";
+    msg.style.border = `1px solid ${isError ? "#fecaca" : "#86efac"}`;
+    msg.style.borderRadius = "6px";
+    msg.style.padding = "8px 10px";
+    msg.style.display = "block";
+  }
+
+  async function sha256(message) {
+    const buf  = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  saveBtn.addEventListener("click", async () => {
+    const current = document.getElementById("current-pwd").value;
+    const newPwd  = document.getElementById("new-pwd").value;
+    const confirm = document.getElementById("confirm-pwd").value;
+
+    if (!current || !newPwd || !confirm) return showMsg("Please fill in all fields.", true);
+    const { score } = scorePassword(newPwd);
+    if (score <= 2) return showMsg("Password is too weak. Use 10+ characters with uppercase, lowercase, numbers and a special character.", true);
+    if (newPwd !== confirm) return showMsg("New passwords do not match.", true);
+
+    saveBtn.disabled    = true;
+    saveBtn.textContent = "Updating…";
+
+    // Verify current password by attempting login
+    const loginRes = await fetch(`${WORKER}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: session.username, password: current }),
+    }).then(r => r.json());
+
+    if (loginRes.error) {
+      saveBtn.disabled    = false;
+      saveBtn.textContent = "Update Password";
+      return showMsg("Current password is incorrect.", true);
+    }
+
+    // Get member id
+    const membersRes = await fetch(`${WORKER}/members`, {
+      headers: { "Content-Type": "application/json", "X-Session-Token": session.token }
+    }).then(r => r.json());
+
+    const me = Array.isArray(membersRes) ? membersRes.find(m => m.username === session.username) : null;
+    if (!me) return showMsg("Could not find your account.", true);
+
+    const updateRes = await fetch(`${WORKER}/members/${me.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Session-Token": session.token },
+      body: JSON.stringify({ password: newPwd }),  // worker hashes server-side
+    }).then(r => r.json());
+
+    saveBtn.disabled    = false;
+    saveBtn.textContent = "Update Password";
+
+    if (updateRes.error) return showMsg("Failed to update password: " + updateRes.error, true);
+
+    showMsg("Password updated successfully!", false);
+    document.getElementById("current-pwd").value = "";
+    document.getElementById("new-pwd").value     = "";
+    document.getElementById("confirm-pwd").value = "";
+  });
+</script>
+</body>
+</html>
