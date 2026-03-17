@@ -563,7 +563,7 @@
                   {colTasks.map(task => {
                     const ci = COLUMNS.indexOf(col);
                     return (
-                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
+                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee === user.username ? "#86efac" : "#e2e8f0"}` }}>
                         {editing?.id === task.id && editing.field === "title"
                           ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
                               onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
