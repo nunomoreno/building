@@ -69,17 +69,7 @@
 </head>
 <body>
 
-<div class="navbar">
-  <a href="dashboard.html" class="navbar-logo">⚙️ Kerno</a>
-  <span style="font-size:12px;color:#475569">CaixaResearch Core Facilities</span>
-  <div class="navbar-right">
-    <a href="kanban.html"   class="nav-btn">📋 Kanban</a>
-    <a href="booking.html"  class="nav-btn">📅 Bookings</a>
-    <a href="requests.html" class="nav-btn">📝 Requests</a>
-    <span class="nav-user" id="nav-user"></span>
-    <button class="nav-btn" id="logout-btn">Sign out</button>
-  </div>
-</div>
+<div id="navbar"></div>
 
 <div class="page">
   <div class="greeting" id="greeting">Good morning</div>
@@ -171,8 +161,28 @@
   const hour  = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   document.getElementById("greeting").textContent = `${greet}, ${username} 👋`;
-  document.getElementById("nav-user").textContent = `👤 ${username}${role === "admin" ? " (admin)" : ""}`;
-  if (role === "admin") document.getElementById("admin-users-link").style.display = "inline";
+
+  // Navbar
+  function buildNavbar(s) {
+    const isAdmin = s.role === "admin";
+    const btn    = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none;cursor:pointer;font-family:inherit";
+    const active = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none";
+    return `
+    <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
+      <span style="color:#475569;font-size:12px">CaixaResearch Core Facilities</span>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <a href="kanban.html"   style="${btn}">📋 Kanban</a>
+        <a href="booking.html"  style="${btn}">📅 Bookings</a>
+        <a href="requests.html" style="${btn}">📝 Requests</a>
+        ${isAdmin ? `<a href="users.html" style="${btn}">👥 Users</a>` : ""}
+        <span style="font-size:12px;color:#64748b">👤 ${s.username}${isAdmin ? `<span style="margin-left:5px;font-size:10px;background:#2563eb;color:#fff;border-radius:99px;padding:1px 6px">admin</span>` : ""}</span>
+        <a href="profile.html" style="${btn}">🔑 Password</a>
+        <button onclick="localStorage.removeItem('kerno_session');window.location.href='index.html'" style="${btn}">Sign out</button>
+      </div>
+    </div>`;
+  }
+  document.getElementById("navbar").innerHTML = buildNavbar(session);
 
   async function apiFetch(path) {
     const res = await fetch(`${WORKER}${path}`, {
@@ -259,11 +269,6 @@
         </div>`).join("");
     }
   }
-
-  document.getElementById("logout-btn").addEventListener("click", () => {
-    localStorage.removeItem(SESSION_KEY);
-    window.location.href = "index.html";
-  });
 
   load();
 </script>
