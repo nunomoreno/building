@@ -490,7 +490,7 @@
         </div>
       );
     }
-    function Board({ project, onUpdate, username, members, membersRef }) {
+    function Board({ project, onUpdate, username, members, membersRef, currentUser }) {
       const [editing,   setEditing]   = useState(null);
       const [draft,     setDraft]     = useState("");
       const [addingTo,  setAddingTo]  = useState(null);
@@ -563,7 +563,7 @@
                   {colTasks.map(task => {
                     const ci = COLUMNS.indexOf(col);
                     return (
-                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee?.toLowerCase() === user.username.toLowerCase() ? "#86efac" : "#e2e8f0"}` }}>
+                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee?.toLowerCase() === currentUser?.username.toLowerCase() ? "#86efac" : "#e2e8f0"}` }}>
                         {editing?.id === task.id && editing.field === "title"
                           ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
                               onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
@@ -778,7 +778,7 @@
               ) : activeProject ? (
                 <>
                   <h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} />
+                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} />
                 </>
               ) : (
                 <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
