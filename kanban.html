@@ -477,7 +477,7 @@
                         </div>
                       )}
                       {task.assignee && (
-                        <div style={{ marginTop: 5, fontSize: 10, fontWeight: 600, background: "#f0fdf4", color: "#16a34a", border: "1px solid #86efac", borderRadius: 99, padding: "1px 8px", display: "inline-block" }}>
+                        <div style={{ marginTop: 5, fontSize: 10, fontWeight: 600, background: task.assignee.toLowerCase() === user.username.toLowerCase() ? "#f0fdf4" : "#f8fafc", color: task.assignee.toLowerCase() === user.username.toLowerCase() ? "#16a34a" : "#64748b", border: `1px solid ${task.assignee.toLowerCase() === user.username.toLowerCase() ? "#86efac" : "#e2e8f0"}`, borderRadius: 99, padding: "1px 8px", display: "inline-block" }}>
                           {task.assignee}
                         </div>
                       )}
@@ -563,7 +563,7 @@
                   {colTasks.map(task => {
                     const ci = COLUMNS.indexOf(col);
                     return (
-                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee === user.username ? "#86efac" : "#e2e8f0"}` }}>
+                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee?.toLowerCase() === user.username.toLowerCase() ? "#86efac" : "#e2e8f0"}` }}>
                         {editing?.id === task.id && editing.field === "title"
                           ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
                               onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
