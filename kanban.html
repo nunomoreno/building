@@ -491,6 +491,8 @@
       );
     }
     function Board({ project, onUpdate, username, members, membersRef, currentUser }) {
+      const isOwner = !project.owner_username || project.owner_username === currentUser?.username || currentUser?.role === "admin";
+      const canEditTask = (task) => isOwner || task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase();
       const [editing,   setEditing]   = useState(null);
       const [draft,     setDraft]     = useState("");
       const [addingTo,  setAddingTo]  = useState(null);
@@ -563,13 +565,13 @@
                   {colTasks.map(task => {
                     const ci = COLUMNS.indexOf(col);
                     return (
-                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee?.toLowerCase() === currentUser?.username.toLowerCase() ? "#86efac" : "#e2e8f0"}` }}>
+                      <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: `1px solid ${task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#86efac" : "#e2e8f0"}` }}>
                         {editing?.id === task.id && editing.field === "title"
                           ? <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
                               onBlur={commitEdit} onKeyDown={e => { if (e.key === "Enter") commitEdit(); if (e.key === "Escape") setEditing(null); }}
                               style={{ width: "100%", fontSize: 12, fontWeight: 600, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", boxSizing: "border-box" }} />
-                          : <div onClick={() => startEdit(task.id, "title", task.title)}
-                              style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: "text", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
+                          : <div onClick={() => canEditTask(task) && startEdit(task.id, "title", task.title)}
+                              style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", cursor: canEditTask(task) ? "text" : "default", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
                         }
                         {editing?.id === task.id && editing.field === "notes"
                           ? <div>
@@ -581,37 +583,42 @@
                                 <button onClick={() => setEditing(null)} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
                               </div>
                             </div>
-                          : <div onClick={() => startEdit(task.id, "notes", task.notes || "")}
-                              style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: "text", lineHeight: 1.4, minHeight: 14 }}>
-                              {task.notes || <em>add note…</em>}
+                          : <div onClick={() => canEditTask(task) && startEdit(task.id, "notes", task.notes || "")}
+                              style={{ fontSize: 11, color: task.notes ? "#475569" : "#94a3b8", cursor: canEditTask(task) ? "text" : "default", lineHeight: 1.4, minHeight: 14 }}>
+                              {task.notes || (canEditTask(task) ? <em>add note…</em> : "")}
                             </div>
                         }
-                        {/* Assignee */}
+                        {/* Assignee — only owner/admin can reassign */}
                         {editing?.id === task.id && editing.field === "notes"
                           ? null
                           : <div style={{ marginTop: 5 }}>
-                              <select
-                                value={task.assignee || ""}
-                                onChange={async e => {
-                                  const assignee = e.target.value;
-                                  await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === task.id ? { ...t, assignee } : t) });
-                                  api.log(username, "assign_task", `Assigned "${task.title}" to ${assignee || "nobody"} in ${project.name}`);
-                                }}
-                                style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 5, border: "1px solid #e2e8f0", background: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#f0fdf4" : "#f8fafc", color: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#16a34a" : "#94a3b8", cursor: "pointer" }}>
-                                <option value="">Unassigned</option>
-                                {members.map(m => <option key={m} value={m}>{m}</option>)}
-                              </select>
+                              {isOwner
+                                ? <select
+                                    value={task.assignee || ""}
+                                    onChange={async e => {
+                                      const assignee = e.target.value;
+                                      await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === task.id ? { ...t, assignee } : t) });
+                                      api.log(username, "assign_task", `Assigned "${task.title}" to ${assignee || "nobody"} in ${project.name}`);
+                                    }}
+                                    style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 5, border: "1px solid #e2e8f0", background: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#f0fdf4" : "#f8fafc", color: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#16a34a" : "#94a3b8", cursor: "pointer" }}>
+                                    <option value="">Unassigned</option>
+                                    {members.map(m => <option key={m} value={m}>{m}</option>)}
+                                  </select>
+                                : task.assignee
+                                  ? <span style={{ fontSize: 10, fontWeight: 600, background: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#f0fdf4" : "#f8fafc", color: task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#16a34a" : "#64748b", border: `1px solid ${task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase() ? "#86efac" : "#e2e8f0"}`, borderRadius: 99, padding: "1px 8px" }}>{task.assignee}</span>
+                                  : null
+                              }
                             </div>
                         }
                         <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
-                          <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
-                          <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
-                          <button onClick={() => deleteTask(task.id)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444", marginLeft: "auto" }}>✕</button>
+                          <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0 || !canEditTask(task)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 || !canEditTask(task) ? "not-allowed" : "pointer", color: ci === 0 || !canEditTask(task) ? "#cbd5e1" : "#475569" }}>←</button>
+                          <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1 || !canEditTask(task)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 || !canEditTask(task) ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 || !canEditTask(task) ? "#cbd5e1" : "#475569" }}>→</button>
+                          {isOwner && <button onClick={() => deleteTask(task.id)} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444", marginLeft: "auto" }}>✕</button>}
                         </div>
                       </div>
                     );
                   })}
-                  {addingTo === col
+                  {addingTo === col && isOwner
                     ? <div style={{ marginTop: 4 }}>
                         <input autoFocus value={newTitle} onChange={e => setNewTitle(e.target.value)}
                           onKeyDown={e => { if (e.key === "Enter") addTask(col); if (e.key === "Escape") { setAddingTo(null); setNewTitle(""); } }}
@@ -621,7 +628,7 @@
                           <button onClick={() => { setAddingTo(null); setNewTitle(""); }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
                         </div>
                       </div>
-                    : <button onClick={() => setAddingTo(col)} style={{ width: "100%", fontSize: 11, padding: "4px", borderRadius: 5, border: `1px dashed ${s.border}`, background: "transparent", cursor: "pointer", color: s.badge, marginTop: 2 }}>+ Add</button>
+                    : isOwner && <button onClick={() => setAddingTo(col)} style={{ width: "100%", fontSize: 11, padding: "4px", borderRadius: 5, border: `1px dashed ${s.border}`, background: "transparent", cursor: "pointer", color: s.badge, marginTop: 2 }}>+ Add</button>
                   }
                 </div>
               );
@@ -746,7 +753,9 @@
               {projects.map(p => (
                 <div key={p.id} onClick={() => setActive(p.id)} style={{ padding: "8px 14px", cursor: "pointer", background: active === p.id ? "#334155" : "transparent", borderLeft: active === p.id ? "3px solid #60a5fa" : "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
                   <span style={{ fontSize: 12, color: active === p.id ? "#f1f5f9" : "#94a3b8", fontWeight: active === p.id ? 600 : 400, lineHeight: 1.3, flex: 1 }}>{p.name}</span>
-                  <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }} style={{ fontSize: 10, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✕</button>
+                  {(p.owner_username === user.username || user.role === "admin") && (
+                    <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }} style={{ fontSize: 10, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: "0 2px" }}>✕</button>
+                  )}
                 </div>
               ))}
               <div style={{ padding: "8px 14px", marginTop: 4 }}>
