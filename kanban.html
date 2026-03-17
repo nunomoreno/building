@@ -448,7 +448,48 @@
       );
     }
 
-    // ── Board ────────────────────────────────────────────────────────────────
+    // ── Mentioned Board (read-only mini kanban) ──────────────────────────────
+    function MentionedBoard({ project }) {
+      if (!project.tasks.length) return (
+        <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>No tasks mention you.</div>
+      );
+      return (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+            {COLUMNS.map(col => {
+              const s = COL_STYLE[col];
+              const colTasks = project.tasks.filter(t => t.col === col);
+              return (
+                <div key={col} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 10, padding: "10px 10px 8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: s.badge, textTransform: "uppercase" }}>{col}</span>
+                    <span style={{ fontSize: 11, background: s.badge, color: "#fff", borderRadius: 99, padding: "1px 7px" }}>{colTasks.length}</span>
+                  </div>
+                  {colTasks.length === 0 && <div style={{ fontSize: 11, color: "#cbd5e1", textAlign: "center", padding: "8px 0" }}>—</div>}
+                  {colTasks.map(task => (
+                    <div key={task.id} style={{ background: "#fff", borderRadius: 7, padding: "8px 9px", marginBottom: 7, boxShadow: "0 1px 3px #0001", border: "1px solid #e2e8f0" }}>
+                      {/* Project source label */}
+                      <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 3, fontStyle: "italic" }}>{task._projectName}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#1e293b", marginBottom: 3, lineHeight: 1.35 }}>{task.title}</div>
+                      {task.notes && (
+                        <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.4 }}>
+                          {task.notes.replace(/@(\w+)/g, (_, u) => `@${u}`)}
+                        </div>
+                      )}
+                      {task.assignee && (
+                        <div style={{ marginTop: 5, fontSize: 10, fontWeight: 600, background: "#f0fdf4", color: "#16a34a", border: "1px solid #86efac", borderRadius: 99, padding: "1px 8px", display: "inline-block" }}>
+                          {task.assignee}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
     function Board({ project, onUpdate, username, members, membersRef }) {
       const [editing,   setEditing]   = useState(null);
       const [draft,     setDraft]     = useState("");
@@ -499,7 +540,7 @@
 
       const addTask = async (col) => {
         if (!newTitle.trim()) return;
-        const task = { id: Date.now(), col, title: newTitle.trim(), notes: "" };
+        const task = { id: Date.now(), col, title: newTitle.trim(), notes: "", assignee: "" };
         setSaving(true);
         await onUpdate({ ...project, tasks: [...project.tasks, task] });
         api.log(username, "add_task", `Added "${task.title}" to ${project.name} as ${col}`);
@@ -545,20 +586,23 @@
                               {task.notes || <em>add note…</em>}
                             </div>
                         }
-                        {/* Mention tags */}
-                        {(() => {
-                          const mentions = task.notes ? extractMentions(task.notes) : [];
-                          if (!mentions.length) return null;
-                          return (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
-                              {mentions.map(u => (
-                                <span key={u} style={{ fontSize: 10, fontWeight: 600, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: 99, padding: "1px 7px" }}>
-                                  @{u}
-                                </span>
-                              ))}
+                        {/* Assignee */}
+                        {editing?.id === task.id && editing.field === "notes"
+                          ? null
+                          : <div style={{ marginTop: 5 }}>
+                              <select
+                                value={task.assignee || ""}
+                                onChange={async e => {
+                                  const assignee = e.target.value;
+                                  await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === task.id ? { ...t, assignee } : t) });
+                                  api.log(username, "assign_task", `Assigned "${task.title}" to ${assignee || "nobody"} in ${project.name}`);
+                                }}
+                                style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 5, border: "1px solid #e2e8f0", background: task.assignee ? "#f0fdf4" : "#f8fafc", color: task.assignee ? "#16a34a" : "#94a3b8", cursor: "pointer" }}>
+                                <option value="">Unassigned</option>
+                                {members.map(m => <option key={m} value={m}>{m}</option>)}
+                              </select>
                             </div>
-                          );
-                        })()}
+                        }
                         <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
                           <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
                           <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
@@ -697,6 +741,7 @@
           </div>
 
           <div style={{ display: "flex", height: "calc(100vh - 86px)" }}>
+            {scope !== "mentioned" && (
             <div style={{ width: 200, minWidth: 200, background: "#1e293b", padding: "12px 0", display: "flex", flexDirection: "column" }}>
               {projects.map(p => (
                 <div key={p.id} onClick={() => setActive(p.id)} style={{ padding: "8px 14px", cursor: "pointer", background: active === p.id ? "#334155" : "transparent", borderLeft: active === p.id ? "3px solid #60a5fa" : "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
@@ -719,13 +764,25 @@
                 }
               </div>
             </div>
+            )}
 
             <div style={{ flex: 1, padding: "16px 20px", overflowY: "auto" }}>
-              {activeProject
-                ? <><h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
-                    <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} /></>
-                : <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
-              }
+              {scope === "mentioned" ? (
+                <>
+                  <h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>
+                    Tasks mentioning you
+                    <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 400, color: "#94a3b8" }}>read-only</span>
+                  </h2>
+                  <MentionedBoard project={projects[0] || { tasks: [] }} />
+                </>
+              ) : activeProject ? (
+                <>
+                  <h2 style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 700, color: "#0f172a" }}>{activeProject.name}</h2>
+                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} />
+                </>
+              ) : (
+                <div style={{ color: "#94a3b8", marginTop: 40, textAlign: "center" }}>Select or create a project to get started</div>
+              )}
             </div>
 
             {panel && (
