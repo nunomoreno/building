@@ -73,10 +73,12 @@
           errEl.style.display = "block";
         } else {
           localStorage.setItem(SESSION_KEY, JSON.stringify({
-            token:    data.token,
-            expires:  data.expires,
-            username: data.username,
-            role:     data.role,
+            token:      data.token,
+            expires:    data.expires,
+            username:   data.username,
+            role:       data.role,
+            group_id:   data.group_id   || null,
+            group_role: data.group_role || null,
           }));
           // Redirect: admins → dashboard, users → bookings
           window.location.href = data.role === "admin" ? "dashboard.html" : "booking.html";
