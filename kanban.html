@@ -84,7 +84,7 @@
     };
 
     function extractMentions(text) {
-      return [...(text.matchAll(/@(\w+)/g))].map(m => m[1]);
+      return [...new Set([...(text.matchAll(/@(\w+)/g))].map(m => m[1]))];
     }
 
     // ── Mention Textarea ─────────────────────────────────────────────────────
@@ -545,6 +545,20 @@
                               {task.notes || <em>add note…</em>}
                             </div>
                         }
+                        {/* Mention tags */}
+                        {(() => {
+                          const mentions = task.notes ? extractMentions(task.notes) : [];
+                          if (!mentions.length) return null;
+                          return (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+                              {mentions.map(u => (
+                                <span key={u} style={{ fontSize: 10, fontWeight: 600, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", borderRadius: 99, padding: "1px 7px" }}>
+                                  @{u}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         <div style={{ display: "flex", gap: 4, marginTop: 7, alignItems: "center" }}>
                           <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === 0 ? "not-allowed" : "pointer", color: ci === 0 ? "#cbd5e1" : "#475569" }}>←</button>
                           <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: ci === COLUMNS.length - 1 ? "not-allowed" : "pointer", color: ci === COLUMNS.length - 1 ? "#cbd5e1" : "#475569" }}>→</button>
