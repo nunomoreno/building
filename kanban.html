@@ -663,10 +663,10 @@
 
       return (
         <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
-          <div style={{ background: "#0f172a", padding: "14px 20px", display: "flex", alignItems: "center", gap: 12 }}>
-            <Navbar user={user} />
-            {/* Scope toggle */}
-            <div style={{ display: "flex", gap: 4, marginLeft: 8, background: "#1e293b", borderRadius: 6, padding: 3 }}>
+          <Navbar user={user} />
+          {/* Scope toggle + stats sub-bar */}
+          <div style={{ background: "#1e293b", padding: "6px 24px", display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid #0f172a" }}>
+            <div style={{ display: "flex", gap: 4, background: "#0f172a", borderRadius: 6, padding: 3 }}>
               {[["mine","👤 Mine"], ["mentioned","@ Mentioned"], ...(isElevated ? [["group","👥 Group"]] : [])].map(([s, label]) => (
                 <button key={s} onClick={() => setScope(s)}
                   style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: scope === s ? "#2563eb" : "transparent", color: scope === s ? "#fff" : "#64748b", cursor: "pointer", fontWeight: scope === s ? 600 : 400 }}>
@@ -674,16 +674,15 @@
                 </button>
               ))}
             </div>
-            <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 8 }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
-          </div>
-          {/* Panel buttons sub-bar */}
-          <div style={{ background: "#1e293b", padding: "6px 24px", display: "flex", gap: 6, borderBottom: "1px solid #0f172a" }}>
-            <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: panel === "log" ? "#2563eb" : "#334155", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
-            <button onClick={() => setPanel(panel === "ai" ? null : "ai")} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: panel === "ai" ? "#2563eb" : "#334155", color: panel === "ai" ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI</button>
-            {isAdmin && <button onClick={() => setPanel(panel === "users" ? null : "users")} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: panel === "users" ? "#2563eb" : "#334155", color: panel === "users" ? "#fff" : "#94a3b8", cursor: "pointer" }}>👥 Team</button>}
+            <span style={{ fontSize: 11, color: "#64748b", marginLeft: 4 }}>{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <button onClick={() => setPanel(panel === "log" ? null : "log")} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: panel === "log" ? "#2563eb" : "#334155", color: panel === "log" ? "#fff" : "#94a3b8", cursor: "pointer" }}>📋 Log</button>
+              <button onClick={() => setPanel(panel === "ai" ? null : "ai")} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: panel === "ai" ? "#2563eb" : "#334155", color: panel === "ai" ? "#fff" : "#94a3b8", cursor: "pointer", fontWeight: 600 }}>🤖 AI</button>
+              {isAdmin && <button onClick={() => setPanel(panel === "users" ? null : "users")} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 4, border: "none", background: panel === "users" ? "#2563eb" : "#334155", color: panel === "users" ? "#fff" : "#94a3b8", cursor: "pointer" }}>👥 Team</button>}
+            </div>
           </div>
 
-          <div style={{ display: "flex", height: "calc(100vh - 49px)" }}>
+          <div style={{ display: "flex", height: "calc(100vh - 86px)" }}>
             <div style={{ width: 200, minWidth: 200, background: "#1e293b", padding: "12px 0", display: "flex", flexDirection: "column" }}>
               {projects.map(p => (
                 <div key={p.id} onClick={() => setActive(p.id)} style={{ padding: "8px 14px", cursor: "pointer", background: active === p.id ? "#334155" : "transparent", borderLeft: active === p.id ? "3px solid #60a5fa" : "3px solid transparent", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
