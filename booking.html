@@ -22,8 +22,8 @@
 
     const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
     const SESSION_KEY = "kerno_session";
-    const SLOT_H      = 28;
-    const SLOTS       = Array.from({length:48},(_,i)=>({
+    const SLOT_H  = 28;
+    const SLOTS   = Array.from({length:48},(_,i)=>({
       h:Math.floor(i/2), m:i%2===0?0:30,
       label:`${String(Math.floor(i/2)).padStart(2,"0")}:${i%2===0?"00":"30"}`
     }));
@@ -42,20 +42,14 @@
       return s;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-    const fmt        = (d) => d.toISOString().split("T")[0];
-    const addDays    = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
-    const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
-    const slotIndex  = (time) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/30); };
-
-    // ── API ───────────────────────────────────────────────────────────────────
+    // ── API ──────────────────────────────────────────────────────────────────
     const authHeaders = () => ({
       "Content-Type": "application/json",
       "X-Session-Token": getSession()?.token || "",
     });
 
     const safeFetch = async (url, opts = {}) => {
-      const res = await fetch(url, opts);
+      const res  = await fetch(url, opts);
       if (res.status === 401) {
         localStorage.removeItem(SESSION_KEY);
         window.location.href = "index.html?expired=1";
@@ -67,24 +61,24 @@
     };
 
     const api = {
-      getResources:  ()          => safeFetch(`${WORKER}/resources`,           { headers: authHeaders() }),
-      saveResource:  (r)         => r.id
+      getResources:  ()        => safeFetch(`${WORKER}/resources`,        { headers: authHeaders() }),
+      saveResource:  (r)       => r.id
         ? safeFetch(`${WORKER}/resources/${r.id}`, { method:"PUT",    headers: authHeaders(), body: JSON.stringify(r) })
         : safeFetch(`${WORKER}/resources`,         { method:"POST",   headers: authHeaders(), body: JSON.stringify(r) }),
-      deleteResource:(id)        => safeFetch(`${WORKER}/resources/${id}`,     { method:"DELETE", headers: authHeaders() }),
-      getBookings:   ()          => safeFetch(`${WORKER}/bookings?limit=200`,  { headers: authHeaders() }),
-      saveBooking:   (b)         => safeFetch(`${WORKER}/bookings`,            { method:"POST",   headers: authHeaders(), body: JSON.stringify(b) }),
-      updateBooking: (id, data)  => safeFetch(`${WORKER}/bookings/${id}`,      { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
-      deleteBooking: (id)        => safeFetch(`${WORKER}/bookings/${id}`,      { method:"DELETE", headers: authHeaders() }),
-      getSettings:   (key)       => safeFetch(`${WORKER}/settings/${key}`,     { headers: authHeaders() }),
-      saveSettings:  (key, val)  => safeFetch(`${WORKER}/settings/${key}`,     { method:"POST",   headers: authHeaders(), body: JSON.stringify(val) }),
-      getMembers:    ()          => safeFetch(`${WORKER}/members`,             { headers: authHeaders() }),
-      updateMember:  (id, data)  => safeFetch(`${WORKER}/members/${id}`,       { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
+      deleteResource:(id)      => safeFetch(`${WORKER}/resources/${id}`,  { method:"DELETE", headers: authHeaders() }),
+      getBookings:   (from,to) => safeFetch(`${WORKER}/bookings?limit=200`,{ headers: authHeaders() }),
+      saveBooking:   (b)       => safeFetch(`${WORKER}/bookings`,         { method:"POST",   headers: authHeaders(), body: JSON.stringify(b) }),
+      updateBooking: (id,data) => safeFetch(`${WORKER}/bookings/${id}`,   { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
+      deleteBooking: (id)      => safeFetch(`${WORKER}/bookings/${id}`,   { method:"DELETE", headers: authHeaders() }),
+      getSettings:   (key)     => safeFetch(`${WORKER}/settings/${key}`,  { headers: authHeaders() }),
+      saveSettings:  (key,val) => safeFetch(`${WORKER}/settings/${key}`,  { method:"POST",   headers: authHeaders(), body: JSON.stringify(val) }),
+      getMembers:    ()        => safeFetch(`${WORKER}/members`,          { headers: authHeaders() }),
+      updateMember:  (id,data) => safeFetch(`${WORKER}/members/${id}`,    { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
     };
 
-    // ── Options tag editor ────────────────────────────────────────────────────
+    // ── Options tag editor ───────────────────────────────────────────────────
     function OptionsEditor({ options, onChange }) {
-      const [input, setInput] = useState("");
+      const [input, setInput] = React.useState("");
       const add = () => {
         const v = input.trim();
         if (!v || options.includes(v)) return;
@@ -113,11 +107,11 @@
       );
     }
 
-    // ── Navbar ────────────────────────────────────────────────────────────────
+    // ── Navbar ───────────────────────────────────────────────────────────────
     function Navbar({ user }) {
-      const logout  = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+      const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
       const isAdmin = user.role === "admin";
-      const btn    = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
+      const btn = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
       const active = { ...btn, background:"#2563eb", color:"#fff", border:"1px solid #2563eb" };
       return (
         <div style={{ background:"#0f172a", padding:"10px 24px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
@@ -129,22 +123,22 @@
             <a href="booking.html"  style={active}>📅 Bookings</a>
             <a href="requests.html" style={btn}>📝 Requests</a>
             {isAdmin && <a href="users.html" style={btn}>👥 Users</a>}
-            <span style={{ fontSize:12, color:"#64748b" }}>
-              👤 {user.username}
-              {isAdmin && <span style={{ marginLeft:5, fontSize:10, background:"#2563eb", color:"#fff", borderRadius:99, padding:"1px 6px" }}>admin</span>}
-            </span>
+            <span style={{ fontSize:12, color:"#64748b" }}>👤 {user.username}{isAdmin && <span style={{ marginLeft:5, fontSize:10, background:"#2563eb", color:"#fff", borderRadius:99, padding:"1px 6px" }}>admin</span>}</span>
             <a href="profile.html" style={btn}>🔑 Password</a>
             <button onClick={logout} style={btn}>Sign out</button>
           </div>
         </div>
       );
     }
+    const addDays  = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
+    const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
+    const slotIndex  = (time) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/30); };
 
-    // ── Booking Form Modal ────────────────────────────────────────────────────
+    // ── Booking Form Modal ───────────────────────────────────────────────────
     function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username, initialSlot, initialDate}) {
       const isNew = !booking?.id;
       const [date,      setDate]      = useState(booking?.date       || initialDate || fmt(new Date()));
-      const [startTime, setStartTime] = useState(booking?.start_time || (initialSlot!=null ? minsToTime(initialSlot*30)    : "09:00"));
+      const [startTime, setStartTime] = useState(booking?.start_time || (initialSlot!=null ? minsToTime(initialSlot*30)   : "09:00"));
       const [endTime,   setEndTime]   = useState(booking?.end_time   || (initialSlot!=null ? minsToTime((initialSlot+2)*30) : "10:00"));
       const [fullDay,   setFullDay]   = useState(booking?.full_day   || false);
       const [notes,     setNotes]     = useState(booking?.notes      || "");
@@ -165,18 +159,22 @@
         const res = isNew
           ? await api.saveBooking(payload)
           : await api.updateBooking(booking.id, payload);
+
         if (res?.error || res?.code === "OVERLAP") {
           setSaveError(res?.code === "OVERLAP"
             ? "This time slot is already booked — please choose another."
             : res.error || "Could not save booking.");
-          setSaving(false); return;
+          setSaving(false);
+          return;
         }
-        setSaving(false); onSave();
+        setSaving(false);
+        onSave();
       };
 
       const del = async () => {
         if (!confirm("Delete this booking?")) return;
-        await api.deleteBooking(booking.id); onDelete();
+        await api.deleteBooking(booking.id);
+        onDelete();
       };
 
       const canEdit = isAdmin || !booking?.id || booking?.username === username;
@@ -273,13 +271,13 @@
       );
     }
 
-    // ── Admin Panel ───────────────────────────────────────────────────────────
+    // ── Admin Panel ──────────────────────────────────────────────────────────
     function AdminPanel({resources, members, onUpdate, onClose}) {
-      const [tab,           setTab]           = useState("resources");
-      const [editRes,       setEditRes]       = useState(null);
-      const [allFields,     setAllFields]     = useState({});
-      const [saving,        setSaving]        = useState(false);
-      const [selectedResId, setSelectedResId] = useState(null);
+      const [tab,          setTab]          = useState("resources");
+      const [editRes,      setEditRes]      = useState(null);
+      const [allFields,    setAllFields]    = useState({});
+      const [saving,       setSaving]       = useState(false);
+      const [selectedResId,setSelectedResId]= useState(null);
 
       useEffect(()=>{
         (async()=>{
@@ -311,9 +309,9 @@
         onUpdate();
       };
 
-      const addField    = ()       => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
-      const updateField = (id,k,v) => setCurrentFields(currentFields.map(f=>f.id===id?{...f,[k]:v}:f));
-      const removeField = (id)     => setCurrentFields(currentFields.filter(f=>f.id!==id));
+      const addField    = ()        => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
+      const updateField = (id,k,v)  => setCurrentFields(currentFields.map(f=>f.id===id?{...f,[k]:v}:f));
+      const removeField = (id)      => setCurrentFields(currentFields.filter(f=>f.id!==id));
 
       return (
         <div style={{position:"fixed",inset:0,background:"#0008",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseDown={onClose}>
@@ -347,6 +345,11 @@
                         <option value="timeslot">Time slots only</option>
                         <option value="fullday">Full days only</option>
                         <option value="both">Both</option>
+                      </select>
+                      <label style={{fontSize:11,fontWeight:600,color:"#475569",display:"block",marginBottom:4}}>SLOT DURATION</label>
+                      <select value={editRes.slot_duration ?? 30} onChange={e=>setEditRes({...editRes,slot_duration:Number(e.target.value)})}
+                        style={{width:"100%",fontSize:12,padding:"6px 9px",borderRadius:6,border:"1px solid #cbd5e1",marginBottom:8}}>
+                        {SLOT_DURATIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                       </select>
                       <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#475569",marginBottom:12,cursor:"pointer"}}>
                         <input type="checkbox" checked={editRes.approval_required||false} onChange={e=>setEditRes({...editRes,approval_required:e.target.checked})}/>
@@ -393,7 +396,7 @@
                       </div>
                       {currentFields.map(f=>(
                         <div key={f.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:12,marginBottom:8}}>
-                          <div style={{display:"flex",gap:8,marginBottom:f.type!=="text"?8:0}}>
+                          <div style={{display:"flex",gap:8,marginBottom:f.type==="dropdown"?8:0}}>
                             <input value={f.label} onChange={e=>updateField(f.id,"label",e.target.value)} placeholder="Field label"
                               style={{flex:2,fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1"}}/>
                             <select value={f.type} onChange={e=>updateField(f.id,"type",e.target.value)}
@@ -404,7 +407,9 @@
                             <button onClick={()=>removeField(f.id)} style={{fontSize:12,padding:"2px 8px",borderRadius:4,border:"1px solid #fecaca",background:"#fff5f5",color:"#ef4444",cursor:"pointer"}}>✕</button>
                           </div>
                           {f.type==="dropdown"&&(
-                            <OptionsEditor options={f.options||[]} onChange={opts=>updateField(f.id,"options",opts)}/>
+                            <input value={(f.options||[]).join(", ")} onChange={e=>updateField(f.id,"options",e.target.value.split(",").map(s=>s.trim()).filter(Boolean))}
+                              placeholder="Options: comma, separated"
+                              style={{width:"100%",fontSize:12,padding:"5px 8px",borderRadius:5,border:"1px solid #cbd5e1",boxSizing:"border-box"}}/>
                           )}
                         </div>
                       ))}
@@ -439,7 +444,7 @@
       );
     }
 
-    // ── Weekly Calendar ───────────────────────────────────────────────────────
+    // ── Weekly Calendar ──────────────────────────────────────────────────────
     function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh}) {
       const [modal, setModal] = useState(null);
       const days  = Array.from({length:7},(_,i)=>addDays(weekStart,i));
@@ -450,7 +455,7 @@
       const getHeight   = (b) => {
         if(b.full_day) return 48*SLOT_H;
         const s=slotIndex(b.start_time), e=slotIndex(b.end_time);
-        return Math.max((e-s)*SLOT_H,SLOT_H);
+        return Math.max((e-s)*SLOT_H, SLOT_H);
       };
 
       return (
@@ -469,6 +474,8 @@
               onClose={()=>setModal(null)}
             />
           )}
+
+          {/* Day headers */}
           <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600,position:"sticky",top:0,zIndex:10,background:"#fff",borderBottom:"2px solid #e2e8f0"}}>
             <div style={{padding:"8px 4px"}}/>
             {days.map((day,i)=>{
@@ -481,6 +488,8 @@
               );
             })}
           </div>
+
+          {/* Full-day row */}
           <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600,borderBottom:"2px solid #e2e8f0",background:"#f8fafc"}}>
             <div style={{padding:"4px 8px",fontSize:10,color:"#94a3b8",display:"flex",alignItems:"center"}}>All day</div>
             {days.map((day,di)=>{
@@ -499,6 +508,8 @@
               );
             })}
           </div>
+
+          {/* Time grid */}
           <div style={{display:"grid",gridTemplateColumns:`60px repeat(7,1fr)`,minWidth:600}}>
             {SLOTS.map((slot,si)=>(
               <React.Fragment key={si}>
@@ -506,7 +517,7 @@
                   {slot.m===0&&<span style={{fontSize:10,color:"#94a3b8"}}>{slot.label}</span>}
                 </div>
                 {days.map((day,di)=>{
-                  const dateStr   = fmt(day);
+                  const dateStr  = fmt(day);
                   const dBookings = si===0 ? dayBookings(dateStr) : [];
                   return (
                     <div key={di} className="slot-row"
@@ -534,8 +545,9 @@
       );
     }
 
-    // ── App ───────────────────────────────────────────────────────────────────
+    // ── App ──────────────────────────────────────────────────────────────────
     function App() {
+      // Read session from localStorage — redirect to login if missing/expired
       const [user] = useState(() => {
         const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
         if (!s || Date.now() > new Date(s.expires).getTime()) {
@@ -558,8 +570,13 @@
         const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d;
       });
 
+      const handleLogout = () => {
+        localStorage.removeItem(SESSION_KEY);
+        window.location.href = "index.html";
+      };
+
       const isAdmin = user?.role === "admin";
-      const canBook = isAdmin || true; // booking permission check can be refined via member.permissions
+      const canBook = isAdmin || user?.permissions?.includes("bookings") || true; // adjust as needed
 
       const loadBase = async () => {
         setLoadError(null);
@@ -580,16 +597,19 @@
       const loadBookings = async () => {
         if (!selectedRes) return;
         try {
-          const b = await api.getBookings();
+          const from = fmt(weekStart), to = fmt(addDays(weekStart,6));
+          const b = await api.getBookings(from, to);
           setBookings(Array.isArray(b) ? b.filter(bk=>bk.resource_id===selectedRes.id) : []);
-        } catch { setBookings([]); }
+        } catch {
+          setBookings([]);
+        }
       };
 
       useEffect(()=>{ if(user) loadBase(); else setLoading(false); }, []);
       useEffect(()=>{ if(selectedRes) loadBookings(); }, [selectedRes, weekStart]);
 
-      if (!user)     return null;
-      if (loading)   return <div style={{padding:32,color:"#64748b"}}>Loading…</div>;
+      if (!user)    return null; // redirecting
+      if (loading)  return <div style={{padding:32,color:"#64748b"}}>Loading…</div>;
       if (loadError) return (
         <div style={{padding:32,display:"flex",flexDirection:"column",gap:12,alignItems:"flex-start"}}>
           <div style={{color:"#ef4444"}}>{loadError}</div>
@@ -604,18 +624,28 @@
         <div style={{fontFamily:"system-ui,sans-serif",height:"100vh",display:"flex",flexDirection:"column"}}>
           {showAdmin && <AdminPanel resources={resources} members={members} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}/>}
 
-          <Navbar user={user} />
-
-          {/* Week nav sub-bar */}
-          <div style={{background:"#0f172a",padding:"6px 24px",display:"flex",alignItems:"center",gap:8,borderTop:"1px solid #1e293b",flexShrink:0}}>
-            <button onClick={()=>setWeekStart(addDays(weekStart,-7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>‹</button>
-            <span style={{fontSize:12,color:"#f1f5f9",fontWeight:600,minWidth:200,textAlign:"center"}}>{weekLabel}</span>
-            <button onClick={()=>setWeekStart(addDays(weekStart,7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>›</button>
-            <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Today</button>
-            {isAdmin && <button onClick={()=>setShowAdmin(true)} style={{fontSize:11,padding:"3px 12px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",marginLeft:8}}>⚙ Admin</button>}
+          {/* Header */}
+          <div style={{background:"#0f172a",padding:"10px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+            <a href="dashboard.html" style={{fontSize:15,fontWeight:700,color:"#fff",textDecoration:"none"}}>⚙️ Kerno</a>
+            <span style={{color:"#475569"}}>›</span>
+            <span style={{fontSize:13,color:"#94a3b8"}}>Bookings</span>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:16}}>
+              <button onClick={()=>setWeekStart(addDays(weekStart,-7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>‹</button>
+              <span style={{fontSize:12,color:"#f1f5f9",fontWeight:600,minWidth:180,textAlign:"center"}}>{weekLabel}</span>
+              <button onClick={()=>setWeekStart(addDays(weekStart,7))} style={{fontSize:13,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>›</button>
+              <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}} style={{fontSize:11,padding:"3px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Today</button>
+            </div>
+            <div style={{marginLeft:"auto",display:"flex",gap:8,alignItems:"center"}}>
+              <a href="kanban.html"   style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📋 Kanban</a>
+              <a href="requests.html" style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer",textDecoration:"none"}}>📝 Requests</a>
+              {isAdmin && <button onClick={()=>setShowAdmin(true)} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>⚙ Admin</button>}
+              <span style={{fontSize:12,color:"#64748b"}}>👤 {user.username}</span>
+              <button onClick={handleLogout} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #334155",background:"#1e293b",color:"#94a3b8",cursor:"pointer"}}>Sign out</button>
+            </div>
           </div>
 
           <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+            {/* Sidebar */}
             <div style={{width:200,minWidth:200,background:"#1e293b",padding:"12px 0",overflowY:"auto",flexShrink:0}}>
               <div style={{padding:"4px 14px 8px",fontSize:11,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:.5}}>Resources</div>
               {resources.length===0 && <div style={{padding:"8px 14px",fontSize:12,color:"#475569"}}>No resources yet.</div>}
@@ -624,13 +654,17 @@
                   style={{padding:"10px 14px",cursor:"pointer",borderLeft:`3px solid ${selectedRes?.id===r.id?COLORS[i%COLORS.length]:"transparent"}`,background:selectedRes?.id===r.id?"#334155":"transparent"}}>
                   <div style={{fontSize:12,fontWeight:600,color:selectedRes?.id===r.id?"#f1f5f9":"#94a3b8"}}>{r.name}</div>
                   {r.description&&<div style={{fontSize:11,color:"#475569",marginTop:2}}>{r.description}</div>}
-                  <div style={{fontSize:10,color:r.approval_required?"#ea580c":"#22c55e",marginTop:3}}>
+                  <div style={{fontSize:10,color:"#64748b",marginTop:2}}>
+                    {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label || "30 min"}
+                  </div>
+                  <div style={{fontSize:10,color:r.approval_required?"#ea580c":"#22c55e",marginTop:2}}>
                     {r.approval_required?"⚠ Approval required":"✓ Auto-confirm"}
                   </div>
                 </div>
               ))}
             </div>
 
+            {/* Calendar */}
             {selectedRes
               ? <WeeklyCalendar
                   resource={selectedRes}
