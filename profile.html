@@ -164,28 +164,48 @@
 
   // ── Navbar ──────────────────────────────────────────────────────────────────
   (function buildNavbar() {
-    const isAdmin = session.role === "admin";
-    const link   = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;text-decoration:none"`;
-    const active = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:6px"`;
+    const isAdmin    = session.role === "admin";
+    const nav        = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;text-decoration:none"`;
+    const avatarHtml = session.avatar_url
+      ? `<img src="${session.avatar_url}" style="width:20px;height:20px;border-radius:50%;object-fit:cover" alt="" />`
+      : `<span style="width:18px;height:18px;border-radius:50%;background:#1e40af;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${session.username[0].toUpperCase()}</span>`;
+    const adminBadge = isAdmin ? `<span style="font-size:9px;background:#2563eb;color:#fff;border-radius:9999px;padding:1px 6px;font-weight:600">admin</span>` : "";
+    const adminDrop  = isAdmin ? `
+      <div style="border-top:1px solid #334155"></div>
+      <a href="users.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
+      <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>` : "";
     document.getElementById("navbar").innerHTML = `
       <div style="background:#0f172a;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
         <span style="color:#475569;font-size:12px">›</span>
         <span style="font-size:12px;color:#94a3b8">My Profile</span>
         <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <a href="kanban.html"   ${link}>📋 Kanban</a>
-          <a href="booking.html"  ${link}>📅 Bookings</a>
-          <a href="requests.html" ${link}>📝 Requests</a>
-          ${isAdmin ? `<a href="users.html"   ${link}>👥 Users</a>` : ""}
-          ${isAdmin ? `<a href="pricing.html" ${link}>💰 Pricing</a>` : ""}
-          <a href="profile.html" ${active}>
-            <span style="width:18px;height:18px;border-radius:50%;background:#1e40af;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${session.username[0].toUpperCase()}</span>
-            ${session.display_name || session.username}
-          </a>
+          <a href="kanban.html"   ${nav}>📋 Kanban</a>
+          <a href="booking.html"  ${nav}>📅 Bookings</a>
+          <a href="requests.html" ${nav}>📝 Requests</a>
+          <div style="position:relative" id="nav-menu-wrap">
+            <button id="nav-menu-btn" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #2563eb;background:#1e40af;color:#fff;cursor:pointer;font-family:inherit">
+              ${avatarHtml}
+              ${session.display_name || session.username}
+              ${adminBadge}
+              <span style="font-size:10px;color:#93c5fd">▾</span>
+            </button>
+            <div id="nav-menu-drop" class="hidden absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+              <a href="profile.html" class="flex items-center gap-2 px-3 py-2 text-xs bg-slate-700 text-white no-underline">👤 My Profile</a>
+              ${adminDrop}
+            </div>
+          </div>
           <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
             style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;cursor:pointer;font-family:inherit">Sign out</button>
         </div>
       </div>`;
+    document.getElementById("nav-menu-btn").addEventListener("click", e => {
+      e.stopPropagation();
+      document.getElementById("nav-menu-drop").classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => {
+      document.getElementById("nav-menu-drop")?.classList.add("hidden");
+    });
   })();
 
   // ── Avatar grid ──────────────────────────────────────────────────────────────

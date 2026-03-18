@@ -144,31 +144,48 @@
 
   // ── Navbar ─────────────────────────────────────────────────────────────────
   (function buildNavbar() {
-    const isAdmin = role === "admin";
-    const navLink = `class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline"`;
-    const activeLink = `class="text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline"`;
+    const isAdmin   = role === "admin";
+    const nav       = `class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline"`;
+    const avatarHtml = session.avatar_url
+      ? `<img src="${session.avatar_url}" style="width:20px;height:20px;border-radius:50%;object-fit:cover" alt="" />`
+      : `<span style="width:20px;height:20px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#cbd5e1">${username[0].toUpperCase()}</span>`;
+    const adminBadge = isAdmin ? `<span style="font-size:9px;background:#2563eb;color:#fff;border-radius:9999px;padding:1px 6px;font-weight:600">admin</span>` : "";
+    const adminDrop  = isAdmin ? `
+      <div style="border-top:1px solid #334155"></div>
+      <a href="users.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
+      <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>` : "";
     document.getElementById("navbar").innerHTML = `
       <div class="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
         <a href="dashboard.html" class="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
         <span class="text-slate-600 text-xs hidden sm:inline">CaixaResearch platform</span>
         <div class="ml-auto flex items-center gap-2 flex-wrap">
-          <a href="kanban.html"   ${navLink}>📋 Kanban</a>
-          <a href="booking.html"  ${navLink}>📅 Bookings</a>
-          <a href="requests.html" ${navLink}>📝 Requests</a>
-          ${isAdmin ? `<a href="users.html"   ${navLink}>👥 Users</a>` : ""}
-          ${isAdmin ? `<a href="pricing.html" ${navLink}>💰 Pricing</a>` : ""}
-          <a href="profile.html" ${navLink} style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
-            ${session.avatar_url
-              ? `<img src="${session.avatar_url}" style="width:20px;height:20px;border-radius:50%;object-fit:cover" alt="" />`
-              : `<span style="width:20px;height:20px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#cbd5e1">${username[0].toUpperCase()}</span>`}
-            ${session.display_name || username}
-            ${isAdmin ? `<span style="font-size:9px;background:#2563eb;color:#fff;border-radius:9999px;padding:1px 6px;font-weight:600">admin</span>` : ""}
-          </a>
+          <a href="kanban.html"   ${nav}>📋 Kanban</a>
+          <a href="booking.html"  ${nav}>📅 Bookings</a>
+          <a href="requests.html" ${nav}>📝 Requests</a>
+          <div class="relative" id="nav-menu-wrap">
+            <button id="nav-menu-btn" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer" style="font-family:inherit">
+              ${avatarHtml}
+              ${session.display_name || username}
+              ${adminBadge}
+              <span style="font-size:10px;color:#64748b">▾</span>
+            </button>
+            <div id="nav-menu-drop" class="hidden absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+              <a href="profile.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👤 My Profile</a>
+              ${adminDrop}
+            </div>
+          </div>
           <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
-            class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-sans">Sign out</button>
+            class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer" style="font-family:inherit">Sign out</button>
         </div>
       </div>`;
     if (isAdmin) document.getElementById("admin-users-link").style.display = "inline";
+    document.getElementById("nav-menu-btn").addEventListener("click", e => {
+      e.stopPropagation();
+      document.getElementById("nav-menu-drop").classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => {
+      document.getElementById("nav-menu-drop")?.classList.add("hidden");
+    });
   })();
 
   // ── API ────────────────────────────────────────────────────────────────────

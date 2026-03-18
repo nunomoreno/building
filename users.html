@@ -88,29 +88,47 @@
 
   // ── Navbar ─────────────────────────────────────────────────────────────────
   function Navbar({ user }) {
+    const [menuOpen, setMenuOpen] = React.useState(false);
     const logout  = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
     const isAdmin = user.role === "admin";
-    const link    = "text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline";
-    const active  = "text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline";
+    React.useEffect(() => {
+      if (!menuOpen) return;
+      const h = () => setMenuOpen(false);
+      document.addEventListener("click", h);
+      return () => document.removeEventListener("click", h);
+    }, [menuOpen]);
+    const nav  = "text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline";
+    const navA = "text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline";
+    const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
     return (
       <div className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap shrink-0">
         <a href="dashboard.html" className="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
         <span className="text-slate-600 text-xs hidden sm:inline">›</span>
         <span className="text-slate-400 text-xs hidden sm:inline">Users & Groups</span>
         <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <a href="kanban.html"   className={link}>📋 Kanban</a>
-          <a href="booking.html"  className={link}>📅 Bookings</a>
-          <a href="requests.html" className={link}>📝 Requests</a>
-          {isAdmin && <a href="users.html"   className={active}>👥 Users</a>}
-          {isAdmin && <a href="pricing.html" className={link}>💰 Pricing</a>}
-          <a href="profile.html" className={`${link} flex items-center gap-1.5`}>
-            {user.avatar_url
-              ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
-              : <span className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-200">{user.username[0].toUpperCase()}</span>}
-            {user.display_name || user.username}
-            {isAdmin && <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>}
-          </a>
-          <button onClick={logout} className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer font-sans">Sign out</button>
+          <a href="kanban.html"   className={nav}>📋 Kanban</a>
+          <a href="booking.html"  className={nav}>📅 Bookings</a>
+          <a href="requests.html" className={nav}>📝 Requests</a>
+          <div className="relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setMenuOpen(o => !o)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-700 text-white hover:bg-slate-600 transition cursor-pointer font-[inherit]">
+              {user.avatar_url
+                ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
+                : <span className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-200">{user.username[0].toUpperCase()}</span>}
+              {user.display_name || user.username}
+              {isAdmin && <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>}
+              <span className="text-[10px] text-slate-400">▾</span>
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                <a href="profile.html" className={drop}>👤 My Profile</a>
+                {isAdmin && <div className="border-t border-slate-700" />}
+                {isAdmin && <a href="users.html"   className={`${drop} bg-slate-700 text-white`}>👥 Users & Groups</a>}
+                {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}
+              </div>
+            )}
+          </div>
+          <button onClick={logout} className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer font-[inherit]">Sign out</button>
         </div>
       </div>
     );

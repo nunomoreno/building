@@ -37,10 +37,18 @@
     const priceCls = "w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right";
 
     function App() {
-      const [skus,    setSkus]    = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [saving,  setSaving]  = useState(false);
-      const [msg,     setMsg]     = useState(null);
+      const [skus,     setSkus]     = useState([]);
+      const [loading,  setLoading]  = useState(true);
+      const [saving,   setSaving]   = useState(false);
+      const [msg,      setMsg]      = useState(null);
+      const [menuOpen, setMenuOpen] = useState(false);
+
+      useEffect(() => {
+        if (!menuOpen) return;
+        const h = () => setMenuOpen(false);
+        document.addEventListener("click", h);
+        return () => document.removeEventListener("click", h);
+      }, [menuOpen]);
 
       useEffect(() => {
         fetch(`${WORKER}/settings/pricing`, { headers: authH() })
@@ -98,11 +106,25 @@
               <a href="kanban.html"   className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📋 Kanban</a>
               <a href="booking.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📅 Bookings</a>
               <a href="requests.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📝 Requests</a>
-              <a href="users.html"    className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">👥 Users</a>
-              <a href="pricing.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-blue-600 bg-blue-600 text-white no-underline">💰 Pricing</a>
-              <a href="profile.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">
-                👤 {session.display_name || session.username}
-              </a>
+              <div className="relative" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setMenuOpen(o => !o)}
+                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-700 text-white hover:bg-slate-600 cursor-pointer font-[inherit]">
+                  {session.avatar_url
+                    ? <img src={session.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
+                    : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-600 text-slate-200 font-bold text-[10px]">{session.username[0].toUpperCase()}</span>}
+                  {session.display_name || session.username}
+                  <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>
+                  <span className="text-[10px] text-slate-400">▾</span>
+                </button>
+                {menuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <a href="profile.html" className="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👤 My Profile</a>
+                    <div className="border-t border-slate-700" />
+                    <a href="users.html"   className="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
+                    <a href="pricing.html" className="flex items-center gap-2 px-3 py-2 text-xs bg-slate-700 text-white no-underline">💰 Pricing</a>
+                  </div>
+                )}
+              </div>
               <button onClick={logout} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 cursor-pointer font-[inherit] hover:bg-slate-700">Sign out</button>
             </div>
           </nav>
