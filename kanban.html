@@ -28,13 +28,12 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    const COLUMNS   = ["To Do", "In Progress", "Blocked", "Done", "Finalized"];
+    const COLUMNS   = ["To Do", "In Progress", "Blocked", "Done"];
     const COL_STYLE = {
       "To Do":       { bg: "#f1f5f9", border: "#cbd5e1", badge: "#64748b" },
       "In Progress": { bg: "#eff6ff", border: "#93c5fd", badge: "#2563eb" },
       "Blocked":     { bg: "#fff7ed", border: "#fdba74", badge: "#ea580c" },
       "Done":        { bg: "#f0fdf4", border: "#86efac", badge: "#16a34a" },
-      "Finalized":   { bg: "#faf5ff", border: "#c4b5fd", badge: "#7c3aed" },
     };
 
     const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
@@ -133,21 +132,8 @@
           <button className={b} title="Heading 1"    onClick={() => line("# ")}  style={{fontWeight:700}}>H1</button>
           <button className={b} title="Heading 2"    onClick={() => line("## ")} style={{fontWeight:700,fontSize:10}}>H2</button>
           {sep}
-          <button className={b} title="Bullet list"    onClick={() => line("- ")}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="9" y1="6"  x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/>
-              <circle cx="4" cy="6"  r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none"/>
-            </svg>
-          </button>
-          <button className={b} title="Numbered list" onClick={() => line("1. ")}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="10" y1="6"  x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/>
-              <path d="M4 6h1v4M4 10h2" strokeWidth="2"/>
-              <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" strokeWidth="2"/>
-            </svg>
-          </button>
+          <button className={b} title="Bullet list"    onClick={() => line("- ")}  style={{letterSpacing:-1}}>• —</button>
+          <button className={b} title="Numbered list" onClick={() => line("1. ")} style={{letterSpacing:-1}}>1. —</button>
           {sep}
           <button className={b} title="Inline code"  onClick={() => wrap("`","`","code")} style={{fontFamily:"monospace",fontWeight:600}}>&lt;/&gt;</button>
           <button className={b} title="Blockquote"   onClick={() => line("> ")} style={{fontWeight:700,fontSize:13}}>&ldquo;</button>
@@ -516,10 +502,12 @@
       const isOwner = !project.owner_username || project.owner_username === currentUser?.username || currentUser?.role === "admin";
       const canEditTask = (task) => isOwner || task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase();
 
-      // Non-owners only see tasks assigned to them
+      // Non-owners only see tasks assigned to them; billed tasks go to the Billed section
+      const activeTasks  = project.tasks.filter(t => t.col !== "Billed");
+      const billedTasks  = project.tasks.filter(t => t.col === "Billed");
       const visibleTasks = isOwner
-        ? project.tasks
-        : project.tasks.filter(t => t.assignee?.toLowerCase() === currentUser?.username?.toLowerCase());
+        ? activeTasks
+        : activeTasks.filter(t => t.assignee?.toLowerCase() === currentUser?.username?.toLowerCase());
       const [editing,         setEditing]         = useState(null);
       const [draft,           setDraft]           = useState("");
       const [addingTo,        setAddingTo]        = useState(null);
@@ -535,21 +523,28 @@
       const finalizeTask = async (taskId, includeFinancial) => {
         const t = project.tasks.find(t => t.id === taskId);
         const updatedTasks = project.tasks.map(t =>
-          t.id === taskId ? { ...t, col: "Finalized", finalized: true, exclude_from_financial: !includeFinancial } : t
+          t.id === taskId ? { ...t, col: "Billed", finalized: true, exclude_from_financial: !includeFinancial } : t
         );
         await onUpdate({ ...project, tasks: updatedTasks });
         setFinalizeModal(null);
-        api.log(username, "finalize_task", `Finalized "${t?.title}" in ${project.name}`);
+        api.log(username, "bill_task", `Billed "${t?.title}" in ${project.name}`);
+      };
+
+      const unbillTask = async (taskId) => {
+        const t = project.tasks.find(t => t.id === taskId);
+        const updatedTasks = project.tasks.map(t =>
+          t.id === taskId ? { ...t, col: "Done", finalized: false, exclude_from_financial: false } : t
+        );
+        await onUpdate({ ...project, tasks: updatedTasks });
+        api.log(username, "unbill_task", `Reopened "${t?.title}" in ${project.name}`);
       };
 
       const moveTask = async (id, dir) => {
         const t  = project.tasks.find(t => t.id === id);
         const ci = COLUMNS.indexOf(t.col), ni = ci + dir;
         if (ni < 0 || ni >= COLUMNS.length) return;
-        const newCol = COLUMNS[ni];
-        if (newCol === "Finalized") { setFinalizeModal(t); return; }
-        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: newCol } : t) });
-        api.log(username, "move_task", `Moved "${t.title}" to ${newCol} in ${project.name}`);
+        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) });
+        api.log(username, "move_task", `Moved "${t.title}" to ${COLUMNS[ni]} in ${project.name}`);
       };
 
       const startEdit  = (id, field, val) => { setEditing({ id, field }); setDraft(val); };
@@ -715,17 +710,16 @@
                               }
                             </div>
                         }
-                        {task.exclude_from_financial && task.finalized && (
-                          <div className="mt-1.5">
-                            <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5">excl. report</span>
-                          </div>
-                        )}
                         <div className="flex gap-1 mt-1.5 items-center">
                           <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0 || !canEditTask(task)}
                             className={`text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans ${ci === 0 || !canEditTask(task) ? "cursor-not-allowed text-slate-300" : "cursor-pointer text-slate-500 hover:bg-slate-100"}`}>←</button>
                           <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1 || !canEditTask(task)}
                             className={`text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans ${ci === COLUMNS.length - 1 || !canEditTask(task) ? "cursor-not-allowed text-slate-300" : "cursor-pointer text-slate-500 hover:bg-slate-100"}`}>→</button>
-                          {isOwner && <button onClick={() => deleteTask(task.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-200 bg-red-50 cursor-pointer text-red-500 ml-auto font-sans">✕</button>}
+                          {isOwner && (
+                            <button onClick={() => setFinalizeModal(task)}
+                              className="text-xs px-1.5 py-0.5 rounded border border-violet-200 bg-violet-50 cursor-pointer text-violet-600 hover:bg-violet-100 font-sans ml-auto">Bill →</button>
+                          )}
+                          {isOwner && <button onClick={() => deleteTask(task.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-200 bg-red-50 cursor-pointer text-red-500 font-sans">✕</button>}
                         </div>
                       </div>
                     );
@@ -750,6 +744,28 @@
               );
             })}
           </div>
+          {billedTasks.length > 0 && (
+            <div className="mt-5 border-t border-violet-100 pt-3">
+              <div className="text-[11px] font-semibold text-violet-500 uppercase tracking-wider mb-2">Billed ({billedTasks.length})</div>
+              <div className="flex flex-col gap-1.5">
+                {billedTasks.map(t => (
+                  <div key={t.id} className="flex items-center gap-2 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 group">
+                    <span className="text-xs font-medium text-slate-700 flex-1 truncate">{t.title}</span>
+                    {t.store_order?.total > 0 && (
+                      <span className="text-xs text-violet-700 font-semibold shrink-0">EUR {Number(t.store_order.total).toFixed(2)}</span>
+                    )}
+                    {t.exclude_from_financial && (
+                      <span className="text-[10px] text-slate-400 bg-white border border-slate-200 rounded px-1.5 py-0.5 shrink-0">excl. report</span>
+                    )}
+                    {isOwner && (
+                      <button onClick={() => unbillTask(t.id)}
+                        className="text-[10px] text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity font-sans shrink-0" title="Reopen">↩ reopen</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {finalizeModal && (
             <FinalizeTaskModal
               task={finalizeModal}
@@ -785,9 +801,9 @@
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={onClose}>
           <div className="bg-white rounded-xl p-5 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">Finalize task</h3>
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">Bill task</h3>
             <p className="text-xs text-slate-500 mb-4">
-              <span className="font-medium text-slate-700">{task.title}</span> will be marked as finalized.
+              <span className="font-medium text-slate-700">{task.title}</span> will be moved to Billed and removed from the active board.
             </p>
             <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 mb-4">
               <div>
@@ -802,7 +818,7 @@
             <div className="flex gap-2 justify-end">
               <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer font-sans hover:bg-slate-50">Cancel</button>
               <button onClick={() => onConfirm(includeFinancial)}
-                className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white border-none cursor-pointer font-sans hover:bg-amber-600">Finalize →</button>
+                className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white border-none cursor-pointer font-sans hover:bg-violet-700">Bill →</button>
             </div>
           </div>
         </div>
