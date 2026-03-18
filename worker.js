@@ -427,7 +427,7 @@ export default {
 
         // Admin with no scope sees everything
         if ((!scope && isAdmin) || scope === "all")
-          return json(toList(await sb("projects?select=id,project_id,data")));
+          return json(toList(await sb("projects?select=id,project_id,data,created_at")));
 
         // Group scope — filter in DB by owner_username IN (group members)
         if (scope === "group") {
