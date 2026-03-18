@@ -185,61 +185,38 @@
       </div>`;
   })();
 
-  // ── Avatar styles ────────────────────────────────────────────────────────────
-  const AVATAR_STYLES = [
-    { key: "avataaars",           label: "Avataaars"      },
-    { key: "avataaars-neutral",   label: "Avataaars (N)"  },
-    { key: "lorelei",             label: "Lorelei"        },
-    { key: "lorelei-neutral",     label: "Lorelei (N)"    },
-    { key: "adventurer",          label: "Adventurer"     },
-    { key: "adventurer-neutral",  label: "Adventurer (N)" },
-    { key: "bottts",              label: "Bottts"         },
-    { key: "bottts-neutral",      label: "Bottts (N)"     },
-    { key: "pixel-art",           label: "Pixel Art"      },
-    { key: "pixel-art-neutral",   label: "Pixel Art (N)"  },
-    { key: "fun-emoji",           label: "Emoji"          },
-    { key: "thumbs",              label: "Thumbs"         },
-    { key: "shapes",              label: "Shapes"         },
-    { key: "rings",               label: "Rings"          },
-    { key: "croodles",            label: "Croodles"       },
-    { key: "croodles-neutral",    label: "Croodles (N)"   },
-    { key: "micah",               label: "Micah"          },
-    { key: "miniavs",             label: "Miniavs"        },
-    { key: "open-peeps",          label: "Open Peeps"     },
-    { key: "big-ears",            label: "Big Ears"       },
-    { key: "big-ears-neutral",    label: "Big Ears (N)"   },
-    { key: "big-smile",           label: "Big Smile"      },
-    { key: "notionists",          label: "Notionists"     },
-    { key: "notionists-neutral",  label: "Notionists (N)" },
-    { key: "personas",            label: "Personas"       },
-    { key: "icons",               label: "Icons"          },
-    { key: "identicon",           label: "Identicon"      },
-    { key: "initials",            label: "Initials"       },
-  ];
+  // ── Avatar picker (Multiavatar) ───────────────────────────────────────────────
+  const AVATAR_COUNT = 30;
 
-  function avatarUrl(style, seed) {
-    return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
+  function avatarUrl(seed) {
+    return `https://api.multiavatar.com/${encodeURIComponent(seed)}.svg`;
   }
 
   let selectedAvatarUrl = "";
 
-  function buildAvatarGrid(seed, current) {
+  function buildAvatarGrid(username, current) {
     const grid = document.getElementById("avatar-grid");
     grid.innerHTML = "";
-    AVATAR_STYLES.forEach(s => {
-      const url = avatarUrl(s.key, seed);
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.title = s.label;
+    for (let i = 1; i <= AVATAR_COUNT; i++) {
+      const seed = `${username}-${i}`;
+      const url  = avatarUrl(seed);
+      const btn  = document.createElement("button");
+      btn.type  = "button";
+      btn.title = `Avatar ${i}`;
       btn.className = "rounded-xl border-2 p-0.5 cursor-pointer transition " +
         (current === url ? "border-blue-500 bg-blue-50" : "border-transparent bg-slate-100 hover:border-slate-300");
-      btn.innerHTML = `<img src="${url}" class="w-12 h-12 rounded-lg" alt="${s.label}" />`;
+      btn.innerHTML = `<img src="${url}" class="w-12 h-12 rounded-lg object-cover" alt="Avatar ${i}" loading="lazy" />`;
       btn.addEventListener("click", () => {
         selectedAvatarUrl = url;
         document.getElementById("avatar-preview").src = url;
+        document.getElementById("avatar-preview").style.display = "block";
         document.getElementById("avatar-url-input").value = "";
-        grid.querySelectorAll("button").forEach(b => b.classList.replace("border-blue-500", "border-transparent"));
-        btn.className = btn.className.replace("border-transparent", "border-blue-500").replace("bg-slate-100", "bg-blue-50");
+        grid.querySelectorAll("button").forEach(b => {
+          b.classList.remove("border-blue-500", "bg-blue-50");
+          b.classList.add("border-transparent", "bg-slate-100");
+        });
+        btn.classList.remove("border-transparent", "bg-slate-100");
+        btn.classList.add("border-blue-500", "bg-blue-50");
       });
       grid.appendChild(btn);
     });
@@ -272,9 +249,9 @@
     document.getElementById("google-scholar").value = data.google_scholar || "";
     document.getElementById("linkedin").value       = data.linkedin      || "";
 
-    selectedAvatarUrl = data.avatar_url || avatarUrl("avataaars", data.username);
+    selectedAvatarUrl = data.avatar_url || avatarUrl(`${data.username}-1`);
     document.getElementById("avatar-preview").src = selectedAvatarUrl;
-    if (data.avatar_url) document.getElementById("avatar-url-input").value = "";
+    document.getElementById("avatar-preview").style.display = "block";
     buildAvatarGrid(data.username, data.avatar_url || "");
 
     window._profileId = data.id;
