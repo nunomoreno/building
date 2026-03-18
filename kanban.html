@@ -8,7 +8,15 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
+    .md-notes h1,.md-notes h2,.md-notes h3{font-weight:600;margin-bottom:2px}
+    .md-notes h1{font-size:13px}.md-notes h2{font-size:12px}.md-notes h3{font-size:11px}
+    .md-notes p{margin-bottom:3px}.md-notes ul,.md-notes ol{padding-left:14px;margin-bottom:3px}
+    .md-notes li{margin-bottom:1px}.md-notes code{background:#f1f5f9;border-radius:3px;padding:0 3px;font-family:monospace}
+    .md-notes pre{background:#f1f5f9;border-radius:4px;padding:4px 6px;overflow-x:auto;margin-bottom:3px}
+    .md-notes a{color:#2563eb;text-decoration:underline}.md-notes strong{font-weight:600}
+    .md-notes em{font-style:italic}.md-notes blockquote{border-left:2px solid #cbd5e1;padding-left:6px;color:#64748b}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; }
     .msg-bubble { white-space: pre-wrap; line-height: 1.5; font-size: 13px; padding: 10px 14px; border-radius: 12px; max-width: 80%; }
@@ -545,8 +553,10 @@
                               </div>
                             </div>
                           : <div onClick={() => canEditTask(task) && startEdit(task.id, "notes", task.notes || "")}
-                              className={`text-xs leading-snug min-h-3.5 ${canEditTask(task) ? "cursor-text" : "cursor-default"} ${task.notes ? "text-slate-500" : "text-slate-400"}`}>
-                              {task.notes || (canEditTask(task) ? <em>add note…</em> : "")}
+                              className={`text-xs leading-snug min-h-3.5 ${canEditTask(task) ? "cursor-text" : "cursor-default"} ${task.notes ? "text-slate-600" : "text-slate-400"}`}>
+                              {task.notes
+                                ? <div className="md-notes" dangerouslySetInnerHTML={{ __html: window.marked ? window.marked.parse(task.notes) : task.notes }} />
+                                : (canEditTask(task) ? <em>add note…</em> : "")}
                             </div>
                         }
                         {editingOrder === task.id
@@ -663,6 +673,38 @@
     }
 
     // ── App ──────────────────────────────────────────────────────────────────
+    function ArchiveModal({ project, onClose, onConfirm }) {
+      const hasBillable = (project.tasks || []).some(t => t.store_order?.items?.length);
+      const [includeFinancial, setIncludeFinancial] = useState(hasBillable);
+      return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={onClose}>
+          <div className="bg-white rounded-xl p-5 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">Finalize project</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              <span className="font-medium text-slate-700">{project.name}</span> will be closed and removed from the active board.
+            </p>
+            {hasBillable && (
+              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 mb-4">
+                <div>
+                  <div className="text-xs font-medium text-slate-700">Include in financial report</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Store orders will appear in the expense dashboard</div>
+                </div>
+                <button onClick={() => setIncludeFinancial(v => !v)}
+                  className={`relative w-9 h-5 rounded-full transition-colors border-none cursor-pointer flex-shrink-0 ml-3 ${includeFinancial ? "bg-blue-600" : "bg-slate-300"}`}>
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${includeFinancial ? "left-[18px]" : "left-0.5"}`} />
+                </button>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer font-sans hover:bg-slate-50">Cancel</button>
+              <button onClick={() => onConfirm(includeFinancial)}
+                className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white border-none cursor-pointer font-sans hover:bg-amber-600">Finalize →</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function App() {
       const [user] = useState(() => {
         const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
@@ -686,6 +728,7 @@
       const [pricing,         setPricing]         = useState({ skus: [] });
       const [grants,          setGrants]          = useState([]);
       const [showArchived,    setShowArchived]     = useState(false);
+      const [archiveModal,    setArchiveModal]     = useState(null); // project object
       const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
 
@@ -743,12 +786,13 @@
         if (active === id) setActive(updated[0]?.id || null);
       };
 
-      const archiveProject = async (id) => {
+      const archiveProject = async (id, includeFinancial = true) => {
         const p = projects.find(p => p.id === id);
         if (!p) return;
-        const updated = { ...p, archived: true };
+        const updated = { ...p, archived: true, exclude_from_financial: !includeFinancial };
         await api.saveProject(updated);
         setProjects(prev => prev.map(x => x.id === id ? updated : x));
+        setArchiveModal(null);
         api.log(user.username, "archive_project", `Archived project "${p.name}"`);
         if (active === id) {
           const next = projects.find(x => x.id !== id && !x.archived);
@@ -809,7 +853,7 @@
               <div className="bg-slate-800 w-48 shrink-0 flex flex-col py-3 overflow-y-auto">
                 {showArchived && (
                   <div className="px-3.5 pb-2 border-b border-slate-700 mb-1">
-                    <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Archived</span>
+                    <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Finalized</span>
                   </div>
                 )}
                 {visibleProjects.map(p => (
@@ -819,15 +863,8 @@
                     <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       {(p.owner_username === user.username || user.role === "admin") && (
                         showArchived
-                          ? <button onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} title="Restore" className="text-[10px] text-amber-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-300 font-sans">↩</button>
-                          : <button onClick={e => {
-                              e.stopPropagation();
-                              const hasBillable = (p.tasks || []).some(t => t.store_order?.items?.length);
-                              const msg = hasBillable
-                                ? `Archive "${p.name}"?\n\nThis project has store orders — they will appear in the financial report once archived.`
-                                : `Archive "${p.name}"?`;
-                              if (window.confirm(msg)) archiveProject(p.id);
-                            }} title="Archive" className="text-[10px] text-slate-500 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-400 font-sans">⊘</button>
+                          ? <button onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} title="Reopen" className="text-[10px] text-amber-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-300 font-sans">reopen</button>
+                          : <button onClick={e => { e.stopPropagation(); setArchiveModal(p); }} title="Finalize" className="text-[10px] text-slate-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-400 font-sans">finalize</button>
                       )}
                     </div>
                   </div>
@@ -852,7 +889,7 @@
                   <div className="mt-auto px-3.5 pt-2 border-t border-slate-700">
                     <button onClick={() => { setShowArchived(s => !s); setActive(null); }}
                       className="text-[10px] text-slate-500 hover:text-slate-300 bg-transparent border-none cursor-pointer p-0 font-sans w-full text-left">
-                      {showArchived ? "← Back to active" : `⊘ ${archivedCount} archived`}
+                      {showArchived ? "← Back to active" : `${archivedCount} finalized`}
                     </button>
                   </div>
                 )}
@@ -870,7 +907,15 @@
                 </>
               ) : activeProject ? (
                 <>
-                  <h2 className="mb-3.5 text-lg font-bold text-slate-900">{activeProject.name}</h2>
+                  <div className="flex items-center justify-between mb-3.5">
+                    <h2 className="text-lg font-bold text-slate-900">{activeProject.name}</h2>
+                    {(activeProject.owner_username === user.username || user.role === "admin") && (
+                      <button onClick={() => setArchiveModal(activeProject)}
+                        className="text-xs px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 cursor-pointer font-sans transition-colors">
+                        Finalize project →
+                      </button>
+                    )}
+                  </div>
                   <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} pricing={pricing} grants={grants} />
                 </>
               ) : (
@@ -886,6 +931,13 @@
               </div>
             )}
           </div>
+          {archiveModal && (
+            <ArchiveModal
+              project={archiveModal}
+              onClose={() => setArchiveModal(null)}
+              onConfirm={includeFinancial => archiveProject(archiveModal.id, includeFinancial)}
+            />
+          )}
         </div>
       );
     }
