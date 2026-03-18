@@ -17,6 +17,7 @@
     .md-notes pre{background:#f1f5f9;border-radius:4px;padding:4px 6px;overflow-x:auto;margin-bottom:3px}
     .md-notes a{color:#2563eb;text-decoration:underline}.md-notes strong{font-weight:600}
     .md-notes em{font-style:italic}.md-notes blockquote{border-left:2px solid #cbd5e1;padding-left:6px;color:#64748b}
+    .md-notes mark{background:#fef08a;border-radius:2px;padding:0 2px}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; }
     .msg-bubble { white-space: pre-wrap; line-height: 1.5; font-size: 13px; padding: 10px 14px; border-radius: 12px; max-width: 80%; }
@@ -98,12 +99,89 @@
       return [...new Set([...(text.matchAll(/@(\w+)/g))].map(m => m[1]))];
     }
 
+    // ── Markdown Toolbar ─────────────────────────────────────────────────────
+    function MarkdownToolbar({ value, onChange, taRef }) {
+      const S = (p) => (
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{p}</svg>
+      );
+      const btn = "flex items-center justify-center w-6 h-6 rounded hover:bg-slate-200 cursor-pointer text-slate-500 hover:text-slate-800 border-none bg-transparent font-sans transition-colors";
+
+      const wrap = (before, after, placeholder) => {
+        const el = taRef.current;
+        const start = el ? el.selectionStart : value.length;
+        const end   = el ? el.selectionEnd   : value.length;
+        const sel   = value.slice(start, end) || placeholder || "";
+        onChange(value.slice(0, start) + before + sel + after + value.slice(end));
+        requestAnimationFrame(() => {
+          el?.focus();
+          el?.setSelectionRange(start + before.length, start + before.length + sel.length);
+        });
+      };
+
+      const linePrefix = (prefix) => {
+        const el = taRef.current;
+        const pos = el ? el.selectionStart : value.length;
+        const ls  = value.lastIndexOf('\n', pos - 1) + 1;
+        const already = value.slice(ls).startsWith(prefix);
+        onChange(already ? value.slice(0, ls) + value.slice(ls + prefix.length) : value.slice(0, ls) + prefix + value.slice(ls));
+        requestAnimationFrame(() => { el?.focus(); });
+      };
+
+      const div = <span className="w-px h-4 bg-slate-200 mx-0.5 self-center" />;
+
+      return (
+        <div className="flex items-center gap-0.5 border border-slate-200 border-b-0 rounded-t bg-slate-50 px-1.5 py-1 flex-wrap">
+          <button className={btn} title="Bold" onClick={() => wrap("**","**","bold text")}>
+            {S(<><path d="M6 4h8a4 4 0 0 1 0 8H6z"/><path d="M6 12h9a4 4 0 0 1 0 8H6z"/></>)}
+          </button>
+          <button className={btn} title="Italic" onClick={() => wrap("_","_","italic text")}>
+            {S(<><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></>)}
+          </button>
+          <button className={btn} title="Strikethrough" onClick={() => wrap("~~","~~","text")}>
+            {S(<><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" y1="12" x2="20" y2="12"/></>)}
+          </button>
+          {div}
+          <button className={btn} title="Heading 1" onClick={() => linePrefix("# ")}>
+            {S(<><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></>)}
+          </button>
+          <button className={btn} title="Heading 2" onClick={() => linePrefix("## ")}>
+            <span style={{fontSize:10,fontWeight:700,letterSpacing:-1}}>H2</span>
+          </button>
+          {div}
+          <button className={btn} title="Bullet list" onClick={() => linePrefix("- ")}>
+            {S(<><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></>)}
+          </button>
+          <button className={btn} title="Numbered list" onClick={() => linePrefix("1. ")}>
+            {S(<><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></>)}
+          </button>
+          {div}
+          <button className={btn} title="Code" onClick={() => wrap("`","`","code")}>
+            {S(<><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></>)}
+          </button>
+          <button className={btn} title="Blockquote" onClick={() => linePrefix("> ")}>
+            {S(<><path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z"/><path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z"/></>)}
+          </button>
+          <button className={btn} title="Horizontal rule" onClick={() => { const nl = value.endsWith('\n') ? '' : '\n'; onChange(value + nl + '---\n'); requestAnimationFrame(() => taRef.current?.focus()); }}>
+            {S(<><line x1="5" y1="12" x2="19" y2="12"/></>)}
+          </button>
+          {div}
+          <button className={btn} title="Link" onClick={() => wrap("[","](url)","link text")}>
+            {S(<><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></>)}
+          </button>
+          <button className={btn} title="Highlight / callout" onClick={() => wrap("==","==","highlight")}>
+            {S(<><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>)}
+          </button>
+        </div>
+      );
+    }
+
     // ── Mention Textarea ─────────────────────────────────────────────────────
-    function MentionTextarea({ value, onChange, members, style, onKeyDown }) {
+    function MentionTextarea({ value, onChange, members, style, onKeyDown, inputRef }) {
       const [showDropdown, setShowDropdown] = useState(false);
       const [mentionQuery, setMentionQuery] = useState("");
       const [mentionStart, setMentionStart] = useState(null);
-      const ref = useRef(null);
+      const internalRef = useRef(null);
+      const ref = inputRef || internalRef;
 
       useEffect(() => { ref.current?.focus(); }, []);
 
@@ -126,7 +204,7 @@
 
       return (
         <div style={{ position: "relative" }}>
-          <textarea ref={ref} value={value} onChange={handleChange} onKeyDown={onKeyDown} style={style} />
+          <textarea ref={ref} value={value} onChange={handleChange} onKeyDown={onKeyDown} style={{ ...style, borderTopLeftRadius: 0, borderTopRightRadius: 0 }} />
           {showDropdown && filtered.length > 0 && (
             <div style={{ position: "absolute", bottom: "100%", left: 0, zIndex: 100, minWidth: 140 }}
               className="bg-white border border-slate-200 rounded-lg shadow-md">
@@ -463,6 +541,7 @@
       const [draftGrantId,    setDraftGrantId]    = useState("");
       const [finalizeModal,   setFinalizeModal]   = useState(null);
       const mentionTimers = useRef({});
+      const notesTaRef   = useRef(null);
 
       const finalizeTask = async (taskId, includeFinancial) => {
         const t = project.tasks.find(t => t.id === taskId);
@@ -555,7 +634,8 @@
                         }
                         {editing?.id === task.id && editing.field === "notes"
                           ? <div>
-                              <MentionTextarea members={members} value={draft} onChange={setDraft}
+                              <MarkdownToolbar value={draft} onChange={setDraft} taRef={notesTaRef} />
+                              <MentionTextarea members={members} value={draft} onChange={setDraft} inputRef={notesTaRef}
                                 onKeyDown={e => { if (e.key === "Escape") setEditing(null); }}
                                 style={{ width: "100%", fontSize: 11, border: "1px solid #93c5fd", borderRadius: 4, padding: "2px 5px", resize: "vertical", boxSizing: "border-box", minHeight: 44 }} />
                               <div className="flex gap-1 mt-1">
@@ -566,7 +646,7 @@
                           : <div onClick={() => canEditTask(task) && startEdit(task.id, "notes", task.notes || "")}
                               className={`text-xs leading-snug min-h-3.5 ${canEditTask(task) ? "cursor-text" : "cursor-default"} ${task.notes ? "text-slate-600" : "text-slate-400"}`}>
                               {task.notes
-                                ? <div className="md-notes" dangerouslySetInnerHTML={{ __html: window.marked ? window.marked.parse(task.notes) : task.notes }} />
+                                ? <div className="md-notes" dangerouslySetInnerHTML={{ __html: window.marked ? window.marked.parse(task.notes.replace(/==(.+?)==/g, '<mark>$1</mark>')) : task.notes }} />
                                 : (canEditTask(task) ? <em>add note…</em> : "")}
                             </div>
                         }
