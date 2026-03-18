@@ -148,8 +148,10 @@
             {isAdmin && <a href="users.html"   className="text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 no-underline hover:bg-slate-600">👥 Users</a>}
             {isAdmin && <a href="pricing.html" className="text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 no-underline hover:bg-slate-600">💰 Pricing</a>}
             <a href="profile.html" className="text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 no-underline hover:bg-slate-600 flex items-center gap-1.5">
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-700 text-slate-300 font-bold text-[10px]">{user.username[0].toUpperCase()}</span>
-              {user.username}
+              {user.avatar_url
+                ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
+                : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-600 text-slate-200 font-bold text-[10px]">{user.username[0].toUpperCase()}</span>}
+              {user.display_name || user.username}
               {isAdmin && <span className="ml-0.5 text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
             </a>
             <button onClick={logout} className="text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600 font-sans">Sign out</button>
@@ -677,7 +679,7 @@
           window.location.href = "index.html?expired=1";
           return null;
         }
-        return { username: s.username, role: s.role, token: s.token, group_id: s.group_id, group_role: s.group_role };
+        return { username: s.username, role: s.role, token: s.token, group_id: s.group_id, group_role: s.group_role, avatar_url: s.avatar_url || null, display_name: s.display_name || null };
       });
 
       const [projects,        setProjects]        = useState([]);

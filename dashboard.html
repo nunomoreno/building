@@ -136,8 +136,10 @@
           ${isAdmin ? `<a href="users.html"   ${navLink}>👥 Users</a>` : ""}
           ${isAdmin ? `<a href="pricing.html" ${navLink}>💰 Pricing</a>` : ""}
           <a href="profile.html" ${navLink} style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
-            <span style="width:20px;height:20px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#cbd5e1">${username[0].toUpperCase()}</span>
-            ${username}
+            ${session.avatar_url
+              ? `<img src="${session.avatar_url}" style="width:20px;height:20px;border-radius:50%;object-fit:cover" alt="" />`
+              : `<span style="width:20px;height:20px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#cbd5e1">${username[0].toUpperCase()}</span>`}
+            ${session.display_name || username}
             ${isAdmin ? `<span style="font-size:9px;background:#2563eb;color:#fff;border-radius:9999px;padding:1px 6px;font-weight:600">admin</span>` : ""}
           </a>
           <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"

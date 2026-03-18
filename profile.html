@@ -12,8 +12,9 @@
 
 <main class="max-w-2xl mx-auto px-4 py-10">
   <div class="flex items-center gap-4 mb-8">
-    <img id="avatar-preview" src="" alt=""
-      class="w-16 h-16 rounded-2xl object-cover bg-slate-200 border border-slate-200" />
+    <img id="avatar-preview" src="" alt="" style="display:none"
+      class="w-16 h-16 rounded-2xl object-cover bg-slate-200 border border-slate-200"
+      onload="this.style.display='block'" />
     <div>
       <h1 id="display-heading" class="text-2xl font-bold text-slate-900 tracking-tight"></h1>
       <p class="text-sm text-slate-400">@<span id="username-sub"></span></p>
@@ -172,7 +173,12 @@
           <a href="requests.html" ${link}>📝 Requests</a>
           ${isAdmin ? `<a href="users.html"   ${link}>👥 Users</a>` : ""}
           ${isAdmin ? `<a href="pricing.html" ${link}>💰 Pricing</a>` : ""}
-          <a href="profile.html" ${active}>👤 ${session.display_name || session.username}</a>
+          <a href="profile.html" ${active} style="display:inline-flex;align-items:center;gap:6px">
+            ${session.avatar_url
+              ? `<img src="${session.avatar_url}" style="width:18px;height:18px;border-radius:50%;object-fit:cover" alt="" />`
+              : `<span style="width:18px;height:18px;border-radius:50%;background:#1e40af;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${session.username[0].toUpperCase()}</span>`}
+            ${session.display_name || session.username}
+          </a>
           <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
             style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;cursor:pointer;font-family:inherit">Sign out</button>
         </div>
@@ -192,7 +198,7 @@
   ];
 
   function avatarUrl(style, seed) {
-    return `https://api.dicebear.com/7.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
+    return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}`;
   }
 
   let selectedAvatarUrl = "";
@@ -295,8 +301,9 @@
       });
       const data = await res.json();
       if (data.error) return showMsg("msg-profile", data.error, true);
-      // Update session display_name so navbar refreshes next time
+      // Update session so navbar shows new name/avatar on next page load
       session.display_name = body.display_name;
+      session.avatar_url   = body.avatar_url;
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       document.getElementById("display-heading").textContent = body.display_name || session.username;
       showMsg("msg-profile", "Profile saved!", false);
