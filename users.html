@@ -4,16 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kerno — Users & Groups</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f8fafc; }
-    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   </style>
 </head>
-<body>
+<body class="min-h-screen bg-slate-50 font-sans">
 <div id="root"></div>
 <script type="text/babel">
   const { useState, useEffect } = React;
@@ -58,7 +57,6 @@
     removeGroupMember:(gid, mid)       => apiFetch(`/groups/${gid}/members/${mid}`,   { method: "DELETE" }),
   };
 
-  // ── Password strength ──────────────────────────────────────────────────────
   function scorePassword(pwd) {
     if (!pwd) return { score: 0, pct: 0, label: "", color: "" };
     let score = 0;
@@ -68,52 +66,55 @@
     if (/[a-z]/.test(pwd)) score++;
     if (/[0-9]/.test(pwd)) score++;
     if (/[^A-Za-z0-9]/.test(pwd)) score++;
-    if (score <= 2) return { score, pct: 20,  label: "Too weak",    color: "#ef4444" };
-    if (score <= 3) return { score, pct: 40,  label: "Weak",        color: "#f97316" };
-    if (score <= 4) return { score, pct: 65,  label: "Fair",        color: "#eab308" };
-    if (score <= 5) return { score, pct: 85,  label: "Strong",      color: "#22c55e" };
-    return             { score, pct: 100, label: "Very strong",  color: "#16a34a" };
+    if (score <= 2) return { score, pct: 20,  label: "Too weak",   color: "#ef4444" };
+    if (score <= 3) return { score, pct: 40,  label: "Weak",       color: "#f97316" };
+    if (score <= 4) return { score, pct: 65,  label: "Fair",       color: "#eab308" };
+    if (score <= 5) return { score, pct: 85,  label: "Strong",     color: "#22c55e" };
+    return             { score, pct: 100, label: "Very strong", color: "#16a34a" };
   }
 
   function PasswordStrengthBar({ password }) {
     const { pct, label, color } = scorePassword(password);
     if (!password) return null;
     return (
-      <div style={{ marginTop: 4, marginBottom: 6 }}>
-        <div style={{ height: 4, borderRadius: 2, background: "#e2e8f0", overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${pct}%`, background: color, transition: "width .2s, background .2s" }} />
+      <div className="mt-1.5 mb-1">
+        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+          <div style={{ width: `${pct}%`, background: color }} className="h-full rounded-full transition-all duration-200" />
         </div>
-        <div style={{ fontSize: 11, color, marginTop: 3 }}>{label}</div>
+        <div style={{ color }} className="text-xs mt-1">{label}</div>
       </div>
     );
   }
 
   // ── Navbar ─────────────────────────────────────────────────────────────────
   function Navbar({ user }) {
-    const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+    const logout  = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
     const isAdmin = user.role === "admin";
-    const btn    = { fontSize:11, padding:"4px 10px", borderRadius:5, border:"1px solid #334155", background:"#1e293b", color:"#94a3b8", textDecoration:"none", cursor:"pointer", fontFamily:"inherit" };
-    const active = { ...btn, background:"#2563eb", color:"#fff", border:"1px solid #2563eb" };
+    const link    = "text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline";
+    const active  = "text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline";
     return (
-      <div style={{ background:"#0f172a", padding:"10px 24px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
-        <a href="dashboard.html" style={{ fontSize:15, fontWeight:700, color:"#fff", textDecoration:"none" }}>⚙️ Kerno</a>
-        <span style={{ color:"#475569" }}>›</span>
-        <span style={{ fontSize:13, color:"#94a3b8" }}>Users & Groups</span>
-        <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-          <a href="kanban.html"   style={btn}>📋 Kanban</a>
-          <a href="booking.html"  style={btn}>📅 Bookings</a>
-          <a href="requests.html" style={btn}>📝 Requests</a>
-          {isAdmin && <a href="users.html" style={active}>👥 Users</a>}
-          <span style={{ fontSize:12, color:"#64748b" }}>
-            👤 {user.username}
-            {isAdmin && <span style={{ marginLeft:5, fontSize:10, background:"#2563eb", color:"#fff", borderRadius:99, padding:"1px 6px" }}>admin</span>}
+      <div className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap shrink-0">
+        <a href="dashboard.html" className="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
+        <span className="text-slate-600 text-xs hidden sm:inline">›</span>
+        <span className="text-slate-400 text-xs hidden sm:inline">Users & Groups</span>
+        <div className="ml-auto flex items-center gap-2 flex-wrap">
+          <a href="kanban.html"   className={link}>📋 Kanban</a>
+          <a href="booking.html"  className={link}>📅 Bookings</a>
+          <a href="requests.html" className={link}>📝 Requests</a>
+          {isAdmin && <a href="users.html" className={active}>👥 Users</a>}
+          <span className="text-xs text-slate-500 flex items-center gap-1.5">
+            <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">{user.username[0].toUpperCase()}</span>
+            {user.username}
+            {isAdmin && <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>}
           </span>
-          <a href="profile.html" style={btn}>🔑 Password</a>
-          <button onClick={logout} style={btn}>Sign out</button>
+          <a href="profile.html" className={link}>🔑 Password</a>
+          <button onClick={logout} className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer font-sans">Sign out</button>
         </div>
       </div>
     );
   }
+
+  const inputCls = "w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition";
 
   // ── Users tab ──────────────────────────────────────────────────────────────
   function UsersTab({ members, groups, onReload }) {
@@ -145,7 +146,6 @@
 
     const doReset = async (id) => {
       if (!resetPwd.trim()) return;
-      // Client-side strength check for immediate feedback
       const { score } = scorePassword(resetPwd);
       if (score <= 2) { setResetMsg("Password too weak — add uppercase, numbers and special characters."); return; }
       setSaving(true); setResetMsg("");
@@ -156,50 +156,50 @@
     };
 
     return (
-      <div style={{ maxWidth: 700 }}>
+      <div className="max-w-2xl space-y-2">
         {members.map(m => (
-          <div key={m.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 16px", marginBottom: 10 }}>
+          <div key={m.id} className="bg-white border border-slate-200 rounded-2xl px-5 py-4">
             {resetId === m.id ? (
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{m.username}</span>
-                  <input
-                    type="password" autoFocus value={resetPwd}
+                <div className="flex items-center gap-3 flex-wrap mb-1">
+                  <span className="text-sm font-semibold text-slate-800">{m.username}</span>
+                  <input type="password" autoFocus value={resetPwd}
                     onChange={e => { setResetPwd(e.target.value); setResetMsg(""); }}
                     placeholder="New password"
                     onKeyDown={e => { if (e.key === "Enter") doReset(m.id); if (e.key === "Escape") cancelReset(); }}
-                    style={{ fontSize: 12, padding: "5px 9px", borderRadius: 6, border: "1px solid #93c5fd", flex: 1, minWidth: 160 }}
-                  />
+                    className="text-sm px-3 py-1.5 rounded-xl border border-blue-300 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-40" />
                   <button onClick={() => doReset(m.id)} disabled={saving}
-                    style={{ fontSize: 12, padding: "5px 12px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
+                    className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer disabled:opacity-60">Save</button>
                   <button onClick={cancelReset}
-                    style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, background: "#f1f5f9", border: "1px solid #e2e8f0", cursor: "pointer", color: "#64748b" }}>Cancel</button>
+                    className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 cursor-pointer">Cancel</button>
                 </div>
                 <PasswordStrengthBar password={resetPwd} />
                 {resetMsg && (
-                  <div style={{ fontSize: 11, color: resetMsg.startsWith("Error") || resetMsg.includes("weak") ? "#ef4444" : "#16a34a", marginTop: 2 }}>
+                  <div className={`text-xs mt-1 ${resetMsg.startsWith("Error") || resetMsg.includes("weak") ? "text-red-500" : "text-emerald-600"}`}>
                     {resetMsg}
                   </div>
                 )}
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{m.username}</span>
-                  {m.role === "admin" && <span style={{ marginLeft: 8, fontSize: 10, background: "#2563eb", color: "#fff", borderRadius: 99, padding: "2px 8px" }}>admin</span>}
-                  {m.group_id && (
-                    <span style={{ marginLeft: 8, fontSize: 10, background: "#f0fdf4", color: "#16a34a", borderRadius: 99, padding: "2px 8px", border: "1px solid #86efac" }}>
-                      {groups.find(g => g.id === m.group_id)?.name || "group"} · {m.group_role}
-                    </span>
-                  )}
-                  {m.email && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{m.email}</div>}
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-slate-800">{m.username}</span>
+                    {m.role === "admin" && <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5 font-semibold">admin</span>}
+                    {m.group_id && (
+                      <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full px-2 py-0.5">
+                        {groups.find(g => g.id === m.group_id)?.name || "group"} · {m.group_role}
+                      </span>
+                    )}
+                  </div>
+                  {m.email && <div className="text-xs text-slate-400 mt-0.5">{m.email}</div>}
                 </div>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div className="flex gap-2 shrink-0">
                   <button onClick={() => startReset(m.id)}
-                    style={{ fontSize: 12, padding: "4px 10px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", color: "#475569" }}>Reset password</button>
+                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 cursor-pointer hover:border-slate-300">Reset password</button>
                   {m.role !== "admin" && (
                     <button onClick={() => removeMember(m.id, m.username)}
-                      style={{ fontSize: 12, padding: "4px 10px", borderRadius: 5, border: "1px solid #fecaca", background: "#fff5f5", color: "#ef4444", cursor: "pointer" }}>Remove</button>
+                      className="text-xs px-3 py-1.5 rounded-lg border border-red-100 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100">Remove</button>
                   )}
                 </div>
               </div>
@@ -208,22 +208,22 @@
         ))}
 
         {/* Add user */}
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "16px 20px", marginTop: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 12 }}>Add new user</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        <div className="bg-white border border-slate-200 rounded-2xl px-5 py-5 mt-4">
+          <h3 className="text-sm font-bold text-slate-800 mb-4">Add new user</h3>
+          <div className="flex gap-3 flex-wrap mb-3">
             <input value={newUser} onChange={e => setNewUser(e.target.value)} placeholder="Username"
-              style={{ fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", flex: "1 1 140px" }} />
+              className="text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-36" />
             <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="Email (optional)"
-              style={{ fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", flex: "1 1 180px" }} />
+              className="text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 flex-1 min-w-44" />
           </div>
-          <div style={{ marginBottom: 4 }}>
+          <div className="mb-3">
             <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Password"
-              style={{ width: "100%", fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", boxSizing: "border-box" }} />
+              className={inputCls} />
             <PasswordStrengthBar password={newPass} />
           </div>
-          {error && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 8 }}>{error}</div>}
+          {error && <div className="text-xs text-red-500 mb-3">{error}</div>}
           <button onClick={addMember} disabled={saving}
-            style={{ fontSize: 13, padding: "7px 18px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+            className="text-sm px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0 cursor-pointer disabled:opacity-60 transition">
             {saving ? "Adding…" : "Add user"}
           </button>
         </div>
@@ -250,13 +250,8 @@
       await api.deleteGroup(id); await onReload();
     };
 
-    const assignMember = async (groupId, memberId, role) => {
-      await api.addGroupMember(groupId, memberId, role); await onReload();
-    };
-
-    const unassignMember = async (groupId, memberId) => {
-      await api.removeGroupMember(groupId, memberId); await onReload();
-    };
+    const assignMember   = async (groupId, memberId, role) => { await api.addGroupMember(groupId, memberId, role); await onReload(); };
+    const unassignMember = async (groupId, memberId)       => { await api.removeGroupMember(groupId, memberId); await onReload(); };
 
     const createGroup = async () => {
       if (!newGroupName.trim()) return;
@@ -266,55 +261,51 @@
     };
 
     return (
-      <div style={{ maxWidth: 700 }}>
+      <div className="max-w-2xl space-y-3">
         {groups.map(g => (
-          <div key={g.id} style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, marginBottom: 12, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid #f1f5f9" }}>
-              <div>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#1e293b" }}>{g.name}</span>
-                {g.description && <span style={{ fontSize: 12, color: "#94a3b8", marginLeft: 10 }}>{g.description}</span>}
-                <span style={{ fontSize: 12, color: "#64748b", marginLeft: 10 }}>
-                  {(g.members || []).length} member{(g.members || []).length !== 1 ? "s" : ""}
-                </span>
+          <div key={g.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <div className="min-w-0">
+                <span className="text-sm font-bold text-slate-800">{g.name}</span>
+                {g.description && <span className="text-xs text-slate-400 ml-2">{g.description}</span>}
+                <span className="text-xs text-slate-400 ml-2">{(g.members || []).length} member{(g.members || []).length !== 1 ? "s" : ""}</span>
               </div>
-              <div style={{ display: "flex", gap: 6 }}>
+              <div className="flex gap-2 shrink-0">
                 <button onClick={() => setEditGroup(editGroup?.id === g.id ? null : g)}
-                  style={{ fontSize: 12, padding: "4px 12px", borderRadius: 5, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", color: "#475569" }}>
+                  className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 cursor-pointer hover:border-slate-300">
                   {editGroup?.id === g.id ? "Cancel" : "Edit"}
                 </button>
                 <button onClick={() => deleteGroup(g.id, g.name)}
-                  style={{ fontSize: 12, padding: "4px 12px", borderRadius: 5, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444" }}>Delete</button>
+                  className="text-xs px-3 py-1.5 rounded-lg border border-red-100 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100">Delete</button>
               </div>
             </div>
 
             {editGroup?.id === g.id && (
-              <div style={{ padding: "12px 16px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                <input value={editGroup.name || ""} onChange={e => setEditGroup({ ...editGroup, name: e.target.value })} placeholder="Group name"
-                  style={{ width: "100%", fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 8, boxSizing: "border-box" }} />
-                <input value={editGroup.description || ""} onChange={e => setEditGroup({ ...editGroup, description: e.target.value })} placeholder="Description (optional)"
-                  style={{ width: "100%", fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", marginBottom: 10, boxSizing: "border-box" }} />
+              <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 space-y-2">
+                <input value={editGroup.name || ""} onChange={e => setEditGroup({ ...editGroup, name: e.target.value })} placeholder="Group name" className={inputCls} />
+                <input value={editGroup.description || ""} onChange={e => setEditGroup({ ...editGroup, description: e.target.value })} placeholder="Description (optional)" className={inputCls} />
                 <button onClick={saveGroup} disabled={saving}
-                  style={{ fontSize: 12, padding: "5px 16px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Save</button>
+                  className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer disabled:opacity-60">Save</button>
               </div>
             )}
 
-            <div style={{ padding: "10px 16px" }}>
+            <div className="px-5 py-3">
               {(g.members || []).map(m => (
-                <div key={m.member_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0", fontSize: 13, borderBottom: "1px solid #f8fafc" }}>
-                  <span style={{ color: "#1e293b", fontWeight: 500 }}>{m.username}</span>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <div key={m.member_id} className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0 text-sm">
+                  <span className="font-medium text-slate-700">{m.username}</span>
+                  <div className="flex items-center gap-2">
                     <select value={m.role} onChange={e => assignMember(g.id, m.member_id, e.target.value)}
-                      style={{ fontSize: 12, padding: "3px 6px", borderRadius: 5, border: "1px solid #e2e8f0" }}>
+                      className="text-xs px-2 py-1 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500">
                       {GROUP_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                     <button onClick={() => unassignMember(g.id, m.member_id)}
-                      style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", color: "#ef4444" }}>✕</button>
+                      className="text-xs px-2 py-1 rounded-lg border border-red-100 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100">✕</button>
                   </div>
                 </div>
               ))}
-              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              <div className="flex gap-2 mt-3">
                 <select id={`add-member-${g.id}`} defaultValue=""
-                  style={{ flex: 1, fontSize: 12, padding: "5px 8px", borderRadius: 5, border: "1px solid #cbd5e1" }}>
+                  className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="" disabled>Add member…</option>
                   {members.filter(m => !g.members?.find(gm => gm.member_id === m.id)).map(m => (
                     <option key={m.id} value={m.id}>{m.username}</option>
@@ -323,21 +314,21 @@
                 <button onClick={() => {
                   const sel = document.getElementById(`add-member-${g.id}`);
                   if (sel.value) { assignMember(g.id, sel.value, "member"); sel.value = ""; }
-                }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 5, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer" }}>Add</button>
+                }} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer">Add</button>
               </div>
             </div>
           </div>
         ))}
 
         {/* New group */}
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "16px 20px", marginTop: 4 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 10 }}>New group</div>
-          <div style={{ display: "flex", gap: 10 }}>
+        <div className="bg-white border border-slate-200 rounded-2xl px-5 py-5">
+          <h3 className="text-sm font-bold text-slate-800 mb-3">New group</h3>
+          <div className="flex gap-3">
             <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Group name"
               onKeyDown={e => { if (e.key === "Enter") createGroup(); }}
-              style={{ flex: 1, fontSize: 13, padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1" }} />
+              className="flex-1 text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" />
             <button onClick={createGroup} disabled={saving}
-              style={{ fontSize: 13, padding: "7px 18px", borderRadius: 6, background: "#2563eb", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+              className="text-sm px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0 cursor-pointer disabled:opacity-60 transition shrink-0">
               {saving ? "Creating…" : "Create group"}
             </button>
           </div>
@@ -367,32 +358,33 @@
 
     useEffect(() => { load(); }, []);
 
-    const tabStyle = (t) => ({
-      fontSize: 13, fontWeight: 600, padding: "9px 20px", border: "none", cursor: "pointer",
-      background: "none", borderBottom: `2px solid ${tab === t ? "#2563eb" : "transparent"}`,
-      color: tab === t ? "#2563eb" : "#64748b",
-    });
-
     return (
-      <div style={{ fontFamily: "system-ui,sans-serif", minHeight: "100vh", background: "#f8fafc" }}>
+      <div className="min-h-screen bg-slate-50 font-sans">
         <Navbar user={user} />
-        <div style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>Users & Groups</div>
-          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 24 }}>Manage platform members, roles and team groups.</div>
+        <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">Users & Groups</h1>
+          <p className="text-sm text-slate-400 mb-8">Manage platform members, roles and team groups.</p>
 
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: 24 }}>
-            <button style={tabStyle("users")}  onClick={() => setTab("users")}>👤 Users ({members.length})</button>
-            <button style={tabStyle("groups")} onClick={() => setTab("groups")}>👥 Groups ({groups.length})</button>
+          {/* Tab bar */}
+          <div className="flex border-b border-slate-200 mb-8">
+            <button onClick={() => setTab("users")}
+              className={`text-sm px-5 py-3 border-b-2 transition cursor-pointer bg-transparent font-sans ${tab === "users" ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+              👤 Users ({members.length})
+            </button>
+            <button onClick={() => setTab("groups")}
+              className={`text-sm px-5 py-3 border-b-2 transition cursor-pointer bg-transparent font-sans ${tab === "groups" ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+              👥 Groups ({groups.length})
+            </button>
           </div>
 
           {loading ? (
-            <div style={{ color: "#94a3b8", fontSize: 13 }}>Loading…</div>
+            <div className="text-sm text-slate-400">Loading…</div>
           ) : tab === "users" ? (
             <UsersTab members={members} groups={groups} onReload={load} />
           ) : (
             <GroupsTab members={members} groups={groups} onReload={load} />
           )}
-        </div>
+        </main>
       </div>
     );
   }

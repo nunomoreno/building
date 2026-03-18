@@ -4,44 +4,51 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kerno — My Profile</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f8fafc; }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-<div id="navbar"></div>
-<div style="max-width:480px;margin:48px auto;padding:0 24px">
-  <div style="font-size:22px;font-weight:700;color:#0f172a;margin-bottom:4px">My Profile</div>
-  <div style="font-size:13px;color:#64748b;margin-bottom:28px">Update your password.</div>
+<body class="min-h-screen bg-slate-50 font-sans">
 
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px">
-    <div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:16px">Change Password</div>
+<nav id="navbar"></nav>
 
-    <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Current Password</label>
-    <input id="current-pwd" type="password" placeholder="Current password"
-      style="width:100%;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:14px;font-family:inherit"/>
+<main class="max-w-lg mx-auto px-4 py-12">
+  <h1 class="text-2xl font-bold text-slate-900 tracking-tight mb-1">My Profile</h1>
+  <p class="text-sm text-slate-400 mb-8">Update your password.</p>
 
-    <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">New Password</label>
-    <input id="new-pwd" type="password" placeholder="New password"
-      style="width:100%;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:6px;font-family:inherit"/>
-    <div id="strength-bar" style="height:4px;border-radius:2px;background:#e2e8f0;margin-bottom:4px;overflow:hidden">
-      <div id="strength-fill" style="height:100%;width:0%;transition:width .2s,background .2s"></div>
+  <div class="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+    <h2 class="text-sm font-bold text-slate-800 mb-6">Change Password</h2>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Current Password</label>
+        <input id="current-pwd" type="password" placeholder="Current password"
+          class="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">New Password</label>
+        <input id="new-pwd" type="password" placeholder="New password"
+          class="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" />
+        <div class="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+          <div id="strength-fill" class="h-full rounded-full transition-all duration-200" style="width:0%"></div>
+        </div>
+        <div id="strength-label" class="text-xs mt-1 text-slate-400"></div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Confirm New Password</label>
+        <input id="confirm-pwd" type="password" placeholder="Confirm new password"
+          class="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" />
+      </div>
     </div>
-    <div id="strength-label" style="font-size:11px;color:#94a3b8;margin-bottom:10px"></div>
 
-    <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Confirm New Password</label>
-    <input id="confirm-pwd" type="password" placeholder="Confirm new password"
-      style="width:100%;font-size:13px;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:20px;font-family:inherit"/>
-
-    <div id="msg" style="font-size:12px;margin-bottom:14px;display:none"></div>
+    <div id="msg" style="display:none" class="flex items-center gap-2 mt-5 rounded-xl px-4 py-2.5 text-sm"></div>
 
     <button id="save-btn"
-      style="width:100%;font-size:14px;padding:10px;border-radius:7px;background:#2563eb;color:#fff;border:none;cursor:pointer;font-weight:600;font-family:inherit">
+      class="mt-5 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm cursor-pointer border-0 font-sans">
       Update Password
     </button>
   </div>
-</div>
+</main>
 
 <script>
   const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
@@ -53,29 +60,33 @@
     window.location.href = "index.html?expired=1";
   }
 
-  // Inject navbar
-  document.getElementById("navbar").innerHTML = buildNavbar(session);
+  // ── Navbar ─────────────────────────────────────────────────────────────────
+  (function buildNavbar() {
+    const isAdmin = session.role === "admin";
+    const link = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;text-decoration:none"`;
+    const active = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none"`;
+    document.getElementById("navbar").innerHTML = `
+      <div style="background:#0f172a;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
+        <span style="color:#475569;font-size:12px">›</span>
+        <span style="font-size:12px;color:#94a3b8">My Profile</span>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <a href="kanban.html"   ${link}>📋 Kanban</a>
+          <a href="booking.html"  ${link}>📅 Bookings</a>
+          <a href="requests.html" ${link}>📝 Requests</a>
+          ${isAdmin ? `<a href="users.html" ${link}>👥 Users</a>` : ""}
+          <span style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px">
+            <span style="width:24px;height:24px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#cbd5e1">${session.username[0].toUpperCase()}</span>
+            ${session.username}
+          </span>
+          <a href="profile.html" ${active}>🔑 Password</a>
+          <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
+            style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;cursor:pointer;font-family:inherit">Sign out</button>
+        </div>
+      </div>`;
+  })();
 
-  function buildNavbar(s) {
-    const isAdmin = s.role === "admin";
-    return `
-    <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px">
-      <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
-      <span style="color:#475569">›</span>
-      <span style="font-size:13px;color:#94a3b8">My Profile</span>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-        <a href="kanban.html"   style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">📋 Kanban</a>
-        <a href="booking.html"  style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">📅 Bookings</a>
-        <a href="requests.html" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">📝 Requests</a>
-        ${isAdmin ? `<a href="users.html" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none">👥 Users</a>` : ""}
-        <span style="font-size:12px;color:#64748b">👤 ${s.username}</span>
-        <a href="profile.html" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none">🔑 Password</a>
-        <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'" style="font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer;font-family:inherit">Sign out</button>
-      </div>
-    </div>`;
-  }
-
-  // ── Password strength meter ───────────────────────────────────────────────
+  // ── Password strength ───────────────────────────────────────────────────────
   function scorePassword(pwd) {
     if (!pwd) return { score: 0, label: "", color: "" };
     let score = 0;
@@ -85,19 +96,21 @@
     if (/[a-z]/.test(pwd)) score++;
     if (/[0-9]/.test(pwd)) score++;
     if (/[^A-Za-z0-9]/.test(pwd)) score++;
-    if (score <= 2) return { score, pct: 20,  label: "Too weak",  color: "#ef4444" };
-    if (score <= 3) return { score, pct: 40,  label: "Weak",      color: "#f97316" };
-    if (score <= 4) return { score, pct: 65,  label: "Fair",      color: "#eab308" };
-    if (score <= 5) return { score, pct: 85,  label: "Strong",    color: "#22c55e" };
+    if (score <= 2) return { score, pct: 20,  label: "Too weak",   color: "#ef4444" };
+    if (score <= 3) return { score, pct: 40,  label: "Weak",       color: "#f97316" };
+    if (score <= 4) return { score, pct: 65,  label: "Fair",       color: "#eab308" };
+    if (score <= 5) return { score, pct: 85,  label: "Strong",     color: "#22c55e" };
     return             { score, pct: 100, label: "Very strong", color: "#16a34a" };
   }
 
   document.getElementById("new-pwd").addEventListener("input", e => {
     const { pct, label, color } = scorePassword(e.target.value);
-    document.getElementById("strength-fill").style.width      = e.target.value ? `${pct}%` : "0%";
-    document.getElementById("strength-fill").style.background = color;
-    document.getElementById("strength-label").textContent     = label;
-    document.getElementById("strength-label").style.color     = color || "#94a3b8";
+    const fill  = document.getElementById("strength-fill");
+    const lbl   = document.getElementById("strength-label");
+    fill.style.width      = e.target.value ? `${pct}%` : "0%";
+    fill.style.background = color;
+    lbl.textContent       = label;
+    lbl.style.color       = color || "#94a3b8";
   });
 
   const msg     = document.getElementById("msg");
@@ -105,16 +118,12 @@
 
   function showMsg(text, isError) {
     msg.textContent = text;
-    msg.style.color = isError ? "#ef4444" : "#16a34a";
-    msg.style.background = isError ? "#fef2f2" : "#f0fdf4";
-    msg.style.border = `1px solid ${isError ? "#fecaca" : "#86efac"}`;
-    msg.style.borderRadius = "6px";
-    msg.style.padding = "8px 10px";
-    msg.style.display = "block";
+    msg.className = `flex items-center gap-2 mt-5 rounded-xl px-4 py-2.5 text-sm ${isError ? "bg-red-50 border border-red-100 text-red-600" : "bg-emerald-50 border border-emerald-200 text-emerald-600"}`;
+    msg.style.display = "flex";
   }
 
   async function sha256(message) {
-    const buf  = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message));
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message));
     return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
   }
 
@@ -131,7 +140,6 @@
     saveBtn.disabled    = true;
     saveBtn.textContent = "Updating…";
 
-    // Verify current password by attempting login
     const loginRes = await fetch(`${WORKER}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -144,7 +152,6 @@
       return showMsg("Current password is incorrect.", true);
     }
 
-    // Get member id
     const membersRes = await fetch(`${WORKER}/members`, {
       headers: { "Content-Type": "application/json", "X-Session-Token": session.token }
     }).then(r => r.json());
@@ -155,7 +162,7 @@
     const updateRes = await fetch(`${WORKER}/members/${me.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", "X-Session-Token": session.token },
-      body: JSON.stringify({ password: newPwd }),  // worker hashes server-side
+      body: JSON.stringify({ password: newPwd }),
     }).then(r => r.json());
 
     saveBtn.disabled    = false;
