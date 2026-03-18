@@ -33,7 +33,7 @@
     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
       <h2 class="text-sm font-bold text-slate-700 mb-5">Avatar</h2>
       <p class="text-xs text-slate-400 mb-3">Pick a generated avatar or paste a custom image URL.</p>
-      <div id="avatar-grid" class="grid grid-cols-4 sm:grid-cols-8 gap-2 mb-4"></div>
+      <div id="avatar-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-4"></div>
       <div class="flex gap-2 items-center mt-2">
         <input id="avatar-url-input" type="url" placeholder="Custom image URL…"
           class="flex-1 text-sm px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" />
@@ -187,14 +187,26 @@
 
   // ── Avatar styles ────────────────────────────────────────────────────────────
   const AVATAR_STYLES = [
-    { key: "avataaars",      label: "Avataaars" },
-    { key: "lorelei",        label: "Lorelei"   },
-    { key: "bottts-neutral", label: "Bottts"    },
-    { key: "pixel-art",      label: "Pixel Art" },
-    { key: "fun-emoji",      label: "Emoji"     },
-    { key: "thumbs",         label: "Thumbs"    },
-    { key: "adventurer",     label: "Adventurer"},
-    { key: "shapes",         label: "Shapes"    },
+    { key: "avataaars",           label: "Avataaars"      },
+    { key: "avataaars-neutral",   label: "Avataaars (N)"  },
+    { key: "lorelei",             label: "Lorelei"        },
+    { key: "lorelei-neutral",     label: "Lorelei (N)"    },
+    { key: "adventurer",          label: "Adventurer"     },
+    { key: "adventurer-neutral",  label: "Adventurer (N)" },
+    { key: "bottts",              label: "Bottts"         },
+    { key: "bottts-neutral",      label: "Bottts (N)"     },
+    { key: "pixel-art",           label: "Pixel Art"      },
+    { key: "pixel-art-neutral",   label: "Pixel Art (N)"  },
+    { key: "fun-emoji",           label: "Emoji"          },
+    { key: "thumbs",              label: "Thumbs"         },
+    { key: "shapes",              label: "Shapes"         },
+    { key: "rings",               label: "Rings"          },
+    { key: "croodles",            label: "Croodles"       },
+    { key: "croodles-neutral",    label: "Croodles (N)"   },
+    { key: "micah",               label: "Micah"          },
+    { key: "miniavs",             label: "Miniavs"        },
+    { key: "open-peeps",          label: "Open Peeps"     },
+    { key: "big-ears",            label: "Big Ears"       },
   ];
 
   function avatarUrl(style, seed) {
