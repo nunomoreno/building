@@ -129,20 +129,53 @@ async function generateWeeklyReport(env) {
     const t   = await res.text(); return t ? JSON.parse(t) : {};
   };
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const [projects, logs, members] = await Promise.all([
+  const [projects, logs, members, weekRequests, grantsRaw] = await Promise.all([
     sb("projects?select=id,data"),
     sb(`logs?timestamp=gte.${oneWeekAgo}&limit=100`),
-    sb("members?select=username,email")
+    sb("members?select=username,email"),
+    sb(`requests?status=eq.approved&reviewed_at=gte.${oneWeekAgo}&select=type,username,metadata,reviewed_at`),
+    sb("grants?active=eq.true&select=id,code,name,tier"),
   ]);
+  const grantMap = Object.fromEntries((Array.isArray(grantsRaw) ? grantsRaw : []).map(g => [g.id, g]));
   const blocked = projects.flatMap(r =>
     (r.data?.tasks || []).filter(t => t.col === "Blocked").map(t => ({ task: t.title, project: r.data?.name }))
   );
+
+  // Completed store orders — all Done tasks across all projects that have store_order
+  const completedOrders = projects.flatMap(r =>
+    (r.data?.tasks || [])
+      .filter(t => t.col === "Done" && t.store_order?.items?.length)
+      .map(t => ({
+        project:  r.data?.name,
+        username: t.store_order.requested_by || r.data?.owner_username || "unknown",
+        items:    t.store_order.items,
+        total:    t.store_order.total || t.store_order.items.reduce((s, i) => s + (i.line_total || 0), 0),
+        grant:    t.store_order.grant_id ? grantMap[t.store_order.grant_id] : null,
+      }))
+  );
+  const completedTotal = completedOrders.reduce((s, o) => s + o.total, 0);
+  const completedLines = completedOrders.map(o => {
+    const items = o.items.map(i => `${i.sku_name || i.sku_id} x${i.qty} = EUR ${(i.line_total || 0).toFixed(2)}`).join(", ");
+    const grantStr = o.grant ? ` [${o.grant.code}/${o.grant.tier}]` : "";
+    return `- ${o.username} [${o.project}]${grantStr}: EUR ${o.total.toFixed(2)} (${items})`;
+  });
+
+  // Newly approved requests this week (all types, for context)
+  const newApprovals = (Array.isArray(weekRequests) ? weekRequests : []);
+  const approvalsText = newApprovals.length
+    ? newApprovals.map(r => `- ${r.username}: ${r.type}`).join("\n")
+    : "none";
+
+  const financialSection = completedOrders.length
+    ? `Completed store orders (all time, currently Done):\n${completedLines.join("\n")}\nTotal value of completed orders: EUR ${completedTotal.toFixed(2)}\n\nRequests approved this week: ${approvalsText}`
+    : `No completed store orders.\nRequests approved this week: ${approvalsText}`;
+
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514", max_tokens: 1000,
-      messages: [{ role: "user", content: `Generate a concise weekly report for a building issues Kanban board.\n\nBlocked tasks:\n${blocked.map(b => `- "${b.task}" in project "${b.project}"`).join("\n") || "None"}\n\nActivity last week:\n${logs.map(l => `- ${l.username} ${l.action}: ${l.details}`).join("\n") || "No activity"}\n\nWrite a short friendly HTML email. Use simple inline styles.` }]
+      model: "claude-sonnet-4-20250514", max_tokens: 1200,
+      messages: [{ role: "user", content: `Generate a concise weekly report for a core facilities platform.\n\nBlocked tasks:\n${blocked.map(b => `- "${b.task}" in project "${b.project}"`).join("\n") || "None"}\n\nActivity last week:\n${logs.map(l => `- ${l.username} ${l.action}: ${l.details}`).join("\n") || "No activity"}\n\n${financialSection}\n\nWrite a short friendly HTML email with sections for activity, blocked tasks, and financials. Use simple inline styles.` }]
     })
   });
   const aiData     = await aiRes.json();
@@ -571,7 +604,7 @@ export default {
     // ── GET /grants ───────────────────────────────────────────────────────────
     if (path === "/grants" && method === "GET") {
       try {
-        return json(await sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,owner_username"));
+        return json(await sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,members"));
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
@@ -579,11 +612,11 @@ export default {
     if (path === "/grants" && method === "POST") {
       try {
         if (sessionUser.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
-        const { code, name, funds, tier, owner_username } = await request.json();
+        const { code, name, funds, tier, members } = await request.json();
         if (!code?.trim()) return errRes(ch, "code is required", 400);
         const data = await sb("grants", "POST", {
           code: code.trim(), name: name?.trim() || "", funds: parseFloat(funds) || 0,
-          tier: tier || "internal", owner_username: owner_username || null, active: true,
+          tier: tier || "internal", members: Array.isArray(members) ? members : [], active: true,
         });
         return json(Array.isArray(data) ? data[0] : data, 201);
       } catch (e) { return errRes(ch, e.message, 500); }
@@ -594,10 +627,10 @@ export default {
       try {
         if (sessionUser.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
         const id = path.split("/").pop();
-        const { code, name, funds, tier, owner_username } = await request.json();
+        const { code, name, funds, tier, members } = await request.json();
         await sb(`grants?id=eq.${id}`, "PATCH", {
           code: code?.trim(), name: name?.trim(), funds: parseFloat(funds) || 0,
-          tier, owner_username: owner_username || null,
+          tier, members: Array.isArray(members) ? members : [],
         });
         return json({ success: true });
       } catch (e) { return errRes(ch, e.message, 500); }

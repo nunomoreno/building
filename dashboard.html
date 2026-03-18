@@ -214,7 +214,7 @@
 
   let expenseScope = "mine"; // mine | group | all
   let expenseYear  = new Date().getFullYear();
-  let _allBookings = [], _resourceMap = {}, _skuMap = {}, _memberMap = {};
+  let _allBookings = [], _resourceMap = {}, _skuMap = {}, _memberMap = {}, _grantMap = {};
   let _allProjects = [];
 
   function bookingHours(b) {
@@ -238,16 +238,18 @@
 
   function buildExpenseRows(bookings) {
     return bookings.map(b => {
-      const res  = _resourceMap[b.resource_id] || {};
-      const m    = _memberMap[b.username] || {};
-      const sku  = res.sku_id ? (_skuMap[res.sku_id] || {}) : {};
-      const tier = m.pricing_tier || "internal";
-      const rate = parseFloat(sku[tier] || 0);
-      const hrs  = bookingHours(b);
-      const cost = hrs * rate;
+      const res   = _resourceMap[b.resource_id] || {};
+      const m     = _memberMap[b.username] || {};
+      const grant = b.grant_id ? (_grantMap[b.grant_id] || null) : null;
+      const sku   = res.sku_id ? (_skuMap[res.sku_id] || {}) : {};
+      const tier  = grant?.tier || m.pricing_tier || "internal";
+      const rate  = parseFloat(sku[tier] || 0);
+      const hrs   = bookingHours(b);
+      const cost  = hrs * rate;
       return { resource: res.name || b.resource_id, user: m.display_name || b.username,
                 date: b.date, start: b.start_time || "—", end: b.end_time || "—",
-                full_day: b.full_day, hours: hrs, tier, rate, cost };
+                full_day: b.full_day, hours: hrs, tier, rate, cost,
+                grant: grant?.code || "" };
     });
   }
 
@@ -266,8 +268,9 @@
             groupUsernames.add(username);
             if (!groupUsernames.has(requestedBy)) return;
           }
-          const m    = _memberMap[requestedBy] || {};
-          const date = (proj.created_at || "").split("T")[0];
+          const m     = _memberMap[requestedBy] || {};
+          const grant = t.store_order.grant_id ? (_grantMap[t.store_order.grant_id] || null) : null;
+          const date  = (proj.created_at || "").split("T")[0];
           if (yearStr && !date.startsWith(yearStr)) return;
           t.store_order.items.forEach(item => {
             rows.push({
@@ -277,10 +280,11 @@
               date,
               start: "—", end: "—", full_day: false,
               hours: item.qty,
-              tier: "—",
+              tier: grant?.tier || "—",
               rate: parseFloat(item.unit_price || 0),
               cost: parseFloat(item.line_total || 0),
               comment: item.comment || "",
+              grant: grant?.code || "",
             });
           });
         });
@@ -329,7 +333,8 @@
             <th class="py-2 pr-3 font-semibold">User</th>
             <th class="py-2 pr-3 font-semibold">Date</th>
             <th class="py-2 pr-3 font-semibold">Qty / Hours</th>
-            <th class="py-2 pr-3 font-semibold">€/h</th>
+            <th class="py-2 pr-3 font-semibold">Grant</th>
+            <th class="py-2 pr-3 font-semibold">EUR/h</th>
             <th class="py-2 font-semibold text-right">Total</th>
           </tr>
         </thead>
@@ -340,8 +345,9 @@
               <td class="py-2 pr-3 text-slate-600 max-w-[100px] truncate">${esc(r.user)}</td>
               <td class="py-2 pr-3 text-slate-500">${esc(r.date)}</td>
               <td class="py-2 pr-3 text-slate-500">${r.type === "order" ? `${r.hours} units` : `${r.hours % 1 === 0 ? r.hours : r.hours.toFixed(1)}h${r.full_day ? " (full)" : ""}`}</td>
-              <td class="py-2 pr-3 text-slate-500">${r.rate > 0 ? "€" + r.rate.toFixed(2) : "—"}</td>
-              <td class="py-2 text-right font-semibold ${r.cost > 0 ? "text-violet-600" : "text-slate-400"}">${r.cost > 0 ? "€" + r.cost.toFixed(2) : "—"}</td>
+              <td class="py-2 pr-3 text-slate-500">${r.grant ? `<span class="text-[10px] bg-violet-50 text-violet-600 border border-violet-200 rounded-full px-1.5 py-0.5">${esc(r.grant)}</span>` : "—"}</td>
+              <td class="py-2 pr-3 text-slate-500">${r.rate > 0 ? r.rate.toFixed(2) : "—"}</td>
+              <td class="py-2 text-right font-semibold ${r.cost > 0 ? "text-violet-600" : "text-slate-400"}">${r.cost > 0 ? r.cost.toFixed(2) : "—"}</td>
             </tr>`).join("")}
         </tbody>
       </table>`;
@@ -366,16 +372,18 @@
     const bookingRows = buildExpenseRows(bookings);
     const storeRows   = buildStoreExpenseRows(expenseScope, yearStr);
     const rows = [...bookingRows, ...storeRows].sort((a, b) => (a.date > b.date ? -1 : 1));
-    const header = ["Type","Resource/Item","User","Date","Qty/Hours","Unit","Rate (€)","Total (€)","Comment"];
+    const header = ["Type","Resource/Item","User","Date","Qty/Hours","Unit","Grant","Tier","Rate (EUR)","Total (EUR)","Comment"];
     const csvRows = [header, ...rows.map(r => [
       r.type === "order" ? "Order" : "Booking",
       r.resource, r.user, r.date,
       r.type === "order" ? r.hours : (r.full_day ? "Full day" : r.hours.toFixed(2)),
       r.type === "order" ? "units" : "hours",
+      r.grant || "",
+      r.tier || "",
       r.rate.toFixed(2), r.cost.toFixed(2),
-      r.type === "order" ? (r.comment || "") : (r.tier || "")
+      r.type === "order" ? (r.comment || "") : ""
     ])].map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob([csvRows], { type: "text/csv" });
+    const blob = new Blob(["\uFEFF" + csvRows], { type: "text/csv;charset=utf-8" });
     const a    = document.createElement("a");
     a.href     = URL.createObjectURL(blob);
     a.download = `kerno-expenses-${expenseYear}-${expenseScope}.csv`;
@@ -384,7 +392,7 @@
 
   // ── Load ───────────────────────────────────────────────────────────────────
   async function load() {
-    const [projects, members, requests, logs, bookingsRaw, resourcesRaw, pricingRaw] = await Promise.all([
+    const [projects, members, requests, logs, bookingsRaw, resourcesRaw, pricingRaw, grantsRaw] = await Promise.all([
       apiFetch("/projects"),
       apiFetch("/members"),
       apiFetch("/requests"),
@@ -392,6 +400,7 @@
       apiFetch("/bookings"),
       apiFetch("/resources"),
       apiFetch("/settings/pricing"),
+      apiFetch("/grants"),
     ]);
 
     const projectList  = Array.isArray(projects)      ? projects      : [];
@@ -408,6 +417,7 @@
     resourceList.forEach(r => { _resourceMap[r.id] = r; });
     pricingData.skus.forEach(s => { _skuMap[s.id] = s; });
     memberList.forEach(m => { _memberMap[m.username] = m; });
+    (Array.isArray(grantsRaw) ? grantsRaw : []).forEach(g => { _grantMap[g.id] = g; });
 
     // Year selector: current year ± 2
     const yearSel = document.getElementById("expense-year");

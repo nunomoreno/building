@@ -12,7 +12,7 @@
 <body class="min-h-screen bg-slate-50 font-sans">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
     const SESSION_KEY = "kerno_session";
@@ -28,28 +28,101 @@
     const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
 
     const api = {
-      list:   ()       => fetch(`${WORKER}/grants`,       { headers: authH() }).then(r => r.json()),
-      create: (g)      => fetch(`${WORKER}/grants`,       { method: "POST",   headers: authH(), body: JSON.stringify(g) }).then(r => r.json()),
-      update: (id, g)  => fetch(`${WORKER}/grants/${id}`, { method: "PUT",    headers: authH(), body: JSON.stringify(g) }).then(r => r.json()),
-      remove: (id)     => fetch(`${WORKER}/grants/${id}`, { method: "DELETE", headers: authH() }).then(r => r.json()),
-      members: ()      => fetch(`${WORKER}/members`,      { headers: authH() }).then(r => r.json()),
+      list:    ()       => fetch(`${WORKER}/grants`,       { headers: authH() }).then(r => r.json()),
+      create:  (g)      => fetch(`${WORKER}/grants`,       { method: "POST",   headers: authH(), body: JSON.stringify(g) }).then(r => r.json()),
+      update:  (id, g)  => fetch(`${WORKER}/grants/${id}`, { method: "PUT",    headers: authH(), body: JSON.stringify(g) }).then(r => r.json()),
+      remove:  (id)     => fetch(`${WORKER}/grants/${id}`, { method: "DELETE", headers: authH() }).then(r => r.json()),
+      members: ()       => fetch(`${WORKER}/members`,      { headers: authH() }).then(r => r.json()),
     };
 
     const TIERS       = ["internal", "cracs", "academia", "industry"];
     const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
     const TIER_COLORS = { internal: "bg-slate-100 text-slate-600", cracs: "bg-blue-50 text-blue-600", academia: "bg-emerald-50 text-emerald-600", industry: "bg-amber-50 text-amber-700" };
 
-    const newRow = () => ({ _tempId: `_new_${Date.now()}`, code: "", name: "", funds: "", tier: "internal", owner_username: "" });
+    const newRow  = () => ({ _tempId: `_new_${Date.now()}`, code: "", name: "", funds: "", tier: "internal", members: [] });
     const inputCls = "w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans bg-white";
 
+    // ── Member picker modal ──────────────────────────────────────────────────
+    function MemberModal({ title, allMembers, selected, onClose, onSave }) {
+      const [search,   setSearch]   = useState("");
+      const [checked,  setChecked]  = useState(new Set(selected));
+      const inputRef = useRef(null);
+
+      useEffect(() => { inputRef.current?.focus(); }, []);
+
+      const filtered = allMembers.filter(m => {
+        const q = search.toLowerCase();
+        return !q || m.username.toLowerCase().includes(q) || (m.display_name || "").toLowerCase().includes(q);
+      });
+
+      const toggle = (username) =>
+        setChecked(prev => { const s = new Set(prev); s.has(username) ? s.delete(username) : s.add(username); return s; });
+
+      return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">Members</div>
+                <div className="text-xs text-slate-400 mt-0.5">{title}</div>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer text-xl leading-none font-sans">×</button>
+            </div>
+            <div className="px-4 pt-3 pb-2">
+              <input
+                ref={inputRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search users…"
+                className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans bg-slate-50"
+              />
+            </div>
+            <div className="overflow-y-auto flex-1 px-2 pb-2">
+              {filtered.length === 0 && (
+                <div className="text-center text-xs text-slate-400 py-6">No users match "{search}"</div>
+              )}
+              {filtered.map(m => (
+                <label key={m.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={checked.has(m.username)}
+                    onChange={() => toggle(m.username)}
+                    className="rounded"
+                  />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold text-[10px] flex-shrink-0">
+                      {m.username[0].toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-slate-700 truncate">{m.display_name || m.username}</div>
+                      {m.display_name && <div className="text-[10px] text-slate-400">{m.username}</div>}
+                    </div>
+                  </div>
+                  {m.role === "admin" && <span className="ml-auto text-[9px] bg-blue-100 text-blue-600 rounded-full px-1.5 py-0.5 flex-shrink-0">admin</span>}
+                </label>
+              ))}
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-400">{checked.size} selected</span>
+              <div className="flex gap-2">
+                <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 cursor-pointer hover:bg-slate-50 font-sans">Cancel</button>
+                <button onClick={() => onSave([...checked])} className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 font-sans font-semibold">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function App() {
-      const [grants,   setGrants]   = useState([]);   // rows from DB (have real id)
-      const [newRows,  setNewRows]  = useState([]);   // unsaved additions
-      const [members,  setMembers]  = useState([]);
-      const [loading,  setLoading]  = useState(true);
-      const [saving,   setSaving]   = useState(false);
-      const [msg,      setMsg]      = useState(null);
-      const [menuOpen, setMenuOpen] = useState(false);
+      const [grants,       setGrants]       = useState([]);
+      const [newRows,      setNewRows]      = useState([]);
+      const [members,      setMembers]      = useState([]);
+      const [loading,      setLoading]      = useState(true);
+      const [saving,       setSaving]       = useState(false);
+      const [msg,          setMsg]          = useState(null);
+      const [menuOpen,     setMenuOpen]     = useState(false);
+      const [modal,        setModal]        = useState(null); // { type: "existing"|"new", id, code }
 
       useEffect(() => {
         if (!menuOpen) return;
@@ -61,7 +134,7 @@
       useEffect(() => {
         Promise.all([api.list(), api.members()])
           .then(([g, m]) => {
-            setGrants(Array.isArray(g) ? g : []);
+            setGrants((Array.isArray(g) ? g : []).map(gr => ({ ...gr, members: Array.isArray(gr.members) ? gr.members : [] })));
             setMembers(Array.isArray(m) ? m : []);
             setLoading(false);
           })
@@ -79,22 +152,31 @@
         setGrants(prev => prev.filter(g => g.id !== id));
       };
 
+      const openModal = (type, id, code, currentMembers) =>
+        setModal({ type, id, code, currentMembers: currentMembers || [] });
+
+      const saveModalMembers = (membersList) => {
+        if (modal.type === "existing") {
+          updateGrant(modal.id, "members", membersList);
+        } else {
+          updateNewRow(modal.id, "members", membersList);
+        }
+        setModal(null);
+      };
+
       const save = async () => {
         setSaving(true); setMsg(null);
         try {
           const ops = [];
-          // Update dirty existing rows
           for (const g of grants.filter(g => g._dirty && g.code?.trim())) {
-            ops.push(api.update(g.id, { code: g.code.trim(), name: g.name?.trim() || "", funds: parseFloat(g.funds) || 0, tier: g.tier, owner_username: g.owner_username || null }));
+            ops.push(api.update(g.id, { code: g.code.trim(), name: g.name?.trim() || "", funds: parseFloat(g.funds) || 0, tier: g.tier, members: g.members || [] }));
           }
-          // Create new rows
           for (const r of newRows.filter(r => r.code.trim())) {
-            ops.push(api.create({ code: r.code.trim(), name: r.name.trim(), funds: parseFloat(r.funds) || 0, tier: r.tier, owner_username: r.owner_username || null }));
+            ops.push(api.create({ code: r.code.trim(), name: r.name?.trim() || "", funds: parseFloat(r.funds) || 0, tier: r.tier, members: r.members || [] }));
           }
           await Promise.all(ops);
-          // Reload fresh from DB
           const fresh = await api.list();
-          setGrants(Array.isArray(fresh) ? fresh : []);
+          setGrants((Array.isArray(fresh) ? fresh : []).map(gr => ({ ...gr, members: Array.isArray(gr.members) ? gr.members : [] })));
           setNewRows([]);
           setMsg({ text: "Saved!", ok: true });
         } catch (e) {
@@ -106,8 +188,36 @@
 
       const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
 
+      const MembersCell = ({ membersList, onManage }) => (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {membersList.slice(0, 4).map(u => (
+            <span key={u} className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold text-[10px]" title={u}>
+              {u[0].toUpperCase()}
+            </span>
+          ))}
+          {membersList.length > 4 && (
+            <span className="text-[10px] text-slate-400">+{membersList.length - 4}</span>
+          )}
+          <button
+            onClick={onManage}
+            className="text-[10px] px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 cursor-pointer font-sans ml-0.5">
+            {membersList.length === 0 ? "Add members" : "Edit"}
+          </button>
+        </div>
+      );
+
       return (
         <div className="min-h-screen bg-slate-50">
+          {modal && (
+            <MemberModal
+              title={modal.code || "New grant"}
+              allMembers={members}
+              selected={modal.currentMembers}
+              onClose={() => setModal(null)}
+              onSave={saveModalMembers}
+            />
+          )}
+
           <nav className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
             <a href="dashboard.html" className="text-[15px] font-bold text-white no-underline">⚙️ Kerno</a>
             <span className="text-slate-600">›</span>
@@ -143,7 +253,7 @@
           <main className="max-w-5xl mx-auto px-4 py-10">
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Grants</h1>
-              <p className="text-sm text-slate-400 mt-1">Manage research grants. The grant's tier determines the pricing category applied to bookings and requests.</p>
+              <p className="text-sm text-slate-400 mt-1">Manage research grants. The grant's tier sets the pricing category for bookings and requests. Members are the users who can charge to this grant.</p>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -163,9 +273,9 @@
                       <tr className="bg-slate-50 border-b border-slate-100">
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Code</th>
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Name</th>
-                        <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Funds (€)</th>
+                        <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Funds (EUR)</th>
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-32">Tier</th>
-                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-44">Owner</th>
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Members</th>
                         <th className="w-10"></th>
                       </tr>
                     </thead>
@@ -176,9 +286,8 @@
                           <td className="px-4 py-2.5"><input value={g.name} onChange={e => updateGrant(g.id, "name", e.target.value)} placeholder="Grant name" className={inputCls} /></td>
                           <td className="px-4 py-2.5">
                             <div className="relative">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
                               <input type="number" min="0" step="0.01" value={g.funds} onChange={e => updateGrant(g.id, "funds", e.target.value)}
-                                className="w-full text-xs pl-6 pr-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-white" />
+                                className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-white" />
                             </div>
                           </td>
                           <td className="px-4 py-2.5">
@@ -187,10 +296,10 @@
                             </select>
                           </td>
                           <td className="px-4 py-2.5">
-                            <select value={g.owner_username || ""} onChange={e => updateGrant(g.id, "owner_username", e.target.value)} className={inputCls}>
-                              <option value="">— unassigned —</option>
-                              {members.map(m => <option key={m.id} value={m.username}>{m.display_name || m.username}</option>)}
-                            </select>
+                            <MembersCell
+                              membersList={g.members || []}
+                              onManage={() => openModal("existing", g.id, g.code, g.members || [])}
+                            />
                           </td>
                           <td className="px-3 py-2.5">
                             <button onClick={() => removeExisting(g.id)} className="text-slate-300 hover:text-red-400 bg-transparent border-none cursor-pointer text-lg leading-none font-sans" title="Remove">×</button>
@@ -198,15 +307,12 @@
                         </tr>
                       ))}
                       {newRows.map((r, i) => (
-                        <tr key={r._tempId} className={(grants.length + i) % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                          <td className="px-4 py-2.5"><input value={r.code} onChange={e => updateNewRow(r._tempId, "code", e.target.value)} placeholder="e.g. FCT-2024-001" className={inputCls} /></td>
-                          <td className="px-4 py-2.5"><input value={r.name} onChange={e => updateNewRow(r._tempId, "name", e.target.value)} placeholder="Grant name" className={inputCls} /></td>
+                        <tr key={r._tempId} className="border-l-2 border-blue-400 bg-blue-50/20">
+                          <td className="px-4 py-2.5"><input value={r.code} onChange={e => updateNewRow(r._tempId, "code", e.target.value)} placeholder="e.g. FCT-2024-001" className={`${inputCls} border-blue-200`} /></td>
+                          <td className="px-4 py-2.5"><input value={r.name} onChange={e => updateNewRow(r._tempId, "name", e.target.value)} placeholder="Grant name" className={`${inputCls} border-blue-200`} /></td>
                           <td className="px-4 py-2.5">
-                            <div className="relative">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
-                              <input type="number" min="0" step="0.01" value={r.funds} onChange={e => updateNewRow(r._tempId, "funds", e.target.value)}
-                                className="w-full text-xs pl-6 pr-2.5 py-1.5 rounded-lg border border-blue-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-blue-50/30" />
-                            </div>
+                            <input type="number" min="0" step="0.01" value={r.funds} onChange={e => updateNewRow(r._tempId, "funds", e.target.value)}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-blue-50/30" />
                           </td>
                           <td className="px-4 py-2.5">
                             <select value={r.tier} onChange={e => updateNewRow(r._tempId, "tier", e.target.value)} className={`${inputCls} border-blue-200 bg-blue-50/30`}>
@@ -214,10 +320,10 @@
                             </select>
                           </td>
                           <td className="px-4 py-2.5">
-                            <select value={r.owner_username} onChange={e => updateNewRow(r._tempId, "owner_username", e.target.value)} className={`${inputCls} border-blue-200 bg-blue-50/30`}>
-                              <option value="">— unassigned —</option>
-                              {members.map(m => <option key={m.id} value={m.username}>{m.display_name || m.username}</option>)}
-                            </select>
+                            <MembersCell
+                              membersList={r.members || []}
+                              onManage={() => openModal("new", r._tempId, r.code || "New grant", r.members || [])}
+                            />
                           </td>
                           <td className="px-3 py-2.5">
                             <button onClick={() => removeNew(r._tempId)} className="text-slate-300 hover:text-red-400 bg-transparent border-none cursor-pointer text-lg leading-none font-sans" title="Remove">×</button>
@@ -244,7 +350,7 @@
             </div>
 
             <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
-              <strong>Note:</strong> Select a grant when creating bookings or submitting requests to automatically apply the correct pricing tier.
+              <strong>Note:</strong> Select a grant when creating bookings or submitting requests to automatically apply the correct pricing tier. Only grant members will see the grant in their selector.
             </div>
           </main>
         </div>

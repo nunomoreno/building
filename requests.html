@@ -288,7 +288,10 @@
     const isStore    = !!typeConfig?.is_store;
 
     useEffect(() => {
-      api.getGrants().then(data => { if (Array.isArray(data)) setGrants(data); });
+      api.getGrants().then(data => {
+        if (!Array.isArray(data)) return;
+        setGrants(user.role === "admin" ? data : data.filter(g => (g.members || []).includes(user.username)));
+      });
     }, []);
 
     useEffect(() => {
@@ -355,7 +358,7 @@
               <div className="mt-1.5 flex gap-2 flex-wrap">
                 <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">Tier: <strong className="text-slate-700">{TIER_LABELS[g.tier] || g.tier}</strong></span>
                 {g.funds > 0 && <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">Budget: <strong className="text-slate-700">€{g.funds.toLocaleString()}</strong></span>}
-                {g.owner_username && <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">PI: <strong className="text-slate-700">{g.owner_username}</strong></span>}
+                {(g.members||[]).length > 0 && <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">{g.members.length} member{g.members.length !== 1 ? "s" : ""}</span>}
               </div>
             ) : null; })()}
           </div>

@@ -83,6 +83,7 @@
                                   apiFetch("/notify", { method: "POST", body: JSON.stringify({ actor, taskTitle, projectName, mentionsWithEmails }) }),
       ai:            (body)    => apiFetch("/ai", { method: "POST", body: JSON.stringify(body) }),
       getSettings:   (key)     => fetch(`${WORKER}/settings/${key}`, { headers: authHeaders() }).then(r => r.json()),
+      getGrants:     ()        => apiFetch("/grants"),
     };
 
     function extractMentions(text) {
@@ -436,7 +437,7 @@
     }
 
     // ── Board ────────────────────────────────────────────────────────────────
-    function Board({ project, onUpdate, username, members, membersRef, currentUser, pricing }) {
+    function Board({ project, onUpdate, username, members, membersRef, currentUser, pricing, grants = [] }) {
       const isOwner = !project.owner_username || project.owner_username === currentUser?.username || currentUser?.role === "admin";
       const canEditTask = (task) => isOwner || task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase();
 
@@ -449,8 +450,9 @@
       const [addingTo,  setAddingTo]  = useState(null);
       const [newTitle,  setNewTitle]  = useState("");
       const [saving,       setSaving]       = useState(false);
-      const [editingOrder, setEditingOrder] = useState(null);
-      const [draftOrder,   setDraftOrder]   = useState(null);
+      const [editingOrder,  setEditingOrder]  = useState(null);
+      const [draftOrder,    setDraftOrder]    = useState(null);
+      const [draftGrantId,  setDraftGrantId]  = useState("");
       const mentionTimers = useRef({});
 
       const moveTask = async (id, dir) => {
@@ -549,6 +551,20 @@
                         }
                         {editingOrder === task.id
                           ? <div className="mt-1.5">
+                              {grants.length > 0 && (
+                                <div className="mb-1.5">
+                                  <label className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Grant</label>
+                                  <select
+                                    value={draftGrantId}
+                                    onChange={e => setDraftGrantId(e.target.value)}
+                                    className="w-full text-xs px-1.5 py-1 rounded-md border border-slate-200 bg-white font-sans mt-0.5">
+                                    <option value="">— no grant —</option>
+                                    {grants.map(g => (
+                                      <option key={g.id} value={g.id}>{g.code} — {g.name} ({g.tier})</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
                               <StoreOrderEditor
                                 items={draftOrder || []}
                                 onChange={setDraftOrder}
@@ -557,25 +573,35 @@
                               />
                               <div className="flex gap-1 mt-1.5">
                                 <button onClick={async () => {
-                                  const updated = { ...task, store_order: { ...(task.store_order||{}), items: draftOrder, total: draftOrder.reduce((s,i)=>s+(i.line_total||0),0), requested_by: task.store_order?.requested_by || project.owner_username } };
+                                  const updated = { ...task, store_order: { ...(task.store_order||{}), items: draftOrder, total: draftOrder.reduce((s,i)=>s+(i.line_total||0),0), requested_by: task.store_order?.requested_by || project.owner_username, grant_id: draftGrantId || null } };
                                   setSaving(true);
                                   await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === task.id ? updated : t) });
-                                  setSaving(false); setEditingOrder(null); setDraftOrder(null);
+                                  setSaving(false); setEditingOrder(null); setDraftOrder(null); setDraftGrantId("");
                                 }} disabled={saving} className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white border-none cursor-pointer disabled:opacity-60 font-sans">Save</button>
-                                <button onClick={() => { setEditingOrder(null); setDraftOrder(null); }} className="text-xs px-2 py-0.5 rounded bg-slate-100 border border-slate-200 cursor-pointer text-slate-500 font-sans">Cancel</button>
+                                <button onClick={() => { setEditingOrder(null); setDraftOrder(null); setDraftGrantId(""); }} className="text-xs px-2 py-0.5 rounded bg-slate-100 border border-slate-200 cursor-pointer text-slate-500 font-sans">Cancel</button>
                               </div>
                             </div>
                           : task.store_order?.items?.length > 0
-                            ? <StoreOrderEditor
-                                items={task.store_order.items}
-                                onChange={() => {}}
-                                skus={pricing?.skus || []}
-                                disabled={true}
-                              />
+                            ? <>
+                                {task.store_order.grant_id && grants.length > 0 && (() => {
+                                  const g = grants.find(g => g.id === task.store_order.grant_id);
+                                  return g ? (
+                                    <div className="mt-1 mb-0.5">
+                                      <span className="text-[10px] bg-violet-50 text-violet-700 border border-violet-200 rounded-full px-2 py-0.5">{g.code} · {g.tier}</span>
+                                    </div>
+                                  ) : null;
+                                })()}
+                                <StoreOrderEditor
+                                  items={task.store_order.items}
+                                  onChange={() => {}}
+                                  skus={pricing?.skus || []}
+                                  disabled={true}
+                                />
+                              </>
                             : null
                         }
                         {canEditTask(task) && editingOrder !== task.id && (task.store_order?.items?.length > 0 || project.source === "request") && (
-                          <button onClick={() => { setEditingOrder(task.id); setDraftOrder(task.store_order?.items ? JSON.parse(JSON.stringify(task.store_order.items)) : []); }}
+                          <button onClick={() => { setEditingOrder(task.id); setDraftOrder(task.store_order?.items ? JSON.parse(JSON.stringify(task.store_order.items)) : []); setDraftGrantId(task.store_order?.grant_id || ""); }}
                             className="text-[10px] px-2 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 cursor-pointer hover:bg-slate-100 mt-1 font-sans">
                             {task.store_order?.items?.length > 0 ? "Edit order" : "Add order"}
                           </button>
@@ -658,6 +684,7 @@
       const [newProjectName,  setNewProjectName]  = useState("");
       const [panel,           setPanel]           = useState(null);
       const [pricing,         setPricing]         = useState({ skus: [] });
+      const [grants,          setGrants]          = useState([]);
       const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
 
@@ -669,10 +696,11 @@
       const loadData = async () => {
         setLoading(true); setLoadError(null);
         try {
-          const [data, m, pricingRaw] = await Promise.all([
+          const [data, m, pricingRaw, grantsRaw] = await Promise.all([
             api.getProjects(scope),
             api.getMembers(),
             api.getSettings("pricing"),
+            api.getGrants(),
           ]);
           const p = Array.isArray(data) ? data : [];
           setProjects(p);
@@ -680,6 +708,7 @@
           setMembers(memberList.map(u => u.username));
           membersRef.current = memberList;
           setPricing(pricingRaw?.skus ? pricingRaw : { skus: [] });
+          setGrants(Array.isArray(grantsRaw) ? grantsRaw : []);
           setActive(a => a || p[0]?.id || null);
         } catch {
           setLoadError("Could not load data. Please refresh.");
@@ -790,7 +819,7 @@
               ) : activeProject ? (
                 <>
                   <h2 className="mb-3.5 text-lg font-bold text-slate-900">{activeProject.name}</h2>
-                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} pricing={pricing} />
+                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} pricing={pricing} grants={grants} />
                 </>
               ) : (
                 <div className="text-slate-400 mt-10 text-center">Select or create a project to get started</div>
