@@ -423,7 +423,7 @@ export default {
         const scope   = url.searchParams.get("scope");
         const isAdmin = sessionUser.role === "admin";
         const me      = sessionUser.username;
-        const toList  = (rows) => (Array.isArray(rows) ? rows : []).map(r => ({ ...r.data, _id: r.id, project_id: r.project_id }));
+        const toList  = (rows) => (Array.isArray(rows) ? rows : []).map(r => ({ ...r.data, _id: r.id, project_id: r.project_id, _created_at: r.created_at }));
 
         // Admin with no scope sees everything
         if ((!scope && isAdmin) || scope === "all")
@@ -435,13 +435,13 @@ export default {
           if (!membership || !["leader", "manager"].includes(membership.role)) return json([]);
           const usernames = await getGroupUsernames(sb, membership.group_id).catch(() => []);
           if (!usernames.length) return json([]);
-          const rows = await sb(`projects?data->>owner_username=in.(${usernames.map(u => encodeURIComponent(u)).join(",")})&select=id,project_id,data`);
+          const rows = await sb(`projects?data->>owner_username=in.(${usernames.map(u => encodeURIComponent(u)).join(",")})&select=id,project_id,data,created_at`);
           return json(toList(rows));
         }
 
         // Mentioned scope — DB text search for @me, then extract matching tasks
         if (scope === "mentioned") {
-          const rows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data`);
+          const rows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data,created_at`);
           const mentionedTasks = [];
           for (const p of toList(rows)) {
             for (const t of (p.tasks || [])) {
@@ -454,8 +454,8 @@ export default {
 
         // Mine — two parallel DB queries: owned + assigned-to-me, merged
         const [owned, assigned] = await Promise.all([
-          sb(`projects?data->>owner_username=eq.${encodeURIComponent(me)}&select=id,project_id,data`),
-          sb(`projects?data::text=ilike.*"assignee":"${encodeURIComponent(me)}"*&select=id,project_id,data`),
+          sb(`projects?data->>owner_username=eq.${encodeURIComponent(me)}&select=id,project_id,data,created_at`),
+          sb(`projects?data::text=ilike.*"assignee":"${encodeURIComponent(me)}"*&select=id,project_id,data,created_at`),
         ]);
         const seen = new Set();
         const mine = [...toList(owned), ...toList(assigned)].filter(p => {
@@ -466,7 +466,7 @@ export default {
         if (scope === "mine") return json(mine);
 
         // Default (no scope, non-admin): mine + mentioned projects
-        const mentionedRows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data`);
+        const mentionedRows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data,created_at`);
         const mentionedProjs = toList(mentionedRows).filter(p => !seen.has(p._id));
         return json([...mine, ...mentionedProjs]);
       } catch (e) { return errRes(ch, e.message, 500); }

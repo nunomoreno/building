@@ -270,7 +270,7 @@
           }
           const m     = _memberMap[requestedBy] || {};
           const grant = t.store_order.grant_id ? (_grantMap[t.store_order.grant_id] || null) : null;
-          const date  = (proj.created_at || "").split("T")[0];
+          const date  = (proj._created_at || "").split("T")[0];
           if (yearStr && !date.startsWith(yearStr)) return;
           t.store_order.items.forEach(item => {
             rows.push({
