@@ -769,6 +769,29 @@ export default {
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
+    // ── POST /request-access ─────────────────────────────────────────────────
+    if (path === "/request-access" && method === "POST") {
+      try {
+        const { resource_id } = await request.json();
+        const resources = await sb(`resources?id=eq.${resource_id}&select=name,admin_username&limit=1`);
+        const resource  = resources[0];
+        if (!resource) return errRes(ch, "Resource not found", 404, "NOT_FOUND");
+        const adminUsername = resource.admin_username;
+        if (!adminUsername) return errRes(ch, "No admin assigned to this resource", 400);
+        const admins = await sb(`members?username=eq.${encodeURIComponent(adminUsername)}&select=email,username&limit=1`);
+        const admin  = admins[0];
+        if (!admin?.email) return errRes(ch, "Calendar admin has no email on file", 400);
+        await sendEmail(env.BREVO_API_KEY, admin.email,
+          `🔑 Booking access request for "${resource.name}"`,
+          `<p>Hi <strong>${admin.username}</strong>,</p>
+           <p><strong>${sessionUser.username}</strong> is requesting booking access to <strong>${resource.name}</strong>.</p>
+           <p>Log in and go to Admin → Permissions to grant access:</p>
+           <p><a href="https://nunomoreno.github.io/building/booking.html">Open Bookings →</a></p>`
+        );
+        return json({ success: true });
+      } catch(e) { return errRes(ch, e.message, 500); }
+    }
+
     // ── POST /ai ──────────────────────────────────────────────────────────────
     // The frontend sends an already-scoped project list in the system prompt.
     // The worker just proxies to Claude — no server-side project fetching.

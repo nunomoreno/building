@@ -84,6 +84,7 @@
       saveSettings:  (key,val) => safeFetch(`${WORKER}/settings/${key}`,  { method:"POST",   headers: authHeaders(), body: JSON.stringify(val) }),
       getMembers:    ()        => safeFetch(`${WORKER}/members`,          { headers: authHeaders() }),
       updateMember:  (id,data) => safeFetch(`${WORKER}/members/${id}`,    { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
+      requestAccess: (resId)   => safeFetch(`${WORKER}/request-access`,   { method:"POST",   headers: authHeaders(), body: JSON.stringify({ resource_id: resId }) }),
     };
 
     const fmt        = (d) => d.toISOString().split("T")[0];
@@ -365,6 +366,11 @@
                       <input type="number" min="0" value={editRes.max_days_ahead ?? 0}
                         onChange={e=>setEditRes({...editRes,max_days_ahead:Number(e.target.value)})}
                         className={inputCls}/>
+                      <label className={labelCls}>CALENDAR ADMIN</label>
+                      <select value={editRes.admin_username||""} onChange={e=>setEditRes({...editRes,admin_username:e.target.value})} className={inputCls}>
+                        <option value="">— None —</option>
+                        {members.map(m=><option key={m.id} value={m.username}>{m.username}</option>)}
+                      </select>
                       <div className="flex gap-2">
                         <button onClick={saveResource} disabled={saving}
                           className="text-xs px-3.5 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 disabled:opacity-70">Save</button>
@@ -377,7 +383,7 @@
                     <div key={r.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 mb-2">
                       <div>
                         <span className="text-[13px] font-semibold text-slate-800">{r.name}</span>
-                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"}</span>
+                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"} · admin: {r.admin_username||"—"}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={()=>setEditRes(r)}
@@ -480,8 +486,10 @@
     }
 
     // ── Weekly Calendar ──────────────────────────────────────────────────────
-    function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh}) {
-      const [modal, setModal] = useState(null);
+    function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh, onRequestAccess}) {
+      const [modal,     setModal]     = useState(null);
+      const [requested, setRequested] = useState(false);
+      const [requesting,setRequesting]= useState(false);
       const days        = Array.from({length:7},(_,i)=>addDays(weekStart,i));
       const color       = "#3b82f6";
       const slotMins    = resource?.slot_duration || 30;
@@ -500,8 +508,30 @@
         return Math.max(((eh*60+em)-(sh*60+sm))/slotMins, 1) * SLOT_H;
       };
 
+      const handleRequestAccess = async () => {
+        setRequesting(true);
+        const res = await onRequestAccess(resource.id);
+        setRequesting(false);
+        if (res?.success) setRequested(true);
+      };
+
       return (
         <div className="flex-1 overflow-y-auto overflow-x-auto">
+          {!canBook && resource && (
+            <div className="m-4 flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <span className="text-sm text-amber-800">
+                You don't have permission to book <strong>{resource.name}</strong>.
+                {resource.admin_username && <> Please ask <strong>{resource.admin_username}</strong> for access.</>}
+              </span>
+              {resource.admin_username && !requested && (
+                <button onClick={handleRequestAccess} disabled={requesting}
+                  className="shrink-0 text-xs px-3.5 py-1.5 rounded-lg bg-amber-600 text-white border-none cursor-pointer hover:bg-amber-700 disabled:opacity-60">
+                  {requesting ? "Sending…" : "Request access"}
+                </button>
+              )}
+              {requested && <span className="shrink-0 text-xs text-green-600 font-semibold">✓ Request sent!</span>}
+            </div>
+          )}
           {modal && (
             <BookingModal
               booking={modal.booking||{}} resource={resource} fields={fields}
@@ -692,13 +722,17 @@
                   {r.max_days_ahead > 0 && (
                     <div className="text-[10px] text-slate-500 mt-0.5">📅 Up to {r.max_days_ahead} days ahead</div>
                   )}
+                  {r.admin_username && (
+                    <div className="text-[10px] text-slate-500 mt-0.5">👤 {r.admin_username}</div>
+                  )}
                 </div>
               ))}
             </div>
 
             {selectedRes
-              ? <WeeklyCalendar resource={selectedRes} weekStart={weekStart} bookings={bookings}
-                  fields={currentFields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadBookings}/>
+              ? <WeeklyCalendar key={selectedRes.id} resource={selectedRes} weekStart={weekStart} bookings={bookings}
+                  fields={currentFields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadBookings}
+                  onRequestAccess={api.requestAccess}/>
               : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
                   {isAdmin
                     ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>
