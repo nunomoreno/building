@@ -820,10 +820,14 @@
                       {(p.owner_username === user.username || user.role === "admin") && (
                         showArchived
                           ? <button onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} title="Restore" className="text-[10px] text-amber-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-300 font-sans">↩</button>
-                          : <button onClick={e => { e.stopPropagation(); archiveProject(p.id); }} title="Archive" className="text-[10px] text-slate-500 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-400 font-sans">⊘</button>
-                      )}
-                      {(p.owner_username === user.username || user.role === "admin") && (
-                        <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }} title="Delete" className="text-[10px] text-slate-600 bg-transparent border-none cursor-pointer px-0.5 hover:text-red-400 font-sans">✕</button>
+                          : <button onClick={e => {
+                              e.stopPropagation();
+                              const hasBillable = (p.tasks || []).some(t => t.store_order?.items?.length);
+                              const msg = hasBillable
+                                ? `Archive "${p.name}"?\n\nThis project has store orders — they will appear in the financial report once archived.`
+                                : `Archive "${p.name}"?`;
+                              if (window.confirm(msg)) archiveProject(p.id);
+                            }} title="Archive" className="text-[10px] text-slate-500 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-400 font-sans">⊘</button>
                       )}
                     </div>
                   </div>

@@ -256,8 +256,9 @@
   function buildStoreExpenseRows(scope, yearStr) {
     const rows = [];
     _allProjects.forEach(proj => {
+      if (!proj.archived) return;
       (proj.tasks || [])
-        .filter(t => t.col === "Done" && t.store_order?.items?.length)
+        .filter(t => t.store_order?.items?.length)
         .forEach(t => {
           const requestedBy = t.store_order.requested_by || proj.owner_username || "unknown";
           if (scope === "mine" && requestedBy !== username) return;
