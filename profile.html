@@ -238,8 +238,9 @@
 
   // ── Load profile ─────────────────────────────────────────────────────────────
   async function loadProfile() {
-    const res  = await fetch(`${WORKER}/me`, { headers: authHeaders() });
-    const data = await res.json();
+    const res   = await fetch(`${WORKER}/members`, { headers: authHeaders() });
+    const list  = await res.json();
+    const data  = Array.isArray(list) ? list.find(m => m.username === session.username) : {};
 
     const displayName = data.display_name || data.username;
     document.getElementById("display-heading").textContent = displayName;
