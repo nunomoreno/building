@@ -27,6 +27,7 @@
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
+    if (typeof marked !== 'undefined') marked.use({ gfm: true, breaks: false });
 
     const COLUMNS   = ["To Do", "In Progress", "Blocked", "Done"];
     const COL_STYLE = {
@@ -627,7 +628,7 @@
                           : <div onClick={() => canEditTask(task) && startEdit(task.id, "notes", task.notes || "")}
                               className={`text-xs leading-snug min-h-3.5 ${canEditTask(task) ? "cursor-text" : "cursor-default"} ${task.notes ? "text-slate-600" : "text-slate-400"}`}>
                               {task.notes
-                                ? <div className="md-notes" dangerouslySetInnerHTML={{ __html: window.marked ? window.marked.parse(task.notes.replace(/==(.+?)==/g, '<mark>$1</mark>')) : task.notes }} />
+                                ? <div className="md-notes" dangerouslySetInnerHTML={{ __html: (typeof marked !== 'undefined') ? marked.parse(task.notes.replace(/==(.+?)==/g, '<mark>$1</mark>')) : task.notes }} />
                                 : (canEditTask(task) ? <em>add note…</em> : "")}
                             </div>
                         }
@@ -715,7 +716,7 @@
                             className={`text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans ${ci === 0 || !canEditTask(task) ? "cursor-not-allowed text-slate-300" : "cursor-pointer text-slate-500 hover:bg-slate-100"}`}>←</button>
                           <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1 || !canEditTask(task)}
                             className={`text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans ${ci === COLUMNS.length - 1 || !canEditTask(task) ? "cursor-not-allowed text-slate-300" : "cursor-pointer text-slate-500 hover:bg-slate-100"}`}>→</button>
-                          {isOwner && (
+                          {isOwner && task.store_order?.items?.length > 0 && (
                             <button onClick={() => setFinalizeModal(task)}
                               className="text-xs px-1.5 py-0.5 rounded border border-violet-200 bg-violet-50 cursor-pointer text-violet-600 hover:bg-violet-100 font-sans ml-auto">Bill →</button>
                           )}
