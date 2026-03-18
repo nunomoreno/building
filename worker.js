@@ -91,8 +91,8 @@ function sanitiseBooking(body) {
 }
 
 // ── Overlap check ─────────────────────────────────────────────────────────────
-async function hasOverlap(sb, resource_id, start_time, end_time, exclude_id = null) {
-  let url = `bookings?resource_id=eq.${resource_id}&status=in.(pending,approved)` +
+async function hasOverlap(sb, resource_id, date, start_time, end_time, exclude_id = null) {
+  let url = `bookings?resource_id=eq.${resource_id}&date=eq.${encodeURIComponent(date)}&status=in.(pending,approved)` +
     `&start_time=lt.${encodeURIComponent(end_time)}&end_time=gt.${encodeURIComponent(start_time)}&select=id&limit=1`;
   if (exclude_id) url += `&id=neq.${exclude_id}`;
   const data = await sb(url);
@@ -623,9 +623,9 @@ export default {
         const body    = await request.json();
         const invalid = sanitiseBooking(body);
         if (invalid) return errRes(ch, invalid, 400, "VALIDATION_ERROR");
-        const { resource_id, start_time, end_time } = body;
+        const { resource_id, date, start_time, end_time } = body;
         if (new Date(start_time) < new Date()) return errRes(ch, "Cannot book in the past", 400, "PAST_BOOKING");
-        if (await hasOverlap(sb, resource_id, start_time, end_time)) return errRes(ch, "This time slot is already booked", 409, "OVERLAP");
+        if (await hasOverlap(sb, resource_id, date, start_time, end_time)) return errRes(ch, "This time slot is already booked", 409, "OVERLAP");
         const resource        = await sb(`resources?id=eq.${resource_id}&select=approval_required&limit=1`);
         const approvalRequired = resource[0]?.approval_required ?? true;
         const status = sessionUser?.role === "admin" || !approvalRequired ? "approved" : "pending";
@@ -644,12 +644,13 @@ export default {
         if (body.status && !["cancelled"].includes(body.status) && sessionUser?.role !== "admin")
           return errRes(ch, "Only admins can approve or reject bookings", 403, "FORBIDDEN");
         if (body.start_time || body.end_time) {
-          const existing = await sb(`bookings?id=eq.${id}&select=resource_id,start_time,end_time&limit=1`);
+          const existing = await sb(`bookings?id=eq.${id}&select=resource_id,date,start_time,end_time&limit=1`);
           const cur = Array.isArray(existing) && existing[0];
           if (!cur) return errRes(ch, "Booking not found", 404, "NOT_FOUND");
+          const date  = body.date       || cur.date;
           const start = body.start_time || cur.start_time;
           const end   = body.end_time   || cur.end_time;
-          if (await hasOverlap(sb, cur.resource_id, start, end, id)) return errRes(ch, "Overlaps existing booking", 409, "OVERLAP");
+          if (await hasOverlap(sb, cur.resource_id, date, start, end, id)) return errRes(ch, "Overlaps existing booking", 409, "OVERLAP");
         }
         await sb(`bookings?id=eq.${id}`, "PATCH", body);
         return json({ success: true });
