@@ -947,6 +947,15 @@ export default {
       } catch (e) { return json({ error: e.message }); }
     }
     if (path === "/test-bookings") { return json(await sb("bookings?limit=200")); }
+    if (path === "/test-store") {
+      const rows = await sb("projects?select=id,project_id,data,created_at&limit=50");
+      const orders = (Array.isArray(rows) ? rows : []).flatMap(r =>
+        (r.data?.tasks || [])
+          .filter(t => t.col === "Done" && t.store_order?.items?.length)
+          .map(t => ({ project: r.data?.name, created_at: r.created_at, items: t.store_order.items, total: t.store_order.total }))
+      );
+      return json({ project_count: rows.length, orders_in_done: orders });
+    }
     if (path === "/test-email") {
       try {
         const res = await fetch("https://api.brevo.com/v3/smtp/email", {

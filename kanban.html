@@ -685,6 +685,7 @@
       const [panel,           setPanel]           = useState(null);
       const [pricing,         setPricing]         = useState({ skus: [] });
       const [grants,          setGrants]          = useState([]);
+      const [showArchived,    setShowArchived]     = useState(false);
       const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
 
@@ -742,6 +743,28 @@
         if (active === id) setActive(updated[0]?.id || null);
       };
 
+      const archiveProject = async (id) => {
+        const p = projects.find(p => p.id === id);
+        if (!p) return;
+        const updated = { ...p, archived: true };
+        await api.saveProject(updated);
+        setProjects(prev => prev.map(x => x.id === id ? updated : x));
+        api.log(user.username, "archive_project", `Archived project "${p.name}"`);
+        if (active === id) {
+          const next = projects.find(x => x.id !== id && !x.archived);
+          setActive(next?.id || null);
+        }
+      };
+
+      const unarchiveProject = async (id) => {
+        const p = projects.find(p => p.id === id);
+        if (!p) return;
+        const updated = { ...p, archived: false };
+        await api.saveProject(updated);
+        setProjects(prev => prev.map(x => x.id === id ? updated : x));
+        api.log(user.username, "unarchive_project", `Unarchived project "${p.name}"`);
+      };
+
       if (!user)     return null; // redirecting
       if (loading)   return <div className="p-8 text-slate-500">Loading…</div>;
       if (loadError) return (
@@ -751,10 +774,13 @@
         </div>
       );
 
-      const isAdmin       = user.role === "admin";
-      const activeProject = projects.find(p => p.id === active);
-      const inProgress    = projects.flatMap(p => (p.tasks || []).filter(t => t.col === "In Progress"));
-      const blocked       = projects.flatMap(p => (p.tasks || []).filter(t => t.col === "Blocked"));
+      const isAdmin         = user.role === "admin";
+      const activeProject   = projects.find(p => p.id === active);
+      const activeProjects  = projects.filter(p => !p.archived);
+      const archivedCount   = projects.filter(p => p.archived).length;
+      const visibleProjects = showArchived ? projects.filter(p => p.archived) : activeProjects;
+      const inProgress      = activeProjects.flatMap(p => (p.tasks || []).filter(t => t.col === "In Progress"));
+      const blocked         = activeProjects.flatMap(p => (p.tasks || []).filter(t => t.col === "Blocked"));
 
       return (
         <div className="font-sans min-h-screen bg-slate-50">
@@ -769,7 +795,7 @@
                 </button>
               ))}
             </div>
-            <span className="text-xs text-slate-500">{projects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
+            <span className="text-xs text-slate-500">{activeProjects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
             <div className="ml-auto flex gap-1.5">
               <button onClick={() => setPanel(panel === "log" ? null : "log")}
                 className={`text-xs px-3 py-1.5 rounded-lg border border-slate-600 cursor-pointer font-sans transition-colors ${panel === "log" ? "bg-blue-600 text-white border-blue-600" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}>📋 Log</button>
@@ -781,29 +807,51 @@
           <div className="flex" style={{ height: "calc(100vh - 86px)" }}>
             {scope !== "mentioned" && (
               <div className="bg-slate-800 w-48 shrink-0 flex flex-col py-3 overflow-y-auto">
-                {projects.map(p => (
+                {showArchived && (
+                  <div className="px-3.5 pb-2 border-b border-slate-700 mb-1">
+                    <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Archived</span>
+                  </div>
+                )}
+                {visibleProjects.map(p => (
                   <div key={p.id} onClick={() => setActive(p.id)}
-                    className={`px-3.5 py-2 cursor-pointer flex items-center justify-between gap-1.5 border-l-2 transition-colors ${active === p.id ? "bg-slate-700 border-blue-400" : "border-transparent hover:bg-slate-700/50"}`}>
-                    <span className={`text-xs leading-snug flex-1 ${active === p.id ? "text-slate-100 font-semibold" : "text-slate-400 font-normal"}`}>{p.name}</span>
-                    {(p.owner_username === user.username || user.role === "admin") && (
-                      <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }} className="text-xs text-slate-600 bg-transparent border-none cursor-pointer px-0.5 hover:text-slate-400">✕</button>
-                    )}
+                    className={`px-3.5 py-2 cursor-pointer flex items-center justify-between gap-1.5 border-l-2 transition-colors group ${active === p.id ? "bg-slate-700 border-blue-400" : "border-transparent hover:bg-slate-700/50"}`}>
+                    <span className={`text-xs leading-snug flex-1 truncate ${active === p.id ? "text-slate-100 font-semibold" : showArchived ? "text-slate-500" : "text-slate-400 font-normal"}`}>{p.name}</span>
+                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {(p.owner_username === user.username || user.role === "admin") && (
+                        showArchived
+                          ? <button onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} title="Restore" className="text-[10px] text-amber-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-300 font-sans">↩</button>
+                          : <button onClick={e => { e.stopPropagation(); archiveProject(p.id); }} title="Archive" className="text-[10px] text-slate-500 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-400 font-sans">⊘</button>
+                      )}
+                      {(p.owner_username === user.username || user.role === "admin") && (
+                        <button onClick={e => { e.stopPropagation(); deleteProject(p.id); }} title="Delete" className="text-[10px] text-slate-600 bg-transparent border-none cursor-pointer px-0.5 hover:text-red-400 font-sans">✕</button>
+                      )}
+                    </div>
                   </div>
                 ))}
-                <div className="px-3.5 py-2 mt-1">
-                  {addingProject
-                    ? <div>
-                        <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
-                          placeholder="Project name…" className="w-full text-xs px-1.5 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 outline-none font-sans" />
-                        <div className="flex gap-1 mt-1">
-                          <button onClick={addProject} className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white border-none cursor-pointer font-sans">Add</button>
-                          <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 border-none cursor-pointer font-sans">✕</button>
+                {!showArchived && (
+                  <div className="px-3.5 py-2 mt-1">
+                    {addingProject
+                      ? <div>
+                          <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
+                            placeholder="Project name…" className="w-full text-xs px-1.5 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 outline-none font-sans" />
+                          <div className="flex gap-1 mt-1">
+                            <button onClick={addProject} className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white border-none cursor-pointer font-sans">Add</button>
+                            <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 border-none cursor-pointer font-sans">✕</button>
+                          </div>
                         </div>
-                      </div>
-                    : <button onClick={() => setAddingProject(true)} className="text-xs text-blue-400 bg-transparent border-none cursor-pointer p-0 hover:text-blue-300 font-sans">+ New project</button>
-                  }
-                </div>
+                      : <button onClick={() => setAddingProject(true)} className="text-xs text-blue-400 bg-transparent border-none cursor-pointer p-0 hover:text-blue-300 font-sans">+ New project</button>
+                    }
+                  </div>
+                )}
+                {archivedCount > 0 && (
+                  <div className="mt-auto px-3.5 pt-2 border-t border-slate-700">
+                    <button onClick={() => { setShowArchived(s => !s); setActive(null); }}
+                      className="text-[10px] text-slate-500 hover:text-slate-300 bg-transparent border-none cursor-pointer p-0 font-sans w-full text-left">
+                      {showArchived ? "← Back to active" : `⊘ ${archivedCount} archived`}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
