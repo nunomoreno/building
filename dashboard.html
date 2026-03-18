@@ -4,129 +4,104 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kerno — Dashboard</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f8fafc; min-height: 100vh; }
-    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
-    .greeting { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-    .greeting-sub { font-size: 13px; color: #64748b; margin-bottom: 32px; }
-
-    .nav-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 36px; }
-    .nav-card { display: flex; align-items: center; gap: 16px; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 12px; padding: 20px 24px; text-decoration: none; transition: border-color .15s, box-shadow .15s; }
-    .nav-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px #2563eb11; }
-    .nav-card-icon { font-size: 28px; }
-    .nav-card-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 2px; }
-    .nav-card-desc  { font-size: 12px; color: #64748b; }
-
-    .section-title { font-size: 13px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 36px; }
-    .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 18px 20px; }
-    .stat-value { font-size: 28px; font-weight: 700; color: #0f172a; line-height: 1; margin-bottom: 6px; }
-    .stat-label { font-size: 12px; color: #64748b; }
-    .stat-sub   { font-size: 11px; color: #94a3b8; margin-top: 3px; }
-    .stat-value.blue  { color: #2563eb; }
-    .stat-value.green { color: #16a34a; }
-    .stat-value.slate { color: #475569; }
-
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
-    .panel-header { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-size: 13px; font-weight: 700; color: #0f172a; display: flex; justify-content: space-between; align-items: center; }
-    .panel-body { padding: 12px 16px; max-height: 300px; overflow-y: auto; }
-    .panel-link { font-size: 11px; color: #2563eb; text-decoration: none; }
-    .panel-link:hover { text-decoration: underline; }
-    .empty { font-size: 12px; color: #94a3b8; padding: 12px 0; }
-
-    .request-item { padding: 8px 10px; border-radius: 7px; border: 1px solid #e2e8f0; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-    .request-name { font-size: 12px; font-weight: 600; color: #1e293b; }
-    .request-meta { font-size: 11px; color: #64748b; margin-top: 1px; }
-    .status-badge { font-size: 10px; font-weight: 600; border-radius: 99px; padding: 2px 8px; text-transform: capitalize; flex-shrink: 0; }
-    .status-pending  { background: #fff7ed; color: #ea580c; }
-    .status-approved { background: #f0fdf4; color: #16a34a; }
-    .status-rejected { background: #fff5f5; color: #ef4444; }
-
-    .member-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f1f5f9; }
-    .member-item:last-child { border-bottom: none; }
-    .member-avatar { width: 28px; height: 28px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #475569; flex-shrink: 0; }
-    .member-name { font-size: 12px; font-weight: 600; color: #1e293b; }
-    .member-role { font-size: 10px; color: #94a3b8; }
-
-    .log-item { font-size: 11px; color: #475569; padding: 5px 0; border-bottom: 1px solid #f1f5f9; display: flex; gap: 8px; }
-    .log-item:last-child { border-bottom: none; }
-    .log-user   { font-weight: 600; color: #1e293b; flex-shrink: 0; }
-    .log-action { color: #2563eb; font-weight: 600; flex-shrink: 0; }
-    .log-time   { color: #94a3b8; margin-left: auto; flex-shrink: 0; }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="min-h-screen bg-slate-50 font-sans">
 
-<div id="navbar"></div>
+<!-- Navbar -->
+<nav id="navbar"></nav>
 
-<div class="page">
-  <div class="greeting"     id="greeting">Good morning</div>
-  <div class="greeting-sub" id="greeting-sub">Here's what's happening at the platforms today.</div>
+<!-- Page -->
+<main class="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+
+  <!-- Greeting -->
+  <div class="mb-10">
+    <h2 id="greeting" class="text-2xl font-bold text-slate-900 tracking-tight"></h2>
+    <p id="greeting-sub" class="text-sm text-slate-500 mt-1"></p>
+  </div>
 
   <!-- Nav cards -->
-  <div class="nav-cards">
-    <a href="kanban.html" class="nav-card">
-      <div class="nav-card-icon">📋</div>
-      <div><div class="nav-card-title">Kanban Board</div><div class="nav-card-desc">Manage projects, tasks and track progress</div></div>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+    <a href="kanban.html" class="group flex items-center gap-4 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-2xl px-6 py-5 transition-all">
+      <div class="w-11 h-11 rounded-xl bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center text-2xl transition-colors shrink-0">📋</div>
+      <div>
+        <div class="text-sm font-semibold text-slate-800">Kanban Board</div>
+        <div class="text-xs text-slate-400 mt-0.5">Manage projects and track progress</div>
+      </div>
     </a>
-    <a href="booking.html" class="nav-card">
-      <div class="nav-card-icon">📅</div>
-      <div><div class="nav-card-title">Resource Bookings</div><div class="nav-card-desc">Book equipment and facilities for your experiments</div></div>
+    <a href="booking.html" class="group flex items-center gap-4 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-2xl px-6 py-5 transition-all">
+      <div class="w-11 h-11 rounded-xl bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center text-2xl transition-colors shrink-0">📅</div>
+      <div>
+        <div class="text-sm font-semibold text-slate-800">Resource Bookings</div>
+        <div class="text-xs text-slate-400 mt-0.5">Book equipment and facilities</div>
+      </div>
     </a>
-    <a href="requests.html" class="nav-card">
-      <div class="nav-card-icon">📝</div>
-      <div><div class="nav-card-title">Service Requests</div><div class="nav-card-desc">Submit and track genomics, sorting and other requests</div></div>
+    <a href="requests.html" class="group flex items-center gap-4 bg-white border border-slate-200 hover:border-blue-400 hover:shadow-md rounded-2xl px-6 py-5 transition-all">
+      <div class="w-11 h-11 rounded-xl bg-blue-50 group-hover:bg-blue-100 flex items-center justify-center text-2xl transition-colors shrink-0">📝</div>
+      <div>
+        <div class="text-sm font-semibold text-slate-800">Service Requests</div>
+        <div class="text-xs text-slate-400 mt-0.5">Submit and track requests</div>
+      </div>
     </a>
   </div>
 
   <!-- Stats -->
-  <div class="section-title">Overview</div>
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-value blue" id="stat-projects">—</div>
-      <div class="stat-label">Active projects</div>
+  <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Overview</p>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+    <div class="bg-white border border-slate-200 rounded-2xl px-6 py-5">
+      <div id="stat-projects" class="text-3xl font-bold text-blue-600 leading-none mb-1">—</div>
+      <div class="text-sm text-slate-500">Active projects</div>
     </div>
-    <div class="stat">
-      <div class="stat-value green" id="stat-members">—</div>
-      <div class="stat-label">Team members</div>
-      <div class="stat-sub" id="stat-members-sub"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl px-6 py-5">
+      <div id="stat-members" class="text-3xl font-bold text-emerald-600 leading-none mb-1">—</div>
+      <div class="text-sm text-slate-500">Team members</div>
+      <div id="stat-members-sub" class="text-xs text-slate-400 mt-0.5"></div>
     </div>
-    <div class="stat">
-      <div class="stat-value slate" id="stat-requests">—</div>
-      <div class="stat-label">Total requests</div>
-      <div class="stat-sub" id="stat-requests-sub"></div>
+    <div class="bg-white border border-slate-200 rounded-2xl px-6 py-5">
+      <div id="stat-requests" class="text-3xl font-bold text-slate-600 leading-none mb-1">—</div>
+      <div class="text-sm text-slate-500">Total requests</div>
+      <div id="stat-requests-sub" class="text-xs text-slate-400 mt-0.5"></div>
     </div>
   </div>
 
   <!-- Panels -->
-  <div class="two-col">
-    <div class="panel">
-      <div class="panel-header">
-        👥 Team
-        <a href="users.html" class="panel-link" id="admin-users-link" style="display:none">Manage →</a>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+    <!-- Team -->
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <span class="text-sm font-semibold text-slate-800">👥 Team</span>
+        <a id="admin-users-link" href="users.html" style="display:none" class="text-xs text-blue-600 hover:underline">Manage →</a>
       </div>
-      <div class="panel-body" id="panel-members"><div class="empty">Loading…</div></div>
+      <div id="panel-members" class="px-6 py-4 max-h-72 overflow-y-auto">
+        <p class="text-xs text-slate-400">Loading…</p>
+      </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-header">
-        📝 Recent Requests
-        <a href="requests.html" class="panel-link">View all →</a>
+    <!-- Recent Requests -->
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <span class="text-sm font-semibold text-slate-800">📝 Recent Requests</span>
+        <a href="requests.html" class="text-xs text-blue-600 hover:underline">View all →</a>
       </div>
-      <div class="panel-body" id="panel-requests"><div class="empty">Loading…</div></div>
+      <div id="panel-requests" class="px-6 py-4 max-h-72 overflow-y-auto">
+        <p class="text-xs text-slate-400">Loading…</p>
+      </div>
     </div>
 
-    <div class="panel" style="grid-column: 1 / -1;">
-      <div class="panel-header">
-        📋 Recent Activity
-        <span style="font-size:11px;color:#94a3b8">Last 20 actions</span>
+    <!-- Activity log — full width -->
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden sm:col-span-2">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <span class="text-sm font-semibold text-slate-800">📋 Recent Activity</span>
+        <span class="text-xs text-slate-400">Last 20 actions</span>
       </div>
-      <div class="panel-body" id="panel-logs"><div class="empty">Loading…</div></div>
+      <div id="panel-logs" class="px-6 py-4 max-h-72 overflow-y-auto">
+        <p class="text-xs text-slate-400">Loading…</p>
+      </div>
     </div>
+
   </div>
-</div>
+</main>
 
 <script>
   const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
@@ -148,24 +123,27 @@
   // ── Navbar ─────────────────────────────────────────────────────────────────
   (function buildNavbar() {
     const isAdmin = role === "admin";
-    const btn    = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #334155;background:#1e293b;color:#94a3b8;text-decoration:none;cursor:pointer;font-family:inherit";
-    const active = "font-size:11px;padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none";
+    const navLink = `class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline"`;
+    const activeLink = `class="text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline"`;
     document.getElementById("navbar").innerHTML = `
-      <div style="background:#0f172a;padding:10px 24px;display:flex;align-items:center;gap:12px;flex-shrink:0">
-        <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
-        <span style="color:#475569;font-size:12px">CaixaResearch Core Facilities</span>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <a href="kanban.html"   style="${btn}">📋 Kanban</a>
-          <a href="booking.html"  style="${btn}">📅 Bookings</a>
-          <a href="requests.html" style="${btn}">📝 Requests</a>
-          ${isAdmin ? `<a href="users.html" style="${btn}">👥 Users</a>` : ""}
-          <span style="font-size:12px;color:#64748b">👤 ${username}${isAdmin ? `<span style="margin-left:5px;font-size:10px;background:#2563eb;color:#fff;border-radius:99px;padding:1px 6px">admin</span>` : ""}</span>
-          <a href="profile.html" style="${btn}">🔑 Password</a>
-          <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'" style="${btn}">Sign out</button>
+      <div class="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+        <a href="dashboard.html" class="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
+        <span class="text-slate-600 text-xs hidden sm:inline">CaixaResearch Core Facilities</span>
+        <div class="ml-auto flex items-center gap-2 flex-wrap">
+          <a href="kanban.html"   ${navLink}>📋 Kanban</a>
+          <a href="booking.html"  ${navLink}>📅 Bookings</a>
+          <a href="requests.html" ${navLink}>📝 Requests</a>
+          ${isAdmin ? `<a href="users.html" ${navLink}>👥 Users</a>` : ""}
+          <span class="text-xs text-slate-500 flex items-center gap-1.5">
+            <span class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">${username[0].toUpperCase()}</span>
+            ${username}
+            ${isAdmin ? `<span class="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>` : ""}
+          </span>
+          <a href="profile.html" ${navLink}>🔑 Password</a>
+          <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
+            class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-sans">Sign out</button>
         </div>
       </div>`;
-
-    // Show "Manage →" link in Team panel for admins
     if (isAdmin) document.getElementById("admin-users-link").style.display = "inline";
   })();
 
@@ -181,6 +159,12 @@
   function esc(str) {
     return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   }
+
+  const STATUS_STYLE = {
+    pending:  "bg-amber-50 text-amber-600 border border-amber-200",
+    approved: "bg-emerald-50 text-emerald-600 border border-emerald-200",
+    rejected: "bg-red-50 text-red-500 border border-red-100",
+  };
 
   // ── Load ───────────────────────────────────────────────────────────────────
   async function load() {
@@ -205,47 +189,50 @@
     document.getElementById("stat-members-sub").textContent = `${adminCount} admin${adminCount !== 1 ? "s" : ""}`;
     document.getElementById("stat-requests").textContent    = requestList.length;
     if (pendingReqs.length) {
-      document.getElementById("stat-requests-sub").textContent = `${pendingReqs.length} pending approval`;
-      document.getElementById("stat-requests-sub").style.color = "#ea580c";
+      const sub = document.getElementById("stat-requests-sub");
+      sub.textContent = `${pendingReqs.length} pending approval`;
+      sub.className = "text-xs text-amber-600 mt-0.5 font-medium";
     }
 
     // Team panel
     const membersEl = document.getElementById("panel-members");
     membersEl.innerHTML = memberList.length
       ? memberList.map(m => `
-          <div class="member-item">
-            <div class="member-avatar">${esc(m.username[0].toUpperCase())}</div>
-            <div>
-              <div class="member-name">${esc(m.username)}</div>
-              <div class="member-role">${m.role === "admin" ? "Admin" : "User"}${m.email ? ` · ${esc(m.email)}` : ""}</div>
+          <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
+            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
+              ${esc(m.username[0].toUpperCase())}
+            </div>
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-slate-800 truncate">${esc(m.username)}</div>
+              <div class="text-xs text-slate-400 truncate">${m.role === "admin" ? "Admin" : "User"}${m.email ? ` · ${esc(m.email)}` : ""}</div>
             </div>
           </div>`).join("")
-      : `<div class="empty">No team members yet.</div>`;
+      : `<p class="text-xs text-slate-400 py-2">No team members yet.</p>`;
 
     // Requests panel
     const requestsEl = document.getElementById("panel-requests");
     requestsEl.innerHTML = requestList.length
       ? requestList.slice(0, 8).map(r => `
-          <div class="request-item">
-            <div>
-              <div class="request-name">${esc(r.type.charAt(0).toUpperCase() + r.type.slice(1))} — ${esc(r.username)}</div>
-              <div class="request-meta">${new Date(r.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</div>
+          <div class="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-slate-800 truncate">${esc(r.type.charAt(0).toUpperCase() + r.type.slice(1))} — ${esc(r.username)}</div>
+              <div class="text-xs text-slate-400">${new Date(r.created_at).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</div>
             </div>
-            <span class="status-badge status-${r.status}">${r.status}</span>
+            <span class="text-[10px] font-semibold rounded-full px-2.5 py-0.5 capitalize shrink-0 ${STATUS_STYLE[r.status] || "bg-slate-100 text-slate-500"}">${r.status}</span>
           </div>`).join("")
-      : `<div class="empty">No requests yet.</div>`;
+      : `<p class="text-xs text-slate-400 py-2">No requests yet.</p>`;
 
     // Logs panel
     const logsEl = document.getElementById("panel-logs");
     logsEl.innerHTML = logList.length
       ? logList.map(l => `
-          <div class="log-item">
-            <span class="log-user">${esc(l.username)}</span>
-            <span class="log-action">${esc(l.action)}</span>
-            <span style="color:#475569;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.details || "")}</span>
-            <span class="log-time">${new Date(l.timestamp).toLocaleString("en", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+          <div class="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0 text-xs min-w-0">
+            <span class="font-semibold text-slate-700 shrink-0">${esc(l.username)}</span>
+            <span class="font-semibold text-blue-500 shrink-0">${esc(l.action)}</span>
+            <span class="text-slate-500 truncate flex-1">${esc(l.details || "")}</span>
+            <span class="text-slate-400 shrink-0">${new Date(l.timestamp).toLocaleString("en", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
           </div>`).join("")
-      : `<div class="empty">No activity yet.</div>`;
+      : `<p class="text-xs text-slate-400 py-2">No activity yet.</p>`;
   }
 
   load();
