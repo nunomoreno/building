@@ -579,18 +579,18 @@ export default {
     }
 
     // ── PUT /resources/:id ────────────────────────────────────────────────────
-    if (path.startsWith("/resources/") && method === "PUT") {
+    if (path.match(/^\/resources\/[^/]+$/) && method === "PUT") {
       try {
-        const id = path.split("/").pop();
+        const id = path.split("/")[2];
         await sb(`resources?id=eq.${id}`, "PATCH", await request.json());
         return json({ success: true });
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
     // ── DELETE /resources/:id ─────────────────────────────────────────────────
-    if (path.startsWith("/resources/") && method === "DELETE") {
+    if (path.match(/^\/resources\/[^/]+$/) && method === "DELETE") {
       try {
-        const id = path.split("/").pop();
+        const id = path.split("/")[2];
         await sb(`resources?id=eq.${id}`, "PATCH", { active: false });
         return json({ success: true });
       } catch (e) { return errRes(ch, e.message, 500); }
@@ -818,9 +818,16 @@ export default {
         const resource  = resources[0];
         if (!resource) return errRes(ch, "Resource not found", 404, "NOT_FOUND");
         const adminUsername = resource.admin_username;
-        if (!adminUsername) return errRes(ch, "No admin assigned to this resource", 400);
-        const admins = await sb(`members?username=eq.${encodeURIComponent(adminUsername)}&select=email,username&limit=1`);
-        const admin  = admins[0];
+        let admin;
+        if (adminUsername) {
+          const admins = await sb(`members?username=eq.${encodeURIComponent(adminUsername)}&select=email,username&limit=1`);
+          admin = admins[0];
+        }
+        // Fall back to any global admin if no calendar admin is assigned
+        if (!admin) {
+          const admins = await sb(`members?role=eq.admin&select=email,username&limit=1`);
+          admin = admins[0];
+        }
         if (!admin?.email) return errRes(ch, "Calendar admin has no email on file", 400);
         await sendEmail(env.BREVO_API_KEY, admin.email,
           `🔑 Booking access request for "${resource.name}"`,

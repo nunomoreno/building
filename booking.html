@@ -525,9 +525,11 @@
             <div className="m-4 flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <span className="text-sm text-amber-800">
                 You don't have permission to book <strong>{resource.name}</strong>.
-                {resource.admin_username && <> Please ask <strong>{resource.admin_username}</strong> for access.</>}
+                {resource.admin_username
+                  ? <> Please ask <strong>{resource.admin_username}</strong> for access.</>
+                  : <> Please ask an administrator for access.</>}
               </span>
-              {resource.admin_username && !requested && (
+              {!requested && (
                 <button onClick={handleRequestAccess} disabled={requesting}
                   className="shrink-0 text-xs px-3.5 py-1.5 rounded-lg bg-amber-600 text-white border-none cursor-pointer hover:bg-amber-700 disabled:opacity-60">
                   {requesting ? "Sending…" : "Request access"}
