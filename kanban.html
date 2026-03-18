@@ -453,15 +453,26 @@
       const visibleTasks = isOwner
         ? project.tasks
         : project.tasks.filter(t => t.assignee?.toLowerCase() === currentUser?.username?.toLowerCase());
-      const [editing,   setEditing]   = useState(null);
-      const [draft,     setDraft]     = useState("");
-      const [addingTo,  setAddingTo]  = useState(null);
-      const [newTitle,  setNewTitle]  = useState("");
-      const [saving,       setSaving]       = useState(false);
-      const [editingOrder,  setEditingOrder]  = useState(null);
-      const [draftOrder,    setDraftOrder]    = useState(null);
-      const [draftGrantId,  setDraftGrantId]  = useState("");
+      const [editing,         setEditing]         = useState(null);
+      const [draft,           setDraft]           = useState("");
+      const [addingTo,        setAddingTo]        = useState(null);
+      const [newTitle,        setNewTitle]        = useState("");
+      const [saving,          setSaving]          = useState(false);
+      const [editingOrder,    setEditingOrder]    = useState(null);
+      const [draftOrder,      setDraftOrder]      = useState(null);
+      const [draftGrantId,    setDraftGrantId]    = useState("");
+      const [finalizeModal,   setFinalizeModal]   = useState(null);
       const mentionTimers = useRef({});
+
+      const finalizeTask = async (taskId, includeFinancial) => {
+        const t = project.tasks.find(t => t.id === taskId);
+        const updatedTasks = project.tasks.map(t =>
+          t.id === taskId ? { ...t, finalized: true, exclude_from_financial: !includeFinancial } : t
+        );
+        await onUpdate({ ...project, tasks: updatedTasks });
+        setFinalizeModal(null);
+        api.log(username, "finalize_task", `Finalized "${t?.title}" in ${project.name}`);
+      };
 
       const moveTask = async (id, dir) => {
         const t  = project.tasks.find(t => t.id === id);
@@ -638,12 +649,22 @@
                               }
                             </div>
                         }
+                        {task.finalized && (
+                          <div className="mt-1.5 flex items-center gap-1">
+                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">Finalized</span>
+                            {task.exclude_from_financial && <span className="text-[10px] text-slate-400 bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5">excl. report</span>}
+                          </div>
+                        )}
                         <div className="flex gap-1 mt-1.5 items-center">
                           <button onClick={() => moveTask(task.id, -1)} disabled={ci === 0 || !canEditTask(task)}
                             className={`text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans ${ci === 0 || !canEditTask(task) ? "cursor-not-allowed text-slate-300" : "cursor-pointer text-slate-500 hover:bg-slate-100"}`}>←</button>
                           <button onClick={() => moveTask(task.id, 1)} disabled={ci === COLUMNS.length - 1 || !canEditTask(task)}
                             className={`text-xs px-1.5 py-0.5 rounded border border-slate-200 bg-slate-50 font-sans ${ci === COLUMNS.length - 1 || !canEditTask(task) ? "cursor-not-allowed text-slate-300" : "cursor-pointer text-slate-500 hover:bg-slate-100"}`}>→</button>
-                          {isOwner && <button onClick={() => deleteTask(task.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-200 bg-red-50 cursor-pointer text-red-500 ml-auto font-sans">✕</button>}
+                          {isOwner && !task.finalized && (
+                            <button onClick={() => setFinalizeModal(task)}
+                              className="text-xs px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 cursor-pointer text-amber-600 hover:bg-amber-100 font-sans ml-auto">Finalize →</button>
+                          )}
+                          {isOwner && <button onClick={() => deleteTask(task.id)} className={`text-xs px-1.5 py-0.5 rounded border border-red-200 bg-red-50 cursor-pointer text-red-500 font-sans ${task.finalized ? "ml-auto" : ""}`}>✕</button>}
                         </div>
                       </div>
                     );
@@ -668,33 +689,55 @@
               );
             })}
           </div>
+          {finalizeModal && (
+            <FinalizeTaskModal
+              task={finalizeModal}
+              onClose={() => setFinalizeModal(null)}
+              onConfirm={includeFinancial => finalizeTask(finalizeModal.id, includeFinancial)}
+            />
+          )}
         </div>
       );
     }
 
     // ── App ──────────────────────────────────────────────────────────────────
     function ArchiveModal({ project, onClose, onConfirm }) {
-      const hasBillable = (project.tasks || []).some(t => t.store_order?.items?.length);
+      return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={onClose}>
+          <div className="bg-white rounded-xl p-5 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">Close project</h3>
+            <p className="text-xs text-slate-500 mb-4">
+              <span className="font-medium text-slate-700">{project.name}</span> will be removed from the active board. Individual tasks can still be finalized for the financial report.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer font-sans hover:bg-slate-50">Cancel</button>
+              <button onClick={onConfirm} className="text-xs px-3 py-1.5 rounded-lg bg-slate-600 text-white border-none cursor-pointer font-sans hover:bg-slate-700">Close project</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FinalizeTaskModal({ task, onClose, onConfirm }) {
+      const hasBillable = task.store_order?.items?.length > 0;
       const [includeFinancial, setIncludeFinancial] = useState(hasBillable);
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={onClose}>
           <div className="bg-white rounded-xl p-5 w-80 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">Finalize project</h3>
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">Finalize task</h3>
             <p className="text-xs text-slate-500 mb-4">
-              <span className="font-medium text-slate-700">{project.name}</span> will be closed and removed from the active board.
+              <span className="font-medium text-slate-700">{task.title}</span> will be marked as finalized.
             </p>
-            {hasBillable && (
-              <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 mb-4">
-                <div>
-                  <div className="text-xs font-medium text-slate-700">Include in financial report</div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">Store orders will appear in the expense dashboard</div>
-                </div>
-                <button onClick={() => setIncludeFinancial(v => !v)}
-                  className={`relative w-9 h-5 rounded-full transition-colors border-none cursor-pointer flex-shrink-0 ml-3 ${includeFinancial ? "bg-blue-600" : "bg-slate-300"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${includeFinancial ? "left-[18px]" : "left-0.5"}`} />
-                </button>
+            <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 mb-4">
+              <div>
+                <div className="text-xs font-medium text-slate-700">Include in financial report</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{hasBillable ? "Store orders will appear in the expense dashboard" : "No store orders — will be recorded but not billed"}</div>
               </div>
-            )}
+              <button onClick={() => setIncludeFinancial(v => !v)}
+                className={`relative w-9 h-5 rounded-full transition-colors border-none cursor-pointer flex-shrink-0 ml-3 ${includeFinancial ? "bg-blue-600" : "bg-slate-300"}`}>
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${includeFinancial ? "left-[18px]" : "left-0.5"}`} />
+              </button>
+            </div>
             <div className="flex gap-2 justify-end">
               <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer font-sans hover:bg-slate-50">Cancel</button>
               <button onClick={() => onConfirm(includeFinancial)}
@@ -786,10 +829,10 @@
         if (active === id) setActive(updated[0]?.id || null);
       };
 
-      const archiveProject = async (id, includeFinancial = true) => {
+      const archiveProject = async (id) => {
         const p = projects.find(p => p.id === id);
         if (!p) return;
-        const updated = { ...p, archived: true, exclude_from_financial: !includeFinancial };
+        const updated = { ...p, archived: true };
         await api.saveProject(updated);
         setProjects(prev => prev.map(x => x.id === id ? updated : x));
         setArchiveModal(null);
@@ -935,7 +978,7 @@
             <ArchiveModal
               project={archiveModal}
               onClose={() => setArchiveModal(null)}
-              onConfirm={includeFinancial => archiveProject(archiveModal.id, includeFinancial)}
+              onConfirm={() => archiveProject(archiveModal.id)}
             />
           )}
         </div>
