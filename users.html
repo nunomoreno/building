@@ -125,6 +125,7 @@
                 {isAdmin && <div className="border-t border-slate-700" />}
                 {isAdmin && <a href="users.html"   className={`${drop} bg-slate-700 text-white`}>👥 Users & Groups</a>}
                 {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}
+                {isAdmin && <a href="grants.html"  className={drop}>🏛 Grants</a>}
               </div>
             )}
           </div>
@@ -164,7 +165,7 @@
 
     const startEdit = (m) => {
       setEditId(m.id);
-      setEditData({ display_name: m.display_name||"", email: m.email||"", phone: m.phone||"", role: m.role||"user" });
+      setEditData({ display_name: m.display_name||"", email: m.email||"", phone: m.phone||"", role: m.role||"user", pricing_tier: m.pricing_tier||"internal" });
       setEditMsg(""); setResetPwd("");
     };
     const cancelEdit = () => { setEditId(null); setEditMsg(""); setResetPwd(""); };
@@ -176,6 +177,7 @@
         email:        editData.email.trim()        || null,
         phone:        editData.phone.trim()        || null,
         role:         editData.role,
+        pricing_tier: editData.pricing_tier,
       };
       const res = await api.updateMember(id, body);
       if (res?.error) setEditMsg("Error: " + res.error);
@@ -205,6 +207,9 @@
                   <span className="text-sm font-semibold text-slate-800">{m.display_name || m.username}</span>
                   {m.display_name && <span className="text-xs text-slate-400">@{m.username}</span>}
                   {m.role === "admin" && <span className="text-[10px] bg-blue-600 text-white rounded-full px-2 py-0.5 font-semibold">admin</span>}
+                  {m.pricing_tier && m.pricing_tier !== "internal" && (
+                    <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">{m.pricing_tier}</span>
+                  )}
                   {m.group_id && (
                     <span className="text-[10px] bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full px-2 py-0.5">
                       {groups.find(g => g.id === m.group_id)?.name || "group"} · {m.group_role}
@@ -249,6 +254,15 @@
                     <select value={editData.role} onChange={e => setEditData({...editData, role: e.target.value})} className={inputCls}>
                       <option value="user">user</option>
                       <option value="admin">admin</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Pricing Tier</label>
+                    <select value={editData.pricing_tier} onChange={e => setEditData({...editData, pricing_tier: e.target.value})} className={inputCls}>
+                      <option value="internal">Internal</option>
+                      <option value="cracs">CRACs</option>
+                      <option value="academia">Academia</option>
+                      <option value="industry">Industry</option>
                     </select>
                   </div>
                 </div>

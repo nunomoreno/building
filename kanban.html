@@ -82,6 +82,7 @@
       notify:        (actor, taskTitle, projectName, mentionsWithEmails) =>
                                   apiFetch("/notify", { method: "POST", body: JSON.stringify({ actor, taskTitle, projectName, mentionsWithEmails }) }),
       ai:            (body)    => apiFetch("/ai", { method: "POST", body: JSON.stringify(body) }),
+      getSettings:   (key)     => fetch(`${WORKER}/settings/${key}`, { headers: authHeaders() }).then(r => r.json()),
     };
 
     function extractMentions(text) {
@@ -171,6 +172,7 @@
                   {isAdmin && <div className="border-t border-slate-700" />}
                   {isAdmin && <a href="users.html"   className={drop}>👥 Users & Groups</a>}
                   {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}
+                  {isAdmin && <a href="grants.html"  className={drop}>🏛 Grants</a>}
                 </div>
               )}
             </div>
@@ -345,8 +347,96 @@
       );
     }
 
+    // ── Store Order Editor ────────────────────────────────────────────────────
+    function StoreOrderEditor({ items, onChange, skus, disabled }) {
+      const newLine = () => ({ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 });
+
+      const updateLine = (id, field, val) => {
+        onChange(items.map(item => {
+          if (item.id !== id) return item;
+          const u = { ...item, [field]: val };
+          if (field === "sku_id") {
+            const sku = skus.find(s => s.id === val);
+            u.sku_name   = sku?.name || "";
+            u.unit_price = parseFloat(sku?.internal || 0);
+          }
+          if (field === "qty" || field === "unit_price" || field === "sku_id") {
+            u.line_total = Math.max(0, parseFloat(u.qty || 0)) * Math.max(0, parseFloat(u.unit_price || 0));
+          }
+          return u;
+        }));
+      };
+
+      const total = items.reduce((s, i) => s + (i.line_total || 0), 0);
+      const inp   = "text-xs px-1.5 py-1 rounded border border-slate-200 outline-none focus:ring-1 focus:ring-blue-500 w-full font-sans";
+
+      return (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          <div className="text-xs font-semibold text-slate-500 mb-1.5">📦 Order Items</div>
+          <table className="w-full text-xs border-collapse mb-1.5">
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-100">
+                <th className="py-1 pr-1.5 font-semibold">Item</th>
+                <th className="py-1 pr-1.5 font-semibold w-12">Qty</th>
+                <th className="py-1 pr-1.5 font-semibold w-16">€/unit</th>
+                <th className="py-1 pr-1.5 font-semibold w-16 text-right">Total</th>
+                {!disabled && <th className="py-1 w-4"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id} className="border-b border-slate-50">
+                  <td className="py-1 pr-1.5">
+                    {disabled
+                      ? <span className="text-slate-700">{item.sku_name || item.sku_id || "—"}</span>
+                      : <select value={item.sku_id} onChange={e => updateLine(item.id, "sku_id", e.target.value)} className={inp}>
+                          <option value="">Select…</option>
+                          {skus.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>}
+                    {item.comment && <div className="text-slate-400 text-[10px] mt-0.5 italic">{item.comment}</div>}
+                  </td>
+                  <td className="py-1 pr-1.5">
+                    {disabled
+                      ? <span className="text-slate-600">{item.qty}</span>
+                      : <input type="number" min="1" value={item.qty}
+                          onChange={e => updateLine(item.id, "qty", Math.max(1, parseInt(e.target.value)||1))}
+                          className={inp + " text-right"} />}
+                  </td>
+                  <td className="py-1 pr-1.5">
+                    {disabled
+                      ? <span className="text-slate-600">€{parseFloat(item.unit_price||0).toFixed(2)}</span>
+                      : <input type="number" min="0" step="0.01" value={item.unit_price}
+                          onChange={e => updateLine(item.id, "unit_price", parseFloat(e.target.value)||0)}
+                          className={inp + " text-right"} />}
+                  </td>
+                  <td className="py-1 pr-1.5 text-right font-semibold text-violet-600">
+                    €{(item.line_total||0).toFixed(2)}
+                  </td>
+                  {!disabled && (
+                    <td className="py-1">
+                      <button onClick={() => onChange(items.filter(i => i.id !== item.id))}
+                        className="text-red-400 hover:text-red-600 cursor-pointer bg-transparent border-0 p-0 font-sans text-sm">✕</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex items-center justify-between">
+            {!disabled
+              ? <button onClick={() => onChange([...items, newLine()])}
+                  className="text-xs px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-600 cursor-pointer hover:bg-blue-100 font-sans border-0">+ Add line</button>
+              : <span />}
+            <div className="text-xs font-bold text-slate-700">
+              Total: <span className="text-violet-600">€{total.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // ── Board ────────────────────────────────────────────────────────────────
-    function Board({ project, onUpdate, username, members, membersRef, currentUser }) {
+    function Board({ project, onUpdate, username, members, membersRef, currentUser, pricing }) {
       const isOwner = !project.owner_username || project.owner_username === currentUser?.username || currentUser?.role === "admin";
       const canEditTask = (task) => isOwner || task.assignee?.toLowerCase() === currentUser?.username?.toLowerCase();
 
@@ -358,15 +448,22 @@
       const [draft,     setDraft]     = useState("");
       const [addingTo,  setAddingTo]  = useState(null);
       const [newTitle,  setNewTitle]  = useState("");
-      const [saving,    setSaving]    = useState(false);
+      const [saving,       setSaving]       = useState(false);
+      const [editingOrder, setEditingOrder] = useState(null);
+      const [draftOrder,   setDraftOrder]   = useState(null);
       const mentionTimers = useRef({});
 
       const moveTask = async (id, dir) => {
         const t  = project.tasks.find(t => t.id === id);
         const ci = COLUMNS.indexOf(t.col), ni = ci + dir;
         if (ni < 0 || ni >= COLUMNS.length) return;
-        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: COLUMNS[ni] } : t) });
-        api.log(username, "move_task", `Moved "${t.title}" to ${COLUMNS[ni]} in ${project.name}`);
+        const newCol = COLUMNS[ni];
+        if (newCol === "Done" && t.store_order?.items?.length) {
+          const total = t.store_order.items.reduce((s, i) => s + (i.line_total || 0), 0);
+          window.alert(`💰 Order total: €${total.toFixed(2)}\nThis order will be included in the financial report.`);
+        }
+        await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === id ? { ...t, col: newCol } : t) });
+        api.log(username, "move_task", `Moved "${t.title}" to ${newCol} in ${project.name}`);
       };
 
       const startEdit  = (id, field, val) => { setEditing({ id, field }); setDraft(val); };
@@ -450,6 +547,39 @@
                               {task.notes || (canEditTask(task) ? <em>add note…</em> : "")}
                             </div>
                         }
+                        {editingOrder === task.id
+                          ? <div className="mt-1.5">
+                              <StoreOrderEditor
+                                items={draftOrder || []}
+                                onChange={setDraftOrder}
+                                skus={(pricing?.skus || [])}
+                                disabled={false}
+                              />
+                              <div className="flex gap-1 mt-1.5">
+                                <button onClick={async () => {
+                                  const updated = { ...task, store_order: { ...(task.store_order||{}), items: draftOrder, total: draftOrder.reduce((s,i)=>s+(i.line_total||0),0), requested_by: task.store_order?.requested_by || project.owner_username } };
+                                  setSaving(true);
+                                  await onUpdate({ ...project, tasks: project.tasks.map(t => t.id === task.id ? updated : t) });
+                                  setSaving(false); setEditingOrder(null); setDraftOrder(null);
+                                }} disabled={saving} className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white border-none cursor-pointer disabled:opacity-60 font-sans">Save</button>
+                                <button onClick={() => { setEditingOrder(null); setDraftOrder(null); }} className="text-xs px-2 py-0.5 rounded bg-slate-100 border border-slate-200 cursor-pointer text-slate-500 font-sans">Cancel</button>
+                              </div>
+                            </div>
+                          : task.store_order?.items?.length > 0
+                            ? <StoreOrderEditor
+                                items={task.store_order.items}
+                                onChange={() => {}}
+                                skus={pricing?.skus || []}
+                                disabled={true}
+                              />
+                            : null
+                        }
+                        {canEditTask(task) && editingOrder !== task.id && (task.store_order?.items?.length > 0 || project.source === "request") && (
+                          <button onClick={() => { setEditingOrder(task.id); setDraftOrder(task.store_order?.items ? JSON.parse(JSON.stringify(task.store_order.items)) : []); }}
+                            className="text-[10px] px-2 py-0.5 rounded border border-slate-200 bg-slate-50 text-slate-500 cursor-pointer hover:bg-slate-100 mt-1 font-sans">
+                            {task.store_order?.items?.length > 0 ? "Edit order" : "Add order"}
+                          </button>
+                        )}
                         {/* Assignee — only owner/admin can reassign */}
                         {editing?.id === task.id && editing.field === "notes"
                           ? null
@@ -527,6 +657,7 @@
       const [addingProject,   setAddingProject]   = useState(false);
       const [newProjectName,  setNewProjectName]  = useState("");
       const [panel,           setPanel]           = useState(null);
+      const [pricing,         setPricing]         = useState({ skus: [] });
       const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
 
@@ -538,15 +669,17 @@
       const loadData = async () => {
         setLoading(true); setLoadError(null);
         try {
-          const [data, m] = await Promise.all([
+          const [data, m, pricingRaw] = await Promise.all([
             api.getProjects(scope),
             api.getMembers(),
+            api.getSettings("pricing"),
           ]);
           const p = Array.isArray(data) ? data : [];
           setProjects(p);
           const memberList = Array.isArray(m) ? m : [];
           setMembers(memberList.map(u => u.username));
           membersRef.current = memberList;
+          setPricing(pricingRaw?.skus ? pricingRaw : { skus: [] });
           setActive(a => a || p[0]?.id || null);
         } catch {
           setLoadError("Could not load data. Please refresh.");
@@ -657,7 +790,7 @@
               ) : activeProject ? (
                 <>
                   <h2 className="mb-3.5 text-lg font-bold text-slate-900">{activeProject.name}</h2>
-                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} />
+                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} pricing={pricing} />
                 </>
               ) : (
                 <div className="text-slate-400 mt-10 text-center">Select or create a project to get started</div>

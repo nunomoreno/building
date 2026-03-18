@@ -82,6 +82,7 @@
       deleteBooking: (id)      => safeFetch(`${WORKER}/bookings/${id}`,   { method:"DELETE", headers: authHeaders() }),
       getSettings:   (key)     => safeFetch(`${WORKER}/settings/${key}`,  { headers: authHeaders() }),
       saveSettings:  (key,val) => safeFetch(`${WORKER}/settings/${key}`,  { method:"POST",   headers: authHeaders(), body: JSON.stringify(val) }),
+      getGrants:     ()        => safeFetch(`${WORKER}/grants`,            { headers: authHeaders() }),
       getMembers:    ()        => safeFetch(`${WORKER}/members`,          { headers: authHeaders() }),
       updateMember:  (id,data) => safeFetch(`${WORKER}/members/${id}`,    { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
       requestAccess: (resId)   => safeFetch(`${WORKER}/request-access`,              { method:"POST",   headers: authHeaders(), body: JSON.stringify({ resource_id: resId }) }),
@@ -164,6 +165,7 @@
                   {isAdmin && <div className="border-t border-slate-700" />}
                   {isAdmin && <a href="users.html"   className={drop}>👥 Users & Groups</a>}
                   {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}
+                  {isAdmin && <a href="grants.html"  className={drop}>🏛 Grants</a>}
                 </div>
               )}
             </div>
@@ -174,7 +176,9 @@
     }
 
     // ── Booking Form Modal ───────────────────────────────────────────────────
-    function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username, initialSlot, initialDate}) {
+    const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
+
+    function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username, initialSlot, initialDate, grants}) {
       const isNew     = !booking?.id;
       const slotMins  = resource?.slot_duration || 30;
       const defaultStart = initialSlot != null ? minsToTime(initialSlot * slotMins) : (booking?.start_time || "09:00");
@@ -186,6 +190,7 @@
       const [fullDay,   setFullDay]   = useState(booking?.full_day  || slotMins === 0);
       const [notes,     setNotes]     = useState(booking?.notes     || "");
       const [meta,      setMeta]      = useState(booking?.metadata  || {});
+      const [grantId,   setGrantId]   = useState(booking?.grant_id || "");
       const [status,    setStatus]    = useState(booking?.status    || (resource?.approval_required ? "pending" : "approved"));
       const [saving,    setSaving]    = useState(false);
       const [saveError, setSaveError] = useState(null);
@@ -197,7 +202,7 @@
           full_day: fullDay,
           start_time: fullDay ? null : startTime,
           end_time:   fullDay ? null : endTime,
-          notes, metadata: meta, status,
+          notes, metadata: meta, grant_id: grantId || null, status,
         };
         const res = isNew ? await api.saveBooking(payload) : await api.updateBooking(booking.id, payload);
         if (res?.error || res?.code === "OVERLAP") {
@@ -251,6 +256,25 @@
                   <label className={labelCls}>END</label>
                   <input type="time" value={endTime} onChange={e=>setEndTime(e.target.value)} disabled={!canEdit} className={inputCls}/>
                 </div>
+              </div>
+            )}
+
+            {(grants||[]).length > 0 && (
+              <div className="mb-3">
+                <label className={labelCls}>GRANT</label>
+                <select value={grantId} onChange={e=>setGrantId(e.target.value)} disabled={!canEdit} className={inputCls}>
+                  <option value="">— none —</option>
+                  {grants.map(g=>(
+                    <option key={g.id} value={g.id}>{g.code} · {g.name}</option>
+                  ))}
+                </select>
+                {grantId && (() => { const g = grants.find(x=>x.id===grantId); return g ? (
+                  <div className="mt-1.5 text-[11px] text-slate-500 flex gap-3">
+                    <span className="bg-slate-100 rounded px-1.5 py-0.5">Tier: <strong>{TIER_LABELS[g.tier]||g.tier}</strong></span>
+                    {g.funds > 0 && <span className="bg-slate-100 rounded px-1.5 py-0.5">Budget: <strong>€{g.funds.toLocaleString()}</strong></span>}
+                    {g.owner_username && <span className="bg-slate-100 rounded px-1.5 py-0.5">PI: <strong>{g.owner_username}</strong></span>}
+                  </div>
+                ) : null; })()}
               </div>
             )}
 
@@ -518,7 +542,7 @@
     }
 
     // ── Weekly Calendar ──────────────────────────────────────────────────────
-    function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh, onRequestAccess}) {
+    function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh, onRequestAccess, grants}) {
       const [modal,     setModal]     = useState(null);
       const [requested, setRequested] = useState(false);
       const [requesting,setRequesting]= useState(false);
@@ -571,6 +595,7 @@
               booking={modal.booking||{}} resource={resource} fields={fields}
               isAdmin={isAdmin} username={user.username}
               initialSlot={modal.slot} initialDate={modal.date}
+              grants={grants||[]}
               onSave={()=>{setModal(null);onRefresh();}}
               onDelete={()=>{setModal(null);onRefresh();}}
               onClose={()=>setModal(null)}
@@ -669,6 +694,7 @@
       const [members,     setMembers]     = useState([]);
       const [allFields,   setAllFields]   = useState({});
       const [pricing,     setPricing]     = useState({ skus: [] });
+      const [grants,      setGrants]      = useState([]);
       const [loading,     setLoading]     = useState(true);
       const [loadError,   setLoadError]   = useState(null);
       const [showAdmin,   setShowAdmin]   = useState(false);
@@ -685,12 +711,13 @@
       const loadBase = async () => {
         setLoadError(null);
         try {
-          const [r,m,f,p] = await Promise.all([api.getResources(), api.getMembers(), api.getSettings("booking-fields"), api.getSettings("pricing")]);
+          const [r,m,f,p,g] = await Promise.all([api.getResources(), api.getMembers(), api.getSettings("booking-fields"), api.getSettings("pricing"), api.getGrants()]);
           const resList = Array.isArray(r) ? r : [];
           setResources(resList);
           setMembers(Array.isArray(m) ? m : []);
           setAllFields(f && typeof f==="object" ? f : {});
           setPricing(p && Array.isArray(p.skus) ? p : { skus: [] });
+          setGrants(Array.isArray(g) ? g : []);
           setSelectedRes(s => s || resList[0] || null);
           setLoading(false);
         } catch { setLoadError("Could not load data. Please refresh."); setLoading(false); }
@@ -773,7 +800,7 @@
             {selectedRes
               ? <WeeklyCalendar key={selectedRes.id} resource={selectedRes} weekStart={weekStart} bookings={bookings}
                   fields={currentFields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadBookings}
-                  onRequestAccess={api.requestAccess}/>
+                  onRequestAccess={api.requestAccess} grants={grants}/>
               : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
                   {isAdmin
                     ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>

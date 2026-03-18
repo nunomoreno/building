@@ -28,12 +28,17 @@ async function checkRateLimit(env, ip, route) {
 }
 
 // ── Session ──────────────────────────────────────────────────────────────────
-async function validateSession(sb, token) {
+async function validateSession(sb, token, kv) {
   if (!token) return null;
+  if (kv) {
+    const cached = await kv.get(`sess:${token}`);
+    if (cached) return JSON.parse(cached);
+  }
   const data = await sb(`members?select=id,username,role,permissions,session_expires_at&session_token=eq.${encodeURIComponent(token)}&limit=1`);
   if (!Array.isArray(data) || !data.length) return null;
   const m = data[0];
   if (!m.session_expires_at || Date.now() > new Date(m.session_expires_at).getTime()) return null;
+  if (kv) await kv.put(`sess:${token}`, JSON.stringify(m), { expirationTtl: 300 }); // 5-min cache
   return m;
 }
 
@@ -190,7 +195,7 @@ export default {
     const bypassRoutes = new Set(["/debug", "/test-report", "/test-email", "/test-bookings"]);
     let sessionUser = null;
     if (!publicRoutes.has(path)) {
-      sessionUser = await validateSession(sb, request.headers.get("X-Session-Token"));
+      sessionUser = await validateSession(sb, request.headers.get("X-Session-Token"), env.RATE_LIMIT_KV);
       if (!sessionUser && !bypassRoutes.has(path))
         return errRes(ch, "Session expired — please log in again", 401, "UNAUTHENTICATED");
     }
@@ -251,9 +256,10 @@ export default {
     // ── GET /members ──────────────────────────────────────────────────────────
     if (path === "/members" && method === "GET") {
       try {
-        const members = await sb("members?select=id,username,email,role,permissions,pricing_tier,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url");
-        // Attach group membership to each member
-        const memberships = await sb("group_members?select=member_id,group_id,role");
+        const [members, memberships] = await Promise.all([
+          sb("members?select=id,username,email,role,permissions,pricing_tier,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url"),
+          sb("group_members?select=member_id,group_id,role"),
+        ]);
         const byMember = Object.fromEntries((Array.isArray(memberships) ? memberships : []).map(m => [m.member_id, m]));
         return json((Array.isArray(members) ? members : []).map(m => ({
           ...m,
@@ -381,67 +387,55 @@ export default {
 
     if (path === "/projects" && method === "GET") {
       try {
-        const scope    = url.searchParams.get("scope");
-        const isAdmin  = sessionUser.role === "admin";
-        const allProjs = await sb("projects?select=id,project_id,data");
-        const projList = Array.isArray(allProjs)
-          ? allProjs.map(r => ({ ...r.data, _id: r.id, project_id: r.project_id }))
-          : [];
+        const scope   = url.searchParams.get("scope");
+        const isAdmin = sessionUser.role === "admin";
+        const me      = sessionUser.username;
+        const toList  = (rows) => (Array.isArray(rows) ? rows : []).map(r => ({ ...r.data, _id: r.id, project_id: r.project_id }));
 
         // Admin with no scope sees everything
-        if (!scope && isAdmin) return json(projList);
-        if (scope === "all")   return json(projList);
+        if ((!scope && isAdmin) || scope === "all")
+          return json(toList(await sb("projects?select=id,project_id,data")));
 
-        const me = sessionUser.username;
-
-        // Group scope
+        // Group scope — filter in DB by owner_username IN (group members)
         if (scope === "group") {
-          let membership = null;
-          try { membership = await getMembership(sb, sessionUser.id); } catch {}
-          const isLeaderOrManager = membership && ["leader", "manager"].includes(membership.role);
-          if (!isLeaderOrManager) return json([]);
-          let usernames = [];
-          try { usernames = await getGroupUsernames(sb, membership.group_id); } catch {}
-          return json(projList.filter(p => usernames.includes(p.owner_username)));
+          const membership = await getMembership(sb, sessionUser.id).catch(() => null);
+          if (!membership || !["leader", "manager"].includes(membership.role)) return json([]);
+          const usernames = await getGroupUsernames(sb, membership.group_id).catch(() => []);
+          if (!usernames.length) return json([]);
+          const rows = await sb(`projects?data->>owner_username=in.(${usernames.map(u => encodeURIComponent(u)).join(",")})&select=id,project_id,data`);
+          return json(toList(rows));
         }
 
-        // Mentioned scope — flat list of tasks that mention @me
+        // Mentioned scope — DB text search for @me, then extract matching tasks
         if (scope === "mentioned") {
+          const rows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data`);
           const mentionedTasks = [];
-          for (const p of projList) {
+          for (const p of toList(rows)) {
             for (const t of (p.tasks || [])) {
-              if ((t.notes || "").includes(`@${me}`)) {
+              if ((t.notes || "").includes(`@${me}`))
                 mentionedTasks.push({ ...t, _projectName: p.name, _projectId: p._id });
-              }
             }
           }
-          return json([{
-            _id: "__mentioned__", id: "__mentioned__",
-            name: `Tasks mentioning @${me}`,
-            _virtual: true,
-            tasks: mentionedTasks,
-          }]);
+          return json([{ _id: "__mentioned__", id: "__mentioned__", name: `Tasks mentioning @${me}`, _virtual: true, tasks: mentionedTasks }]);
         }
 
-        // Mine: I own it OR I'm assigned to at least one task
-        const mine = projList.filter(p =>
-          p.owner_username === me ||
-          (p.tasks || []).some(t => t.assignee?.toLowerCase() === me.toLowerCase())
-        );
+        // Mine — two parallel DB queries: owned + assigned-to-me, merged
+        const [owned, assigned] = await Promise.all([
+          sb(`projects?data->>owner_username=eq.${encodeURIComponent(me)}&select=id,project_id,data`),
+          sb(`projects?data::text=ilike.*"assignee":"${encodeURIComponent(me)}"*&select=id,project_id,data`),
+        ]);
+        const seen = new Set();
+        const mine = [...toList(owned), ...toList(assigned)].filter(p => {
+          if (seen.has(p._id)) return false;
+          seen.add(p._id); return true;
+        });
 
         if (scope === "mine") return json(mine);
 
-        // Default (no scope, non-admin): mine + projects where mentioned
-        const mentionedProjs = projList.filter(p =>
-          p.owner_username !== me &&
-          (p.tasks || []).some(t => (t.notes || "").includes(`@${me}`))
-        );
-        const seen = new Set();
-        return json([...mine, ...mentionedProjs].filter(p => {
-          if (seen.has(p._id)) return false;
-          seen.add(p._id);
-          return true;
-        }));
+        // Default (no scope, non-admin): mine + mentioned projects
+        const mentionedRows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data`);
+        const mentionedProjs = toList(mentionedRows).filter(p => !seen.has(p._id));
+        return json([...mine, ...mentionedProjs]);
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
@@ -574,6 +568,50 @@ export default {
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
+    // ── GET /grants ───────────────────────────────────────────────────────────
+    if (path === "/grants" && method === "GET") {
+      try {
+        return json(await sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,owner_username"));
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── POST /grants ──────────────────────────────────────────────────────────
+    if (path === "/grants" && method === "POST") {
+      try {
+        if (sessionUser.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const { code, name, funds, tier, owner_username } = await request.json();
+        if (!code?.trim()) return errRes(ch, "code is required", 400);
+        const data = await sb("grants", "POST", {
+          code: code.trim(), name: name?.trim() || "", funds: parseFloat(funds) || 0,
+          tier: tier || "internal", owner_username: owner_username || null, active: true,
+        });
+        return json(Array.isArray(data) ? data[0] : data, 201);
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── PUT /grants/:id ───────────────────────────────────────────────────────
+    if (path.match(/^\/grants\/[^/]+$/) && method === "PUT") {
+      try {
+        if (sessionUser.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const id = path.split("/").pop();
+        const { code, name, funds, tier, owner_username } = await request.json();
+        await sb(`grants?id=eq.${id}`, "PATCH", {
+          code: code?.trim(), name: name?.trim(), funds: parseFloat(funds) || 0,
+          tier, owner_username: owner_username || null,
+        });
+        return json({ success: true });
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── DELETE /grants/:id ────────────────────────────────────────────────────
+    if (path.match(/^\/grants\/[^/]+$/) && method === "DELETE") {
+      try {
+        if (sessionUser.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        await sb(`grants?id=eq.${path.split("/").pop()}`, "PATCH", { active: false });
+        return json({ success: true });
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
     // ── GET /resources ────────────────────────────────────────────────────────
     if (path === "/resources" && method === "GET") {
       try { return json(await sb("resources?active=eq.true&limit=100")); }
@@ -619,9 +657,7 @@ export default {
         if (scope === "group" && membership && isElevated) {
           const usernames = await getGroupUsernames(sb, membership.group_id);
           if (!usernames.length) return json([]);
-          // Filter bookings by username — fetch all and filter (Supabase IN syntax)
-          const all = await sb("bookings?limit=500");
-          return json((Array.isArray(all) ? all : []).filter(b => usernames.includes(b.username)));
+          return json(await sb(`bookings?username=in.(${usernames.map(u => encodeURIComponent(u)).join(",")})&limit=500`));
         }
 
         return json(await sb("bookings?limit=200"));
@@ -721,6 +757,7 @@ export default {
         const data = await sb("requests", "POST", {
           type, username: sessionUser.username, email: body.email || null,
           status: "pending", metadata: metadata || {}, notes: notes || null,
+          grant_id: body.grant_id || null,
         });
         return json(Array.isArray(data) ? data[0] : data, 201);
       } catch (e) { return errRes(ch, e.message, 500); }
@@ -731,7 +768,7 @@ export default {
       try {
         const id   = path.split("/").pop();
         const body = await request.json();
-        const { status, rejection_reason } = body;
+        const { status, rejection_reason, store_order: bodyStoreOrder } = body;
         if (!["approved", "rejected"].includes(status)) return errRes(ch, "Invalid status", 400);
         const rows = await sb(`requests?id=eq.${id}&limit=1`);
         if (!rows?.length) return errRes(ch, "Request not found", 404, "NOT_FOUND");
@@ -754,12 +791,15 @@ export default {
           if (req.notes) metaLines.push(`Notes: ${req.notes}`);
           metaLines.push(`Submitted by: ${req.username}`);
           metaLines.push(`Approved by: ${sessionUser.username}`);
+          const storeOrder = bodyStoreOrder || req.metadata?.store_order;
+          const baseTask   = { id: Date.now(), col: "To Do", title: `${label} request`, notes: metaLines.join("\n") };
+          if (storeOrder) baseTask.store_order = { ...storeOrder, requested_by: req.username };
           await sb("projects", "POST", {
             project_id: projectId,
             data: {
               id: projectId, name: `[${label}] ${req.username} — ${new Date(req.created_at).toLocaleDateString("en-GB")}`,
               owner_username: sessionUser.username, source: "request",
-              tasks: [{ id: Date.now(), col: "To Do", title: `${label} request`, notes: metaLines.join("\n") }],
+              tasks: [baseTask],
             }
           });
           await sb("logs", "POST", { username: sessionUser.username, action: "approve_request", details: `Approved ${label} request from ${req.username}`, timestamp: new Date().toISOString() });

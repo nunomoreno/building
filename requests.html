@@ -50,6 +50,8 @@
     getRequests:      ()         => apiFetch("/requests"),
     submitRequest:    (body)     => apiFetch("/requests", { method: "POST", body: JSON.stringify(body) }),
     reviewRequest:    (id, body) => apiFetch(`/requests/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    getPricing:       ()         => apiFetch("/settings/pricing"),
+    getGrants:        ()         => apiFetch("/grants"),
   };
 
   const STATUS_CLASSES = {
@@ -103,6 +105,7 @@
                 {isAdmin && <div className="border-t border-slate-700" />}
                 {isAdmin && <a href="users.html"   className={drop}>👥 Users & Groups</a>}
                 {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}
+                {isAdmin && <a href="grants.html"  className={drop}>🏛 Grants</a>}
               </div>
             )}
           </div>
@@ -177,35 +180,150 @@
     );
   }
 
+  // ── Store Order Editor ──────────────────────────────────────────────────────
+  function StoreOrderEditor({ items, onChange, skus, disabled }) {
+    const newLine = () => ({ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 });
+
+    const updateLine = (id, field, val) => {
+      onChange(items.map(item => {
+        if (item.id !== id) return item;
+        const u = { ...item, [field]: val };
+        if (field === "sku_id") {
+          const sku = skus.find(s => s.id === val);
+          u.sku_name   = sku?.name || "";
+          u.unit_price = parseFloat(sku?.internal || 0);
+        }
+        if (field === "qty" || field === "unit_price" || field === "sku_id") {
+          u.line_total = Math.max(0, parseFloat(u.qty || 0)) * Math.max(0, parseFloat(u.unit_price || 0));
+        }
+        return u;
+      }));
+    };
+
+    const total = items.reduce((s, i) => s + (i.line_total || 0), 0);
+    const inp   = "text-xs px-2 py-1 rounded border border-slate-200 outline-none focus:ring-1 focus:ring-blue-500 w-full";
+
+    return (
+      <div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse mb-2" style={{ minWidth: 560 }}>
+            <thead>
+              <tr className="text-left text-slate-400 border-b border-slate-100">
+                <th className="py-2 pr-2 font-semibold">SKU / Item</th>
+                <th className="py-2 pr-2 font-semibold w-16">Qty</th>
+                <th className="py-2 pr-2 font-semibold w-20">€/unit</th>
+                <th className="py-2 pr-2 font-semibold w-20 text-right">Line total</th>
+                <th className="py-2 pr-2 font-semibold">Comment</th>
+                {!disabled && <th className="py-2 w-5"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id} className="border-b border-slate-50">
+                  <td className="py-1.5 pr-2">
+                    <select value={item.sku_id} onChange={e => updateLine(item.id, "sku_id", e.target.value)} disabled={disabled} className={inp}>
+                      <option value="">Select item…</option>
+                      {skus.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <input type="number" min="1" value={item.qty}
+                      onChange={e => updateLine(item.id, "qty", Math.max(1, parseInt(e.target.value) || 1))}
+                      disabled={disabled} className={inp + " text-right"} />
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <input type="number" min="0" step="0.01" value={item.unit_price}
+                      onChange={e => updateLine(item.id, "unit_price", parseFloat(e.target.value) || 0)}
+                      disabled={disabled} className={inp + " text-right"} />
+                  </td>
+                  <td className="py-1.5 pr-2 text-right font-semibold text-slate-700">
+                    €{(item.line_total || 0).toFixed(2)}
+                  </td>
+                  <td className="py-1.5 pr-2">
+                    <input value={item.comment} onChange={e => updateLine(item.id, "comment", e.target.value)}
+                      disabled={disabled} placeholder="Comment…" className={inp} />
+                  </td>
+                  {!disabled && (
+                    <td className="py-1.5 pl-1">
+                      <button onClick={() => onChange(items.filter(i => i.id !== item.id))}
+                        className="text-red-400 hover:text-red-600 cursor-pointer bg-transparent border-0 p-0 leading-none text-sm">✕</button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          {!disabled
+            ? <button onClick={() => onChange([...items, newLine()])}
+                className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 cursor-pointer hover:bg-blue-100 border-0">+ Add line</button>
+            : <span />}
+          <div className="text-sm font-bold text-slate-800">
+            Order total: <span className="text-violet-600">€{total.toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── Submit form ────────────────────────────────────────────────────────────
   function RequestForm({ user, requestTypes, onSubmitted }) {
     const typeKeys = Object.keys(requestTypes || {});
-    const [type,    setType]    = useState(typeKeys[0] || "");
-    const [meta,    setMeta]    = useState({});
-    const [notes,   setNotes]   = useState("");
-    const [saving,  setSaving]  = useState(false);
-    const [success, setSuccess] = useState(false);
-    const [error,   setError]   = useState(null);
+    const [type,       setType]       = useState(typeKeys[0] || "");
+    const [meta,       setMeta]       = useState({});
+    const [notes,      setNotes]      = useState("");
+    const [saving,     setSaving]     = useState(false);
+    const [success,    setSuccess]    = useState(false);
+    const [error,      setError]      = useState(null);
+    const [skus,       setSkus]       = useState([]);
+    const [storeItems, setStoreItems] = useState([{ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 }]);
+    const [grants,     setGrants]     = useState([]);
+    const [grantId,    setGrantId]    = useState("");
+
+    const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
 
     const typeConfig = requestTypes?.[type];
     const fields     = typeConfig?.fields || [];
+    const isStore    = !!typeConfig?.is_store;
 
-    const handleTypeChange = (t) => { setType(t); setMeta({}); setError(null); };
+    useEffect(() => {
+      api.getGrants().then(data => { if (Array.isArray(data)) setGrants(data); });
+    }, []);
+
+    useEffect(() => {
+      if (isStore) {
+        api.getPricing().then(data => { if (data?.skus) setSkus(data.skus); });
+      }
+    }, [type]);
+
+    const handleTypeChange = (t) => {
+      setType(t); setMeta({}); setError(null);
+      setStoreItems([{ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 }]);
+    };
 
     const submit = async () => {
       setError(null);
-      for (const f of fields) {
-        const v = meta[f.id];
-        if (!v || (Array.isArray(v) && v.length === 0) || v === "") {
-          setError(`Please fill in "${f.label}"`); return;
+      if (isStore) {
+        if (!storeItems.some(i => i.sku_id)) { setError("Please add at least one item."); return; }
+      } else {
+        for (const f of fields) {
+          const v = meta[f.id];
+          if (!v || (Array.isArray(v) && v.length === 0) || v === "") {
+            setError(`Please fill in "${f.label}"`); return;
+          }
         }
       }
       setSaving(true);
-      const res = await api.submitRequest({ type, metadata: meta, notes, email: user.email || null });
+      const validItems = storeItems.filter(i => i.sku_id);
+      const baseMetadata = isStore
+        ? { store_order: { items: validItems, total: validItems.reduce((s, i) => s + (i.line_total || 0), 0) } }
+        : meta;
+      const res = await api.submitRequest({ type, metadata: baseMetadata, notes, email: user.email || null, grant_id: grantId || null });
       setSaving(false);
       if (res?.error) { setError(res.error); return; }
       setSuccess(true);
-      setTimeout(() => { setSuccess(false); setMeta({}); setNotes(""); onSubmitted(); }, 2500);
+      setTimeout(() => { setSuccess(false); setMeta({}); setNotes(""); setGrantId(""); setStoreItems([{ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 }]); onSubmitted(); }, 2500);
     };
 
     return (
@@ -213,25 +331,52 @@
         <h2 className="text-base font-bold text-slate-900 mb-1">New Request</h2>
         <p className="text-sm text-slate-400 mb-6">Submit a service request to the platforms team.</p>
 
-        {/* Type selector */}
         <div className="flex gap-2 flex-wrap mb-6">
           {typeKeys.map(k => (
             <button key={k} onClick={() => handleTypeChange(k)}
               className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer ${type === k ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
               {requestTypes[k].label}
+              {requestTypes[k].is_store && <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>}
             </button>
           ))}
         </div>
 
-        {/* Dynamic fields */}
-        <div className="space-y-4">
-          {fields.map(f => (
-            <div key={f.id}>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">{f.label}</label>
-              <FieldInput field={f} value={meta[f.id]} onChange={v => setMeta({ ...meta, [f.id]: v })} disabled={saving} />
-            </div>
-          ))}
+        {grants.length > 0 && (
+          <div className="mb-5">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Grant</label>
+            <select value={grantId} onChange={e => setGrantId(e.target.value)} disabled={saving}
+              className="w-full text-sm px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">— none —</option>
+              {grants.map(g => (
+                <option key={g.id} value={g.id}>{g.code} · {g.name}</option>
+              ))}
+            </select>
+            {grantId && (() => { const g = grants.find(x => x.id === grantId); return g ? (
+              <div className="mt-1.5 flex gap-2 flex-wrap">
+                <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">Tier: <strong className="text-slate-700">{TIER_LABELS[g.tier] || g.tier}</strong></span>
+                {g.funds > 0 && <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">Budget: <strong className="text-slate-700">€{g.funds.toLocaleString()}</strong></span>}
+                {g.owner_username && <span className="text-[11px] bg-slate-100 rounded px-2 py-0.5 text-slate-500">PI: <strong className="text-slate-700">{g.owner_username}</strong></span>}
+              </div>
+            ) : null; })()}
+          </div>
+        )}
 
+        <div className="space-y-4">
+          {isStore ? (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Order Items</label>
+              {skus.length === 0
+                ? <p className="text-xs text-slate-400">No SKUs configured yet. Ask an admin to add items in Pricing.</p>
+                : <StoreOrderEditor items={storeItems} onChange={setStoreItems} skus={skus} disabled={saving} />}
+            </div>
+          ) : (
+            fields.map(f => (
+              <div key={f.id}>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">{f.label}</label>
+                <FieldInput field={f} value={meta[f.id]} onChange={v => setMeta({ ...meta, [f.id]: v })} disabled={saving} />
+              </div>
+            ))
+          )}
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Additional Notes</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} disabled={saving} rows={3}
@@ -271,6 +416,29 @@
                 </div>
                 <span className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 capitalize shrink-0 ${STATUS_CLASSES[r.status] || "bg-slate-100 text-slate-500"}`}>{r.status}</span>
               </div>
+              {r.metadata?.store_order ? (
+                <div className="text-xs mt-1">
+                  <table className="w-full border-collapse text-slate-500">
+                    <thead><tr className="border-b border-slate-100 text-slate-400">
+                      <th className="text-left py-1 pr-2 font-semibold">Item</th>
+                      <th className="text-right py-1 pr-2 font-semibold">Qty</th>
+                      <th className="text-right py-1 pr-2 font-semibold">€/unit</th>
+                      <th className="text-right py-1 font-semibold">Total</th>
+                    </tr></thead>
+                    <tbody>
+                      {(r.metadata.store_order.items || []).map((item, i) => (
+                        <tr key={i} className="border-b border-slate-50">
+                          <td className="py-1 pr-2">{item.sku_name || item.sku_id}{item.comment && <span className="text-slate-400 ml-1">— {item.comment}</span>}</td>
+                          <td className="py-1 pr-2 text-right">{item.qty}</td>
+                          <td className="py-1 pr-2 text-right">€{parseFloat(item.unit_price||0).toFixed(2)}</td>
+                          <td className="py-1 text-right font-semibold text-slate-700">€{parseFloat(item.line_total||0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="text-right font-bold text-sm text-violet-600 mt-1">Total: €{parseFloat(r.metadata.store_order.total||0).toFixed(2)}</div>
+                </div>
+              ) : (
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                 {fields.map(f => {
                   const v = r.metadata?.[f.id];
@@ -278,6 +446,7 @@
                   return <span key={f.id}><strong className="text-slate-700">{f.label}:</strong> {Array.isArray(v) ? v.join(", ") : v}</span>;
                 })}
               </div>
+              )}
               {r.notes && <p className="text-xs text-slate-400 mt-2">{r.notes}</p>}
               {r.reviewed_by && <p className="text-xs text-slate-400 mt-2">Reviewed by <strong>{r.reviewed_by}</strong> · {new Date(r.reviewed_at).toLocaleDateString("en-GB")}</p>}
             </div>
@@ -289,20 +458,34 @@
 
   // ── Admin queue ────────────────────────────────────────────────────────────
   function AdminQueue({ requests, requestTypes, onRefresh }) {
-    const [filter,    setFilter]    = useState("pending");
-    const [reviewing, setReviewing] = useState(null);
-    const [reason,    setReason]    = useState("");
-    const [saving,    setSaving]    = useState(false);
-    const [error,     setError]     = useState(null);
+    const [filter,      setFilter]      = useState("pending");
+    const [reviewing,   setReviewing]   = useState(null);
+    const [reason,      setReason]      = useState("");
+    const [saving,      setSaving]      = useState(false);
+    const [error,       setError]       = useState(null);
+    const [reviewOrder, setReviewOrder] = useState(null);
+    const [skus,        setSkus]        = useState([]);
 
     const visible = requests.filter(r => filter === "all" ? true : r.status === filter);
 
+    const startReview = (r) => {
+      setReviewing(r); setReason(""); setError(null);
+      if (r.metadata?.store_order) {
+        setReviewOrder(JSON.parse(JSON.stringify(r.metadata.store_order)));
+        api.getPricing().then(data => { if (data?.skus) setSkus(data.skus); });
+      } else {
+        setReviewOrder(null);
+      }
+    };
+
     const review = async (status) => {
       setSaving(true); setError(null);
-      const res = await api.reviewRequest(reviewing.id, { status, rejection_reason: reason });
+      const body = { status, rejection_reason: reason };
+      if (status === "approved" && reviewOrder) body.store_order = reviewOrder;
+      const res = await api.reviewRequest(reviewing.id, body);
       setSaving(false);
       if (res?.error) { setError(res.error); return; }
-      setReviewing(null); setReason(""); onRefresh();
+      setReviewing(null); setReviewOrder(null); setReason(""); onRefresh();
     };
 
     const filterLabels = ["pending", "approved", "rejected", "all"];
@@ -348,6 +531,29 @@
                     if (!v || (Array.isArray(v) && !v.length)) return null;
                     return <div key={f.id}><strong className="text-slate-700">{f.label}:</strong> {Array.isArray(v) ? v.join(", ") : v}</div>;
                   })}
+                  {r.metadata?.store_order && reviewing?.id !== r.id && (
+                    <div className="mt-1">
+                      <table className="w-full border-collapse">
+                        <thead><tr className="border-b border-slate-100 text-slate-400">
+                          <th className="text-left py-1 pr-2 font-semibold">Item</th>
+                          <th className="text-right py-1 pr-2 font-semibold">Qty</th>
+                          <th className="text-right py-1 pr-2 font-semibold">€/unit</th>
+                          <th className="text-right py-1 font-semibold">Total</th>
+                        </tr></thead>
+                        <tbody>
+                          {(r.metadata.store_order.items || []).map((item, i) => (
+                            <tr key={i} className="border-b border-slate-50">
+                              <td className="py-1 pr-2">{item.sku_name || item.sku_id}{item.comment && <span className="text-slate-400 ml-1">— {item.comment}</span>}</td>
+                              <td className="py-1 pr-2 text-right">{item.qty}</td>
+                              <td className="py-1 pr-2 text-right">€{parseFloat(item.unit_price||0).toFixed(2)}</td>
+                              <td className="py-1 text-right font-semibold text-slate-700">€{parseFloat(item.line_total||0).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="text-right font-bold text-xs text-violet-600 mt-1">Total: €{parseFloat(r.metadata.store_order.total||0).toFixed(2)}</div>
+                    </div>
+                  )}
                   {r.notes && <div><strong className="text-slate-700">Notes:</strong> {r.notes}</div>}
                   {r.email  && <div className="text-slate-400">📧 {r.email}</div>}
                 </div>
@@ -358,6 +564,17 @@
                       <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2}
                         placeholder="Rejection reason (optional)…"
                         className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-3" />
+                      {reviewOrder && (
+                        <div className="mb-3">
+                          <div className="text-xs font-semibold text-slate-500 mb-2">Edit Order (optional)</div>
+                          <StoreOrderEditor
+                            items={reviewOrder.items || []}
+                            onChange={items => setReviewOrder({ ...reviewOrder, items, total: items.reduce((s,i) => s+(i.line_total||0), 0) })}
+                            skus={skus}
+                            disabled={false}
+                          />
+                        </div>
+                      )}
                       {error && <div className="text-xs text-red-600 mb-2">⚠ {error}</div>}
                       <div className="flex gap-2">
                         <button onClick={() => review("approved")} disabled={saving}
@@ -373,7 +590,7 @@
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => { setReviewing(r); setReason(""); setError(null); }}
+                    <button onClick={() => startReview(r)}
                       className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0 cursor-pointer mt-1 transition">
                       Review →
                     </button>
@@ -442,7 +659,7 @@
 
         {selType && (
           <>
-            <div className="grid grid-cols-2 gap-4 mb-5">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Label</label>
                 <input value={cfg.label} onChange={e => setcfg({ ...cfg, label: e.target.value })} className={inputCls} />
@@ -452,33 +669,43 @@
                 <input value={cfg.approver_role} onChange={e => setcfg({ ...cfg, approver_role: e.target.value })} className={inputCls} />
               </div>
             </div>
+            <label className="flex items-center gap-3 mb-5 cursor-pointer select-none">
+              <div className={`relative w-10 h-5 rounded-full transition-colors ${cfg.is_store ? "bg-violet-600" : "bg-slate-200"}`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${cfg.is_store ? "left-5" : "left-0.5"}`} />
+              </div>
+              <input type="checkbox" className="hidden" checked={!!cfg.is_store} onChange={e => setcfg({ ...cfg, is_store: e.target.checked, fields: e.target.checked ? [] : cfg.fields })} />
+              <span className="text-sm text-slate-600">Store-style order <span className="text-xs text-slate-400">(replaces custom fields with a SKU order table)</span></span>
+            </label>
 
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fields</span>
-              <button onClick={addField} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer">+ Add field</button>
-            </div>
-
-            <div className="space-y-2 mb-5">
-              {cfg.fields.map(f => (
-                <div key={f.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  <div className="flex gap-2 mb-2">
-                    <input value={f.label} onChange={e => updField(f.id, "label", e.target.value)} placeholder="Label"
-                      className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" />
-                    <select value={f.type} onChange={e => updField(f.id, "type", e.target.value)}
-                      className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="text">Text</option>
-                      <option value="dropdown">Dropdown</option>
-                      <option value="multiselect">Multiselect</option>
-                    </select>
-                    <button onClick={() => delField(f.id)}
-                      className="text-xs px-2.5 py-1.5 rounded-lg border border-red-100 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100">✕</button>
-                  </div>
-                  {(f.type === "dropdown" || f.type === "multiselect") && (
-                    <OptionsEditor options={f.options || []} onChange={opts => updField(f.id, "options", opts)} />
-                  )}
+            {!cfg.is_store && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fields</span>
+                  <button onClick={addField} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer">+ Add field</button>
                 </div>
-              ))}
-            </div>
+                <div className="space-y-2 mb-5">
+                  {cfg.fields.map(f => (
+                    <div key={f.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <div className="flex gap-2 mb-2">
+                        <input value={f.label} onChange={e => updField(f.id, "label", e.target.value)} placeholder="Label"
+                          className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" />
+                        <select value={f.type} onChange={e => updField(f.id, "type", e.target.value)}
+                          className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="text">Text</option>
+                          <option value="dropdown">Dropdown</option>
+                          <option value="multiselect">Multiselect</option>
+                        </select>
+                        <button onClick={() => delField(f.id)}
+                          className="text-xs px-2.5 py-1.5 rounded-lg border border-red-100 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100">✕</button>
+                      </div>
+                      {(f.type === "dropdown" || f.type === "multiselect") && (
+                        <OptionsEditor options={f.options || []} onChange={opts => updField(f.id, "options", opts)} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
 

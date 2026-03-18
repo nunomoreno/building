@@ -153,7 +153,8 @@
     const adminDrop  = isAdmin ? `
       <div style="border-top:1px solid #334155"></div>
       <a href="users.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
-      <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>` : "";
+      <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>
+      <a href="grants.html"  class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🏛 Grants</a>` : "";
     document.getElementById("navbar").innerHTML = `
       <div class="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
         <a href="dashboard.html" class="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
@@ -214,6 +215,7 @@
   let expenseScope = "mine"; // mine | group | all
   let expenseYear  = new Date().getFullYear();
   let _allBookings = [], _resourceMap = {}, _skuMap = {}, _memberMap = {};
+  let _allProjects = [];
 
   function bookingHours(b) {
     if (b.full_day) return 8;
@@ -249,6 +251,43 @@
     });
   }
 
+  function buildStoreExpenseRows(scope, yearStr) {
+    const rows = [];
+    _allProjects.forEach(proj => {
+      (proj.data?.tasks || [])
+        .filter(t => t.col === "Done" && t.store_order?.items?.length)
+        .forEach(t => {
+          const requestedBy = t.store_order.requested_by || proj.data?.owner_username || "unknown";
+          if (scope === "mine" && requestedBy !== username) return;
+          if (scope === "group") {
+            const groupUsernames = new Set(
+              Object.values(_memberMap).filter(m => m.group_id === group_id).map(m => m.username)
+            );
+            groupUsernames.add(username);
+            if (!groupUsernames.has(requestedBy)) return;
+          }
+          const m    = _memberMap[requestedBy] || {};
+          const date = (proj.created_at || "").split("T")[0];
+          if (yearStr && !date.startsWith(yearStr)) return;
+          t.store_order.items.forEach(item => {
+            rows.push({
+              type: "order",
+              resource: item.sku_name || item.sku_id || "—",
+              user: m.display_name || requestedBy,
+              date,
+              start: "—", end: "—", full_day: false,
+              hours: item.qty,
+              tier: "—",
+              rate: parseFloat(item.unit_price || 0),
+              cost: parseFloat(item.line_total || 0),
+              comment: item.comment || "",
+            });
+          });
+        });
+    });
+    return rows;
+  }
+
   function renderExpenses() {
     const yearStr = String(expenseYear);
     let bookings  = _allBookings.filter(b =>
@@ -268,7 +307,9 @@
     }
     // "all" → no filter
 
-    const rows  = buildExpenseRows(bookings);
+    const bookingRows = buildExpenseRows(bookings);
+    const storeRows   = buildStoreExpenseRows(expenseScope, yearStr);
+    const rows  = [...bookingRows, ...storeRows].sort((a, b) => (a.date > b.date ? -1 : 1));
     const total = rows.reduce((s, r) => s + r.cost, 0);
 
     document.getElementById("expense-total").textContent =
@@ -287,7 +328,7 @@
             <th class="py-2 pr-3 font-semibold">Resource</th>
             <th class="py-2 pr-3 font-semibold">User</th>
             <th class="py-2 pr-3 font-semibold">Date</th>
-            <th class="py-2 pr-3 font-semibold">Hours</th>
+            <th class="py-2 pr-3 font-semibold">Qty / Hours</th>
             <th class="py-2 pr-3 font-semibold">€/h</th>
             <th class="py-2 font-semibold text-right">Total</th>
           </tr>
@@ -295,10 +336,10 @@
         <tbody>
           ${rows.map(r => `
             <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-              <td class="py-2 pr-3 text-slate-700 font-medium max-w-[140px] truncate">${esc(r.resource)}</td>
+              <td class="py-2 pr-3 text-slate-700 font-medium max-w-[140px] truncate">${esc(r.resource)}${r.type === "order" ? `<span class="ml-1 text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>` : ""}</td>
               <td class="py-2 pr-3 text-slate-600 max-w-[100px] truncate">${esc(r.user)}</td>
               <td class="py-2 pr-3 text-slate-500">${esc(r.date)}</td>
-              <td class="py-2 pr-3 text-slate-500">${r.hours % 1 === 0 ? r.hours : r.hours.toFixed(1)}h${r.full_day ? " (full)" : ""}</td>
+              <td class="py-2 pr-3 text-slate-500">${r.type === "order" ? `${r.hours} units` : `${r.hours % 1 === 0 ? r.hours : r.hours.toFixed(1)}h${r.full_day ? " (full)" : ""}`}</td>
               <td class="py-2 pr-3 text-slate-500">${r.rate > 0 ? "€" + r.rate.toFixed(2) : "—"}</td>
               <td class="py-2 text-right font-semibold ${r.cost > 0 ? "text-violet-600" : "text-slate-400"}">${r.cost > 0 ? "€" + r.cost.toFixed(2) : "—"}</td>
             </tr>`).join("")}
@@ -322,12 +363,17 @@
       groupUsernames.add(username);
       bookings = bookings.filter(b => groupUsernames.has(b.username));
     }
-    const rows = buildExpenseRows(bookings);
-    const header = ["Resource","User","Date","Start","End","Hours","Tier","Rate (€/h)","Total (€)"];
+    const bookingRows = buildExpenseRows(bookings);
+    const storeRows   = buildStoreExpenseRows(expenseScope, yearStr);
+    const rows = [...bookingRows, ...storeRows].sort((a, b) => (a.date > b.date ? -1 : 1));
+    const header = ["Type","Resource/Item","User","Date","Qty/Hours","Unit","Rate (€)","Total (€)","Comment"];
     const csvRows = [header, ...rows.map(r => [
-      r.resource, r.user, r.date, r.full_day ? "Full day" : r.start,
-      r.full_day ? "Full day" : r.end, r.hours.toFixed(2),
-      r.tier, r.rate.toFixed(2), r.cost.toFixed(2)
+      r.type === "order" ? "Order" : "Booking",
+      r.resource, r.user, r.date,
+      r.type === "order" ? r.hours : (r.full_day ? "Full day" : r.hours.toFixed(2)),
+      r.type === "order" ? "units" : "hours",
+      r.rate.toFixed(2), r.cost.toFixed(2),
+      r.type === "order" ? (r.comment || "") : (r.tier || "")
     ])].map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
     const blob = new Blob([csvRows], { type: "text/csv" });
     const a    = document.createElement("a");
@@ -358,6 +404,7 @@
 
     // Build lookup maps for expense computation
     _allBookings = bookingList;
+    _allProjects = projectList;
     resourceList.forEach(r => { _resourceMap[r.id] = r; });
     pricingData.skus.forEach(s => { _skuMap[s.id] = s; });
     memberList.forEach(m => { _memberMap[m.username] = m; });

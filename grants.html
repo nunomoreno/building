@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerno — Grants</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-50 font-sans">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
+    const SESSION_KEY = "kerno_session";
+
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (!session || Date.now() > new Date(session.expires).getTime()) {
+      localStorage.removeItem(SESSION_KEY);
+      window.location.href = "index.html?expired=1";
+    }
+    if (session.role !== "admin") window.location.href = "dashboard.html";
+
+    const authH  = () => ({ "Content-Type": "application/json", "X-Session-Token": session.token });
+    const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+
+    const api = {
+      list:   ()       => fetch(`${WORKER}/grants`,       { headers: authH() }).then(r => r.json()),
+      create: (g)      => fetch(`${WORKER}/grants`,       { method: "POST",   headers: authH(), body: JSON.stringify(g) }).then(r => r.json()),
+      update: (id, g)  => fetch(`${WORKER}/grants/${id}`, { method: "PUT",    headers: authH(), body: JSON.stringify(g) }).then(r => r.json()),
+      remove: (id)     => fetch(`${WORKER}/grants/${id}`, { method: "DELETE", headers: authH() }).then(r => r.json()),
+      members: ()      => fetch(`${WORKER}/members`,      { headers: authH() }).then(r => r.json()),
+    };
+
+    const TIERS       = ["internal", "cracs", "academia", "industry"];
+    const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
+    const TIER_COLORS = { internal: "bg-slate-100 text-slate-600", cracs: "bg-blue-50 text-blue-600", academia: "bg-emerald-50 text-emerald-600", industry: "bg-amber-50 text-amber-700" };
+
+    const newRow = () => ({ _tempId: `_new_${Date.now()}`, code: "", name: "", funds: "", tier: "internal", owner_username: "" });
+    const inputCls = "w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans bg-white";
+
+    function App() {
+      const [grants,   setGrants]   = useState([]);   // rows from DB (have real id)
+      const [newRows,  setNewRows]  = useState([]);   // unsaved additions
+      const [members,  setMembers]  = useState([]);
+      const [loading,  setLoading]  = useState(true);
+      const [saving,   setSaving]   = useState(false);
+      const [msg,      setMsg]      = useState(null);
+      const [menuOpen, setMenuOpen] = useState(false);
+
+      useEffect(() => {
+        if (!menuOpen) return;
+        const h = () => setMenuOpen(false);
+        document.addEventListener("click", h);
+        return () => document.removeEventListener("click", h);
+      }, [menuOpen]);
+
+      useEffect(() => {
+        Promise.all([api.list(), api.members()])
+          .then(([g, m]) => {
+            setGrants(Array.isArray(g) ? g : []);
+            setMembers(Array.isArray(m) ? m : []);
+            setLoading(false);
+          })
+          .catch(() => setLoading(false));
+      }, []);
+
+      const updateGrant  = (id, field, val) => setGrants(prev => prev.map(g => g.id === id ? { ...g, [field]: val, _dirty: true } : g));
+      const updateNewRow = (tid, field, val) => setNewRows(prev => prev.map(r => r._tempId === tid ? { ...r, [field]: val } : r));
+      const addRow       = () => setNewRows(prev => [...prev, newRow()]);
+      const removeNew    = (tid) => setNewRows(prev => prev.filter(r => r._tempId !== tid));
+
+      const removeExisting = async (id) => {
+        if (!confirm("Remove this grant?")) return;
+        await api.remove(id);
+        setGrants(prev => prev.filter(g => g.id !== id));
+      };
+
+      const save = async () => {
+        setSaving(true); setMsg(null);
+        try {
+          const ops = [];
+          // Update dirty existing rows
+          for (const g of grants.filter(g => g._dirty && g.code?.trim())) {
+            ops.push(api.update(g.id, { code: g.code.trim(), name: g.name?.trim() || "", funds: parseFloat(g.funds) || 0, tier: g.tier, owner_username: g.owner_username || null }));
+          }
+          // Create new rows
+          for (const r of newRows.filter(r => r.code.trim())) {
+            ops.push(api.create({ code: r.code.trim(), name: r.name.trim(), funds: parseFloat(r.funds) || 0, tier: r.tier, owner_username: r.owner_username || null }));
+          }
+          await Promise.all(ops);
+          // Reload fresh from DB
+          const fresh = await api.list();
+          setGrants(Array.isArray(fresh) ? fresh : []);
+          setNewRows([]);
+          setMsg({ text: "Saved!", ok: true });
+        } catch (e) {
+          setMsg({ text: e.message, ok: false });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
+
+      return (
+        <div className="min-h-screen bg-slate-50">
+          <nav className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+            <a href="dashboard.html" className="text-[15px] font-bold text-white no-underline">⚙️ Kerno</a>
+            <span className="text-slate-600">›</span>
+            <span className="text-[13px] text-slate-400">Grants</span>
+            <div className="ml-auto flex gap-2 items-center flex-wrap">
+              <a href="kanban.html"   className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📋 Kanban</a>
+              <a href="booking.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📅 Bookings</a>
+              <a href="requests.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📝 Requests</a>
+              <div className="relative" onClick={e => e.stopPropagation()}>
+                <button onClick={() => setMenuOpen(o => !o)}
+                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-700 text-white hover:bg-slate-600 cursor-pointer font-[inherit]">
+                  {session.avatar_url
+                    ? <img src={session.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
+                    : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-600 text-slate-200 font-bold text-[10px]">{session.username[0].toUpperCase()}</span>}
+                  {session.display_name || session.username}
+                  <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>
+                  <span className="text-[10px] text-slate-400">▾</span>
+                </button>
+                {menuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <a href="profile.html" className={drop}>👤 My Profile</a>
+                    <div className="border-t border-slate-700" />
+                    <a href="users.html"   className={drop}>👥 Users & Groups</a>
+                    <a href="pricing.html" className={drop}>💰 Pricing</a>
+                    <a href="grants.html"  className="flex items-center gap-2 px-3 py-2 text-xs bg-slate-700 text-white no-underline">🏛 Grants</a>
+                  </div>
+                )}
+              </div>
+              <button onClick={logout} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 cursor-pointer font-[inherit] hover:bg-slate-700">Sign out</button>
+            </div>
+          </nav>
+
+          <main className="max-w-5xl mx-auto px-4 py-10">
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Grants</h1>
+              <p className="text-sm text-slate-400 mt-1">Manage research grants. The grant's tier determines the pricing category applied to bookings and requests.</p>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700">Research Grants</span>
+                <button onClick={addRow} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 font-sans">
+                  + Add Grant
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="p-8 text-center text-sm text-slate-400">Loading…</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Code</th>
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Name</th>
+                        <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Funds (€)</th>
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-32">Tier</th>
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-44">Owner</th>
+                        <th className="w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grants.map((g, i) => (
+                        <tr key={g.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                          <td className="px-4 py-2.5"><input value={g.code} onChange={e => updateGrant(g.id, "code", e.target.value)} className={inputCls} /></td>
+                          <td className="px-4 py-2.5"><input value={g.name} onChange={e => updateGrant(g.id, "name", e.target.value)} placeholder="Grant name" className={inputCls} /></td>
+                          <td className="px-4 py-2.5">
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                              <input type="number" min="0" step="0.01" value={g.funds} onChange={e => updateGrant(g.id, "funds", e.target.value)}
+                                className="w-full text-xs pl-6 pr-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-white" />
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <select value={g.tier} onChange={e => updateGrant(g.id, "tier", e.target.value)} className={inputCls}>
+                              {TIERS.map(t => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <select value={g.owner_username || ""} onChange={e => updateGrant(g.id, "owner_username", e.target.value)} className={inputCls}>
+                              <option value="">— unassigned —</option>
+                              {members.map(m => <option key={m.id} value={m.username}>{m.display_name || m.username}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button onClick={() => removeExisting(g.id)} className="text-slate-300 hover:text-red-400 bg-transparent border-none cursor-pointer text-lg leading-none font-sans" title="Remove">×</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {newRows.map((r, i) => (
+                        <tr key={r._tempId} className={(grants.length + i) % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                          <td className="px-4 py-2.5"><input value={r.code} onChange={e => updateNewRow(r._tempId, "code", e.target.value)} placeholder="e.g. FCT-2024-001" className={inputCls} /></td>
+                          <td className="px-4 py-2.5"><input value={r.name} onChange={e => updateNewRow(r._tempId, "name", e.target.value)} placeholder="Grant name" className={inputCls} /></td>
+                          <td className="px-4 py-2.5">
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                              <input type="number" min="0" step="0.01" value={r.funds} onChange={e => updateNewRow(r._tempId, "funds", e.target.value)}
+                                className="w-full text-xs pl-6 pr-2.5 py-1.5 rounded-lg border border-blue-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-blue-50/30" />
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <select value={r.tier} onChange={e => updateNewRow(r._tempId, "tier", e.target.value)} className={`${inputCls} border-blue-200 bg-blue-50/30`}>
+                              {TIERS.map(t => <option key={t} value={t}>{TIER_LABELS[t]}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <select value={r.owner_username} onChange={e => updateNewRow(r._tempId, "owner_username", e.target.value)} className={`${inputCls} border-blue-200 bg-blue-50/30`}>
+                              <option value="">— unassigned —</option>
+                              {members.map(m => <option key={m.id} value={m.username}>{m.display_name || m.username}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button onClick={() => removeNew(r._tempId)} className="text-slate-300 hover:text-red-400 bg-transparent border-none cursor-pointer text-lg leading-none font-sans" title="Remove">×</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {grants.length === 0 && newRows.length === 0 && (
+                        <tr><td colSpan={6} className="text-center text-sm text-slate-400 py-8">No grants yet. Click "+ Add Grant" to start.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                {msg
+                  ? <span className={`text-sm ${msg.ok ? "text-emerald-600" : "text-red-600"}`}>{msg.ok ? "✓ " : "✗ "}{msg.text}</span>
+                  : <span />}
+                <button onClick={save} disabled={saving}
+                  className="text-sm px-5 py-2 rounded-xl bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 disabled:opacity-60 font-sans font-semibold">
+                  {saving ? "Saving…" : "Save Grants"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+              <strong>Note:</strong> Select a grant when creating bookings or submitting requests to automatically apply the correct pricing tier.
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
