@@ -64,6 +64,28 @@
     </div>
   </div>
 
+  <!-- Expenses -->
+  <p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Expenses</p>
+  <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-10">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-wrap gap-3">
+      <span class="text-sm font-semibold text-slate-800">💰 Resource Usage Costs</span>
+      <div class="flex items-center gap-2 flex-wrap">
+        <select id="expense-year" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white"></select>
+        <div id="expense-scope-wrap" class="flex rounded-lg overflow-hidden border border-slate-200 text-xs"></div>
+        <button id="expense-csv" class="text-xs px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition font-medium">⬇ Download CSV</button>
+      </div>
+    </div>
+    <div class="px-6 py-4">
+      <div class="flex items-end gap-3 mb-5">
+        <div id="expense-total" class="text-4xl font-bold text-violet-600 leading-none">—</div>
+        <div class="text-sm text-slate-400 mb-1">total this year</div>
+      </div>
+      <div id="expense-table" class="max-h-72 overflow-y-auto">
+        <p class="text-xs text-slate-400">Loading…</p>
+      </div>
+    </div>
+  </div>
+
   <!-- Panels -->
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
 
@@ -168,19 +190,197 @@
     rejected: "bg-red-50 text-red-500 border border-red-100",
   };
 
+  // ── Expense helpers ─────────────────────────────────────────────────────────
+  const { group_role, group_id } = session;
+  const canSeeGroup = role === "admin" || group_role === "leader" || group_role === "manager";
+
+  let expenseScope = "mine"; // mine | group | all
+  let expenseYear  = new Date().getFullYear();
+  let _allBookings = [], _resourceMap = {}, _skuMap = {}, _memberMap = {};
+
+  function bookingHours(b) {
+    if (b.full_day) return 8;
+    if (!b.start_time || !b.end_time) return 0;
+    const [sh, sm] = b.start_time.split(":").map(Number);
+    const [eh, em] = b.end_time.split(":").map(Number);
+    return Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60);
+  }
+
+  function bookingCost(b) {
+    const res = _resourceMap[b.resource_id];
+    if (!res || !res.sku_id) return 0;
+    const sku = _skuMap[res.sku_id];
+    if (!sku) return 0;
+    const m = _memberMap[b.username] || {};
+    const tier = m.pricing_tier || "internal";
+    const rate  = parseFloat(sku[tier] || 0);
+    return bookingHours(b) * rate;
+  }
+
+  function buildExpenseRows(bookings) {
+    return bookings.map(b => {
+      const res  = _resourceMap[b.resource_id] || {};
+      const m    = _memberMap[b.username] || {};
+      const sku  = res.sku_id ? (_skuMap[res.sku_id] || {}) : {};
+      const tier = m.pricing_tier || "internal";
+      const rate = parseFloat(sku[tier] || 0);
+      const hrs  = bookingHours(b);
+      const cost = hrs * rate;
+      return { resource: res.name || b.resource_id, user: m.display_name || b.username,
+                date: b.date, start: b.start_time || "—", end: b.end_time || "—",
+                full_day: b.full_day, hours: hrs, tier, rate, cost };
+    });
+  }
+
+  function renderExpenses() {
+    const yearStr = String(expenseYear);
+    let bookings  = _allBookings.filter(b =>
+      b.status === "approved" && b.date && b.date.startsWith(yearStr)
+    );
+
+    if (expenseScope === "mine") {
+      bookings = bookings.filter(b => b.username === username);
+    } else if (expenseScope === "group") {
+      const groupUsernames = new Set(
+        Object.values(_memberMap)
+          .filter(m => m.group_id === group_id)
+          .map(m => m.username)
+      );
+      groupUsernames.add(username);
+      bookings = bookings.filter(b => groupUsernames.has(b.username));
+    }
+    // "all" → no filter
+
+    const rows  = buildExpenseRows(bookings);
+    const total = rows.reduce((s, r) => s + r.cost, 0);
+
+    document.getElementById("expense-total").textContent =
+      `€${total.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const tableEl = document.getElementById("expense-table");
+    if (!rows.length) {
+      tableEl.innerHTML = `<p class="text-xs text-slate-400 py-2">No approved bookings with pricing in ${expenseYear}.</p>`;
+      return;
+    }
+
+    tableEl.innerHTML = `
+      <table class="w-full text-xs border-collapse">
+        <thead>
+          <tr class="text-left text-slate-400 border-b border-slate-100">
+            <th class="py-2 pr-3 font-semibold">Resource</th>
+            <th class="py-2 pr-3 font-semibold">User</th>
+            <th class="py-2 pr-3 font-semibold">Date</th>
+            <th class="py-2 pr-3 font-semibold">Hours</th>
+            <th class="py-2 pr-3 font-semibold">€/h</th>
+            <th class="py-2 font-semibold text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+              <td class="py-2 pr-3 text-slate-700 font-medium max-w-[140px] truncate">${esc(r.resource)}</td>
+              <td class="py-2 pr-3 text-slate-600 max-w-[100px] truncate">${esc(r.user)}</td>
+              <td class="py-2 pr-3 text-slate-500">${esc(r.date)}</td>
+              <td class="py-2 pr-3 text-slate-500">${r.hours % 1 === 0 ? r.hours : r.hours.toFixed(1)}h${r.full_day ? " (full)" : ""}</td>
+              <td class="py-2 pr-3 text-slate-500">${r.rate > 0 ? "€" + r.rate.toFixed(2) : "—"}</td>
+              <td class="py-2 text-right font-semibold ${r.cost > 0 ? "text-violet-600" : "text-slate-400"}">${r.cost > 0 ? "€" + r.cost.toFixed(2) : "—"}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  }
+
+  function downloadCSV() {
+    const yearStr = String(expenseYear);
+    let bookings  = _allBookings.filter(b =>
+      b.status === "approved" && b.date && b.date.startsWith(yearStr)
+    );
+    if (expenseScope === "mine") {
+      bookings = bookings.filter(b => b.username === username);
+    } else if (expenseScope === "group") {
+      const groupUsernames = new Set(
+        Object.values(_memberMap)
+          .filter(m => m.group_id === group_id)
+          .map(m => m.username)
+      );
+      groupUsernames.add(username);
+      bookings = bookings.filter(b => groupUsernames.has(b.username));
+    }
+    const rows = buildExpenseRows(bookings);
+    const header = ["Resource","User","Date","Start","End","Hours","Tier","Rate (€/h)","Total (€)"];
+    const csvRows = [header, ...rows.map(r => [
+      r.resource, r.user, r.date, r.full_day ? "Full day" : r.start,
+      r.full_day ? "Full day" : r.end, r.hours.toFixed(2),
+      r.tier, r.rate.toFixed(2), r.cost.toFixed(2)
+    ])].map(row => row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob = new Blob([csvRows], { type: "text/csv" });
+    const a    = document.createElement("a");
+    a.href     = URL.createObjectURL(blob);
+    a.download = `kerno-expenses-${expenseYear}-${expenseScope}.csv`;
+    a.click();
+  }
+
   // ── Load ───────────────────────────────────────────────────────────────────
   async function load() {
-    const [projects, members, requests, logs] = await Promise.all([
+    const [projects, members, requests, logs, bookingsRaw, resourcesRaw, pricingRaw] = await Promise.all([
       apiFetch("/projects"),
       apiFetch("/members"),
       apiFetch("/requests"),
       apiFetch("/logs?limit=20"),
+      apiFetch("/bookings"),
+      apiFetch("/resources"),
+      apiFetch("/settings/pricing"),
     ]);
 
-    const projectList = Array.isArray(projects) ? projects : [];
-    const memberList  = Array.isArray(members)  ? members  : [];
-    const requestList = Array.isArray(requests) ? requests : [];
-    const logList     = Array.isArray(logs)     ? logs     : [];
+    const projectList  = Array.isArray(projects)      ? projects      : [];
+    const memberList   = Array.isArray(members)       ? members       : [];
+    const requestList  = Array.isArray(requests)      ? requests      : [];
+    const logList      = Array.isArray(logs)          ? logs          : [];
+    const bookingList  = Array.isArray(bookingsRaw)   ? bookingsRaw   : [];
+    const resourceList = Array.isArray(resourcesRaw)  ? resourcesRaw  : [];
+    const pricingData  = (pricingRaw && pricingRaw.skus) ? pricingRaw : { skus: [] };
+
+    // Build lookup maps for expense computation
+    _allBookings = bookingList;
+    resourceList.forEach(r => { _resourceMap[r.id] = r; });
+    pricingData.skus.forEach(s => { _skuMap[s.id] = s; });
+    memberList.forEach(m => { _memberMap[m.username] = m; });
+
+    // Year selector: current year ± 2
+    const yearSel = document.getElementById("expense-year");
+    const thisYear = new Date().getFullYear();
+    [thisYear - 1, thisYear, thisYear + 1].forEach(y => {
+      const opt = document.createElement("option");
+      opt.value = y; opt.textContent = y;
+      if (y === thisYear) opt.selected = true;
+      yearSel.appendChild(opt);
+    });
+    yearSel.addEventListener("change", () => { expenseYear = parseInt(yearSel.value); renderExpenses(); });
+
+    // Scope tabs
+    const scopeWrap = document.getElementById("expense-scope-wrap");
+    const scopes = [["mine","Mine"]];
+    if (canSeeGroup && group_id) scopes.push(["group","Group"]);
+    if (role === "admin") scopes.push(["all","All"]);
+    scopes.forEach(([val, label]) => {
+      const btn = document.createElement("button");
+      btn.textContent = label;
+      btn.dataset.scope = val;
+      btn.className = `px-3 py-1.5 text-xs font-medium transition ${val === expenseScope
+        ? "bg-violet-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`;
+      btn.addEventListener("click", () => {
+        expenseScope = val;
+        scopeWrap.querySelectorAll("button").forEach(b => {
+          b.className = `px-3 py-1.5 text-xs font-medium transition ${b.dataset.scope === val
+            ? "bg-violet-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`;
+        });
+        renderExpenses();
+      });
+      scopeWrap.appendChild(btn);
+    });
+    if (scopes.length < 2) scopeWrap.style.display = "none";
+
+    document.getElementById("expense-csv").addEventListener("click", downloadCSV);
+    renderExpenses();
 
     const pendingReqs = requestList.filter(r => r.status === "pending");
     const adminCount  = memberList.filter(m => m.role === "admin").length;

@@ -243,7 +243,7 @@ export default {
     // ── GET /me ───────────────────────────────────────────────────────────────
     if (path === "/me" && method === "GET") {
       try {
-        const rows = await sb(`members?id=eq.${sessionUser.id}&select=id,username,email,role,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url&limit=1`);
+        const rows = await sb(`members?id=eq.${sessionUser.id}&select=id,username,email,role,pricing_tier,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url&limit=1`);
         return json(rows[0] || {});
       } catch (e) { return errRes(ch, e.message, 500); }
     }
@@ -251,7 +251,7 @@ export default {
     // ── GET /members ──────────────────────────────────────────────────────────
     if (path === "/members" && method === "GET") {
       try {
-        const members = await sb("members?select=id,username,email,role,permissions,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url");
+        const members = await sb("members?select=id,username,email,role,permissions,pricing_tier,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url");
         // Attach group membership to each member
         const memberships = await sb("group_members?select=member_id,group_id,role");
         const byMember = Object.fromEntries((Array.isArray(memberships) ? memberships : []).map(m => [m.member_id, m]));

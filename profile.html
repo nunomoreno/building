@@ -14,6 +14,7 @@
   <div class="flex items-center gap-4 mb-8">
     <div id="avatar-initials"
       class="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-xl font-bold shrink-0"></div>
+    <img id="avatar-preview" style="display:none" class="w-14 h-14 rounded-2xl object-cover shrink-0" src="" alt="Avatar" />
     <div>
       <h1 id="display-heading" class="text-2xl font-bold text-slate-900 tracking-tight"></h1>
       <p class="text-sm text-slate-400">@<span id="username-sub"></span></p>
@@ -29,6 +30,20 @@
 
   <!-- ── Profile Tab ──────────────────────────────────────────────── -->
   <div id="tab-profile" class="tab-panel">
+
+    <!-- Avatar Picker -->
+    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-4">
+      <h2 class="text-sm font-bold text-slate-700 mb-1">Choose Avatar</h2>
+      <p class="text-xs text-slate-400 mb-4">Pick one of the generated avatars or paste a custom image URL below.</p>
+      <div id="avatar-grid" class="grid grid-cols-6 sm:grid-cols-10 gap-2 mb-4"></div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Custom Avatar URL</label>
+        <input id="custom-avatar-url" type="url" placeholder="https://example.com/avatar.png"
+          class="w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition" />
+      </div>
+    </div>
+
+    <!-- Personal Information -->
     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
       <h2 class="text-sm font-bold text-slate-700 mb-5">Personal Information</h2>
       <div class="space-y-4">
@@ -144,6 +159,9 @@
 
   const authHeaders = () => ({ "Content-Type": "application/json", "X-Session-Token": session.token });
 
+  // Track selected avatar URL
+  let selectedAvatarUrl = "";
+
   // ── Navbar ──────────────────────────────────────────────────────────────────
   (function buildNavbar() {
     const isAdmin = session.role === "admin";
@@ -170,6 +188,91 @@
       </div>`;
   })();
 
+  // ── Avatar grid ──────────────────────────────────────────────────────────────
+  const AVATAR_STYLES = [
+    "avataaars", "adventurer", "lorelei", "personas", "open-peeps",
+    "big-smile", "micah", "notionists", "croodles", "miniavs"
+  ];
+  const AVATAR_COLORS = [
+    "e74c3c", "3498db", "2ecc71", "f39c12", "9b59b6",
+    "1abc9c", "e91e63", "ff9800", "607d8b", "00acc1"
+  ];
+
+  function avatarUrl(style, seed, bg) {
+    return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&backgroundColor=${bg}`;
+  }
+
+  function buildAvatarGrid(username, currentUrl) {
+    const grid = document.getElementById("avatar-grid");
+    grid.innerHTML = "";
+    for (let i = 1; i <= 30; i++) {
+      const style = AVATAR_STYLES[(i - 1) % 10];
+      const bg    = AVATAR_COLORS[(i - 1) % 10];
+      const seed  = `${username}-${i}`;
+      const url   = avatarUrl(style, seed, bg);
+      const isSelected = currentUrl && currentUrl === url;
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "p-0 rounded-xl border-2 cursor-pointer transition-all focus:outline-none " +
+        (isSelected ? "border-blue-500" : "border-transparent hover:border-slate-300");
+      btn.dataset.url = url;
+
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = `Avatar ${i}`;
+      img.className = "w-12 h-12 rounded-xl block";
+
+      btn.appendChild(img);
+      btn.addEventListener("click", () => {
+        // Deselect all
+        grid.querySelectorAll("button").forEach(b => {
+          b.classList.remove("border-blue-500");
+          b.classList.add("border-transparent", "hover:border-slate-300");
+        });
+        // Select this one
+        btn.classList.add("border-blue-500");
+        btn.classList.remove("border-transparent", "hover:border-slate-300");
+
+        selectedAvatarUrl = url;
+        document.getElementById("custom-avatar-url").value = "";
+        updateAvatarPreview(url);
+      });
+
+      grid.appendChild(btn);
+    }
+  }
+
+  function updateAvatarPreview(url) {
+    const preview  = document.getElementById("avatar-preview");
+    const initials = document.getElementById("avatar-initials");
+    if (url) {
+      preview.src = url;
+      preview.style.display = "block";
+      initials.style.display = "none";
+    } else {
+      preview.style.display = "none";
+      initials.style.display = "";
+    }
+  }
+
+  // Custom avatar URL input
+  document.getElementById("custom-avatar-url").addEventListener("input", function () {
+    const url = this.value.trim();
+    if (url) {
+      // Deselect all grid avatars
+      document.getElementById("avatar-grid").querySelectorAll("button").forEach(b => {
+        b.classList.remove("border-blue-500");
+        b.classList.add("border-transparent", "hover:border-slate-300");
+      });
+      selectedAvatarUrl = url;
+      updateAvatarPreview(url);
+    } else {
+      selectedAvatarUrl = "";
+      updateAvatarPreview("");
+    }
+  });
+
   // ── Load profile ─────────────────────────────────────────────────────────────
   async function loadProfile() {
     try {
@@ -188,8 +291,21 @@
       document.getElementById("google-scholar").value  = data.google_scholar || "";
       document.getElementById("linkedin").value        = data.linkedin       || "";
       window._profileId = data.id;
+
+      selectedAvatarUrl = data.avatar_url || "";
+
+      if (selectedAvatarUrl) {
+        document.getElementById("avatar-preview").src = selectedAvatarUrl;
+        document.getElementById("avatar-preview").style.display = "block";
+        document.getElementById("avatar-initials").style.display = "none";
+        // If it's a custom URL not matching a grid avatar, populate the custom input
+        document.getElementById("custom-avatar-url").value = selectedAvatarUrl;
+      }
+
+      buildAvatarGrid(data.username || session.username, selectedAvatarUrl);
     } catch (e) {
       console.error("Failed to load profile", e);
+      buildAvatarGrid(session.username, "");
     }
   }
   loadProfile();
@@ -228,6 +344,7 @@
         display_name: document.getElementById("display-name").value.trim() || null,
         email:        document.getElementById("email").value.trim()         || null,
         phone:        document.getElementById("phone").value.trim()         || null,
+        avatar_url:   selectedAvatarUrl || null,
       };
       const res  = await fetch(`${WORKER}/members/${window._profileId}`, {
         method: "PUT", headers: authHeaders(), body: JSON.stringify(body),
@@ -235,9 +352,11 @@
       const data = await res.json();
       if (data.error) return showMsg("msg-profile", data.error, true);
       session.display_name = body.display_name;
+      session.avatar_url   = body.avatar_url;
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       document.getElementById("display-heading").textContent = body.display_name || session.username;
-      document.getElementById("avatar-initials").textContent = (body.display_name || session.username)[0].toUpperCase();
+      const newInitial = (body.display_name || session.username)[0].toUpperCase();
+      document.getElementById("avatar-initials").textContent = newInitial;
       showMsg("msg-profile", "Profile saved!", false);
     } catch (e) {
       showMsg("msg-profile", e.message, true);
