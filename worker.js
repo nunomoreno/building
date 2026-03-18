@@ -769,6 +769,47 @@ export default {
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
+    // ── POST /resources/:id/grant — calendar admin or global admin grants access
+    if (path.match(/^\/resources\/[^/]+\/grant$/) && method === "POST") {
+      try {
+        const resourceId = path.split("/")[2];
+        const { member_id } = await request.json();
+        if (!member_id || !UUID_RE.test(member_id)) return errRes(ch, "Invalid member_id", 400);
+        const res = await sb(`resources?id=eq.${resourceId}&select=admin_username&limit=1`);
+        const resource = res[0];
+        if (!resource) return errRes(ch, "Resource not found", 404, "NOT_FOUND");
+        if (sessionUser.role !== "admin" && resource.admin_username !== sessionUser.username)
+          return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const mems = await sb(`members?id=eq.${member_id}&select=permissions&limit=1`);
+        const member = mems[0];
+        if (!member) return errRes(ch, "Member not found", 404, "NOT_FOUND");
+        const perms = Array.isArray(member.permissions) ? member.permissions : [];
+        if (!perms.includes(resourceId))
+          await sb(`members?id=eq.${member_id}`, "PATCH", { permissions: [...perms, resourceId] });
+        return json({ success: true });
+      } catch(e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── DELETE /resources/:id/grant/:memberId — revoke access ─────────────────
+    if (path.match(/^\/resources\/[^/]+\/grant\/[^/]+$/) && method === "DELETE") {
+      try {
+        const parts      = path.split("/");
+        const resourceId = parts[2];
+        const memberId   = parts[4];
+        const res = await sb(`resources?id=eq.${resourceId}&select=admin_username&limit=1`);
+        const resource = res[0];
+        if (!resource) return errRes(ch, "Resource not found", 404, "NOT_FOUND");
+        if (sessionUser.role !== "admin" && resource.admin_username !== sessionUser.username)
+          return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const mems = await sb(`members?id=eq.${memberId}&select=permissions&limit=1`);
+        const member = mems[0];
+        if (!member) return errRes(ch, "Member not found", 404, "NOT_FOUND");
+        const perms = Array.isArray(member.permissions) ? member.permissions : [];
+        await sb(`members?id=eq.${memberId}`, "PATCH", { permissions: perms.filter(p => p !== resourceId) });
+        return json({ success: true });
+      } catch(e) { return errRes(ch, e.message, 500); }
+    }
+
     // ── POST /request-access ─────────────────────────────────────────────────
     if (path === "/request-access" && method === "POST") {
       try {

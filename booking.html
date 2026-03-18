@@ -84,7 +84,9 @@
       saveSettings:  (key,val) => safeFetch(`${WORKER}/settings/${key}`,  { method:"POST",   headers: authHeaders(), body: JSON.stringify(val) }),
       getMembers:    ()        => safeFetch(`${WORKER}/members`,          { headers: authHeaders() }),
       updateMember:  (id,data) => safeFetch(`${WORKER}/members/${id}`,    { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
-      requestAccess: (resId)   => safeFetch(`${WORKER}/request-access`,   { method:"POST",   headers: authHeaders(), body: JSON.stringify({ resource_id: resId }) }),
+      requestAccess: (resId)   => safeFetch(`${WORKER}/request-access`,              { method:"POST",   headers: authHeaders(), body: JSON.stringify({ resource_id: resId }) }),
+      grantAccess:   (resId, memberId) => safeFetch(`${WORKER}/resources/${resId}/grant`,           { method:"POST",   headers: authHeaders(), body: JSON.stringify({ member_id: memberId }) }),
+      revokeAccess:  (resId, memberId) => safeFetch(`${WORKER}/resources/${resId}/grant/${memberId}`,{ method:"DELETE", headers: authHeaders() }),
     };
 
     const fmt        = (d) => d.toISOString().split("T")[0];
@@ -281,8 +283,9 @@
     }
 
     // ── Admin Panel ──────────────────────────────────────────────────────────
-    function AdminPanel({resources, members, onUpdate, onClose}) {
-      const [tab,          setTab]           = useState("resources");
+    function AdminPanel({resources, members, onUpdate, onClose, isGlobalAdmin, myAdminResources}) {
+      const visibleResources = isGlobalAdmin ? resources : myAdminResources;
+      const [tab,          setTab]           = useState(isGlobalAdmin ? "resources" : "permissions");
       const [editRes,      setEditRes]       = useState(null);
       const [allFields,    setAllFields]     = useState({});
       const [saving,       setSaving]        = useState(false);
@@ -303,9 +306,10 @@
         setSaving(true); await api.saveSettings("booking-fields", allFields); setSaving(false); onUpdate();
       };
       const togglePerm = async (m, resourceId) => {
-        const perms   = m.permissions||[];
-        const updated = perms.includes(resourceId) ? perms.filter(p=>p!==resourceId) : [...perms, resourceId];
-        await api.updateMember(m.id,{permissions:updated}); onUpdate();
+        const perms = m.permissions||[];
+        if (perms.includes(resourceId)) await api.revokeAccess(resourceId, m.id);
+        else                            await api.grantAccess(resourceId, m.id);
+        onUpdate();
       };
       const addField    = ()       => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
       const updateField = (id,k,v) => setCurrentFields(currentFields.map(f=>f.id===id?{...f,[k]:v}:f));
@@ -324,7 +328,7 @@
             </div>
             {/* Tab bar */}
             <div className="flex border-b border-slate-200">
-              {["resources","fields","permissions"].map(t=>(
+              {(isGlobalAdmin ? ["resources","fields","permissions"] : ["permissions"]).map(t=>(
                 <button key={t} onClick={()=>setTab(t)}
                   className={`flex-1 text-xs py-2.5 border-none cursor-pointer capitalize transition-colors
                     ${tab===t
@@ -452,7 +456,7 @@
                       <thead>
                         <tr className="border-b border-slate-200">
                           <th className="text-left py-2 pr-4 text-slate-500 font-semibold">User</th>
-                          {resources.map(r=>(
+                          {visibleResources.map(r=>(
                             <th key={r.id} className="text-center py-2 px-3 text-slate-500 font-semibold whitespace-nowrap">{r.name}</th>
                           ))}
                         </tr>
@@ -464,7 +468,7 @@
                               <span className="text-[13px] font-semibold text-slate-800">{m.username}</span>
                               {m.role==="admin"&&<span className="ml-1.5 text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
                             </td>
-                            {resources.map(r=>(
+                            {visibleResources.map(r=>(
                               <td key={r.id} className="text-center py-2.5 px-3">
                                 <input type="checkbox"
                                   checked={m.role==="admin"||(m.permissions||[]).includes(r.id)}
@@ -641,8 +645,10 @@
         const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d;
       });
 
-      const isAdmin = user?.role === "admin";
-      const currentMember = members.find(m => m.username === user?.username);
+      const isAdmin         = user?.role === "admin";
+      const currentMember   = members.find(m => m.username === user?.username);
+      const myAdminResources = resources.filter(r => r.admin_username === user?.username);
+      const isCalendarAdmin  = myAdminResources.length > 0;
       const canBook = isAdmin || (selectedRes != null && Array.isArray(currentMember?.permissions) && currentMember.permissions.includes(selectedRes.id));
 
       const loadBase = async () => {
@@ -683,7 +689,8 @@
 
       return (
         <div className="font-sans h-screen flex flex-col">
-          {showAdmin && <AdminPanel resources={resources} members={members} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}/>}
+          {showAdmin && <AdminPanel resources={resources} members={members} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}
+            isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}/>}
 
           <Navbar user={user} />
 
@@ -696,9 +703,11 @@
               className="text-[13px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600">›</button>
             <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}}
               className="text-[11px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600">Today</button>
-            {isAdmin && (
+            {(isAdmin || isCalendarAdmin) && (
               <button onClick={()=>setShowAdmin(true)}
-                className="text-[11px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600 ml-2">⚙ Admin</button>
+                className="text-[11px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600 ml-2">
+                {isAdmin ? "⚙ Admin" : "⚙ My Calendars"}
+              </button>
             )}
           </div>
 
