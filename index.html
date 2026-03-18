@@ -4,31 +4,57 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kerno — Sign in</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .card { background: #fff; border-radius: 12px; padding: 36px 40px; width: 320px; box-shadow: 0 4px 24px #0004; }
-    .logo { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-    .sub  { font-size: 13px; color: #64748b; margin-bottom: 24px; }
-    input { width: 100%; font-size: 13px; padding: 9px 12px; border-radius: 7px; border: 1px solid #cbd5e1; margin-bottom: 10px; outline: none; font-family: inherit; }
-    input:focus { border-color: #93c5fd; }
-    .btn  { width: 100%; font-size: 14px; padding: 10px; border-radius: 7px; background: #2563eb; color: #fff; border: none; cursor: pointer; font-weight: 600; font-family: inherit; }
-    .btn:disabled { opacity: 0.7; cursor: not-allowed; }
-    .err  { font-size: 12px; color: #ef4444; margin-bottom: 12px; }
-    .warn { font-size: 12px; color: #92400e; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 8px 10px; margin-bottom: 14px; }
-    .hint { margin-top: 14px; text-align: center; font-size: 12px; color: #94a3b8; }
-  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <div class="card">
-    <div class="logo">⚙️ Kerno</div>
-    <div class="sub">CaixaResearch Core Facilities</div>
-    <div id="expired-banner" class="warn" style="display:none">Your session has expired. Please sign in again.</div>
-    <input id="username" placeholder="Username" autocomplete="username" />
-    <input id="password" placeholder="Password" type="password" autocomplete="current-password" />
-    <div id="error" class="err" style="display:none"></div>
-    <button id="btn" class="btn">Sign in</button>
-    <div class="hint">Contact your administrator to get access.</div>
+<body class="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+
+  <div class="w-full max-w-sm">
+
+    <!-- Logo mark -->
+    <div class="flex flex-col items-center mb-8">
+      <div class="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg mb-4 text-2xl select-none">⚙️</div>
+      <h1 class="text-2xl font-bold text-white tracking-tight">Kerno</h1>
+      <p class="text-sm text-slate-400 mt-1">CaixaResearch Core Facilities</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-2xl shadow-2xl p-8">
+
+      <!-- Session expired banner -->
+      <div id="expired-banner" style="display:none"
+        class="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6">
+        <span class="text-amber-500 text-base leading-none mt-0.5">⚠</span>
+        <p class="text-sm text-amber-800">Your session has expired. Please sign in again.</p>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Username</label>
+          <input id="username" type="text" autocomplete="username" placeholder="your username"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="••••••••"
+            class="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow" />
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div id="error" style="display:none"
+        class="flex items-center gap-2 mt-4 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5 text-sm text-red-600">
+        <span class="text-base leading-none">⚠</span>
+        <span id="error-text"></span>
+      </div>
+
+      <button id="btn"
+        class="mt-5 w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm">
+        Sign in
+      </button>
+
+      <p class="mt-5 text-center text-xs text-slate-400">Contact your administrator to get access.</p>
+    </div>
+
   </div>
 
   <script>
@@ -43,11 +69,12 @@
 
     // Show expiry banner if redirected here after session expired
     if (new URLSearchParams(location.search).get("expired") === "1") {
-      document.getElementById("expired-banner").style.display = "block";
+      document.getElementById("expired-banner").style.display = "flex";
     }
 
-    const btn      = document.getElementById("btn");
-    const errEl    = document.getElementById("error");
+    const btn        = document.getElementById("btn");
+    const errEl      = document.getElementById("error");
+    const errText    = document.getElementById("error-text");
     const usernameEl = document.getElementById("username");
     const passwordEl = document.getElementById("password");
 
@@ -69,8 +96,8 @@
         const data = await res.json();
 
         if (data.error) {
-          errEl.textContent = "Invalid username or password.";
-          errEl.style.display = "block";
+          errText.textContent = "Invalid username or password.";
+          errEl.style.display = "flex";
         } else {
           localStorage.setItem(SESSION_KEY, JSON.stringify({
             token:      data.token,
@@ -80,12 +107,11 @@
             group_id:   data.group_id   || null,
             group_role: data.group_role || null,
           }));
-          // Redirect: admins → dashboard, users → bookings
           window.location.href = data.role === "admin" ? "dashboard.html" : "booking.html";
         }
       } catch {
-        errEl.textContent = "Network error — please try again.";
-        errEl.style.display = "block";
+        errText.textContent = "Network error — please try again.";
+        errEl.style.display = "flex";
       }
 
       btn.disabled = false;
