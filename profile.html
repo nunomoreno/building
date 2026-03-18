@@ -12,9 +12,8 @@
 
 <main class="max-w-2xl mx-auto px-4 py-10">
   <div class="flex items-center gap-4 mb-8">
-    <img id="avatar-preview" src="" alt="" style="display:none"
-      class="w-16 h-16 rounded-2xl object-cover bg-slate-200 border border-slate-200"
-      onload="this.style.display='block'" />
+    <div id="avatar-initials"
+      class="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-xl font-bold shrink-0"></div>
     <div>
       <h1 id="display-heading" class="text-2xl font-bold text-slate-900 tracking-tight"></h1>
       <p class="text-sm text-slate-400">@<span id="username-sub"></span></p>
@@ -23,25 +22,13 @@
 
   <!-- Tabs -->
   <div class="flex gap-1 mb-6 border-b border-slate-200">
-    <button data-tab="profile"   class="tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-blue-600 text-blue-600 bg-white -mb-px cursor-pointer">Profile</button>
-    <button data-tab="research"  class="tab-btn px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer">Research IDs</button>
-    <button data-tab="security"  class="tab-btn px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer">Security</button>
+    <button data-tab="profile"  class="tab-btn px-4 py-2 text-sm font-semibold rounded-t-lg border-b-2 border-blue-600 text-blue-600 bg-white -mb-px cursor-pointer">Profile</button>
+    <button data-tab="research" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer">Research IDs</button>
+    <button data-tab="security" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 border-transparent text-slate-500 hover:text-slate-800 cursor-pointer">Security</button>
   </div>
 
-  <!-- ── Profile Tab ─────────────────────────────────────────────── -->
+  <!-- ── Profile Tab ──────────────────────────────────────────────── -->
   <div id="tab-profile" class="tab-panel">
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
-      <h2 class="text-sm font-bold text-slate-700 mb-5">Avatar</h2>
-      <p class="text-xs text-slate-400 mb-3">Pick a generated avatar or paste a custom image URL.</p>
-      <div id="avatar-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-4"></div>
-      <div class="flex gap-2 items-center mt-2">
-        <input id="avatar-url-input" type="url" placeholder="Custom image URL…"
-          class="flex-1 text-sm px-3 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500" />
-        <button id="avatar-url-btn"
-          class="text-xs px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 cursor-pointer hover:bg-slate-200 text-slate-600 font-medium">Use URL</button>
-      </div>
-    </div>
-
     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
       <h2 class="text-sm font-bold text-slate-700 mb-5">Personal Information</h2>
       <div class="space-y-4">
@@ -69,7 +56,7 @@
     </div>
   </div>
 
-  <!-- ── Research IDs Tab ────────────────────────────────────────── -->
+  <!-- ── Research IDs Tab ─────────────────────────────────────────── -->
   <div id="tab-research" class="tab-panel hidden">
     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
       <h2 class="text-sm font-bold text-slate-700 mb-1">Research Identifiers</h2>
@@ -81,7 +68,7 @@
             <span class="normal-case font-normal text-slate-400 ml-1">orcid.org/0000-0000-0000-0000</span>
           </label>
           <div class="flex gap-2 items-center">
-            <span class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-base" style="background:#a6ce39">🆔</span>
+            <span class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-base font-bold text-white text-xs" style="background:#a6ce39">iD</span>
             <input id="orcid-id" type="text" placeholder="0000-0001-2345-6789"
               class="flex-1 text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition" />
           </div>
@@ -97,7 +84,7 @@
         <div>
           <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">LinkedIn</label>
           <div class="flex gap-2 items-center">
-            <span class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-base" style="background:#0077b5">💼</span>
+            <span class="shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold rounded-lg" style="background:#0077b5">in</span>
             <input id="linkedin" type="url" placeholder="https://linkedin.com/in/…"
               class="flex-1 text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition" />
           </div>
@@ -111,7 +98,7 @@
     </div>
   </div>
 
-  <!-- ── Security Tab ────────────────────────────────────────────── -->
+  <!-- ── Security Tab ─────────────────────────────────────────────── -->
   <div id="tab-security" class="tab-panel hidden">
     <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
       <h2 class="text-sm font-bold text-slate-700 mb-5">Change Password</h2>
@@ -161,7 +148,7 @@
   (function buildNavbar() {
     const isAdmin = session.role === "admin";
     const link   = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#94a3b8;text-decoration:none"`;
-    const active = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none"`;
+    const active = `style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:6px"`;
     document.getElementById("navbar").innerHTML = `
       <div style="background:#0f172a;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
@@ -173,10 +160,8 @@
           <a href="requests.html" ${link}>📝 Requests</a>
           ${isAdmin ? `<a href="users.html"   ${link}>👥 Users</a>` : ""}
           ${isAdmin ? `<a href="pricing.html" ${link}>💰 Pricing</a>` : ""}
-          <a href="profile.html" ${active} style="display:inline-flex;align-items:center;gap:6px">
-            ${session.avatar_url
-              ? `<img src="${session.avatar_url}" style="width:18px;height:18px;border-radius:50%;object-fit:cover" alt="" />`
-              : `<span style="width:18px;height:18px;border-radius:50%;background:#1e40af;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${session.username[0].toUpperCase()}</span>`}
+          <a href="profile.html" ${active}>
+            <span style="width:18px;height:18px;border-radius:50%;background:#1e40af;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${session.username[0].toUpperCase()}</span>
             ${session.display_name || session.username}
           </a>
           <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
@@ -185,76 +170,27 @@
       </div>`;
   })();
 
-  // ── Avatar picker (Multiavatar) ───────────────────────────────────────────────
-  const AVATAR_COUNT = 30;
-
-  function avatarUrl(seed) {
-    return `https://api.multiavatar.com/${encodeURIComponent(seed)}.svg`;
-  }
-
-  let selectedAvatarUrl = "";
-
-  function buildAvatarGrid(username, current) {
-    const grid = document.getElementById("avatar-grid");
-    grid.innerHTML = "";
-    for (let i = 1; i <= AVATAR_COUNT; i++) {
-      const seed = `${username}-${i}`;
-      const url  = avatarUrl(seed);
-      const btn  = document.createElement("button");
-      btn.type  = "button";
-      btn.title = `Avatar ${i}`;
-      btn.className = "rounded-xl border-2 p-0.5 cursor-pointer transition " +
-        (current === url ? "border-blue-500 bg-blue-50" : "border-transparent bg-slate-100 hover:border-slate-300");
-      btn.innerHTML = `<img src="${url}" class="w-12 h-12 rounded-lg object-cover" alt="Avatar ${i}" loading="lazy" />`;
-      btn.addEventListener("click", () => {
-        selectedAvatarUrl = url;
-        document.getElementById("avatar-preview").src = url;
-        document.getElementById("avatar-preview").style.display = "block";
-        document.getElementById("avatar-url-input").value = "";
-        grid.querySelectorAll("button").forEach(b => {
-          b.classList.remove("border-blue-500", "bg-blue-50");
-          b.classList.add("border-transparent", "bg-slate-100");
-        });
-        btn.classList.remove("border-transparent", "bg-slate-100");
-        btn.classList.add("border-blue-500", "bg-blue-50");
-      });
-      grid.appendChild(btn);
-    });
-  }
-
-  document.getElementById("avatar-url-btn").addEventListener("click", () => {
-    const url = document.getElementById("avatar-url-input").value.trim();
-    if (!url) return;
-    selectedAvatarUrl = url;
-    document.getElementById("avatar-preview").src = url;
-    document.getElementById("avatar-grid").querySelectorAll("button").forEach(b => {
-      b.classList.remove("border-blue-500", "bg-blue-50");
-      b.classList.add("border-transparent", "bg-slate-100");
-    });
-  });
-
   // ── Load profile ─────────────────────────────────────────────────────────────
   async function loadProfile() {
-    const res   = await fetch(`${WORKER}/members`, { headers: authHeaders() });
-    const list  = await res.json();
-    const data  = Array.isArray(list) ? list.find(m => m.username === session.username) : {};
+    try {
+      const res  = await fetch(`${WORKER}/members`, { headers: authHeaders() });
+      const list = await res.json();
+      const data = (Array.isArray(list) ? list.find(m => m.username === session.username) : null) || {};
 
-    const displayName = data.display_name || data.username;
-    document.getElementById("display-heading").textContent = displayName;
-    document.getElementById("username-sub").textContent     = data.username;
-    document.getElementById("display-name").value  = data.display_name || "";
-    document.getElementById("email").value          = data.email        || "";
-    document.getElementById("phone").value          = data.phone        || "";
-    document.getElementById("orcid-id").value       = data.orcid_id     || "";
-    document.getElementById("google-scholar").value = data.google_scholar || "";
-    document.getElementById("linkedin").value       = data.linkedin      || "";
-
-    selectedAvatarUrl = data.avatar_url || avatarUrl(`${data.username}-1`);
-    document.getElementById("avatar-preview").src = selectedAvatarUrl;
-    document.getElementById("avatar-preview").style.display = "block";
-    buildAvatarGrid(data.username, data.avatar_url || "");
-
-    window._profileId = data.id;
+      const displayName = data.display_name || data.username || session.username;
+      document.getElementById("display-heading").textContent = displayName;
+      document.getElementById("username-sub").textContent    = data.username || session.username;
+      document.getElementById("avatar-initials").textContent = (data.display_name || data.username || session.username)[0].toUpperCase();
+      document.getElementById("display-name").value   = data.display_name  || "";
+      document.getElementById("email").value           = data.email         || "";
+      document.getElementById("phone").value           = data.phone         || "";
+      document.getElementById("orcid-id").value        = data.orcid_id      || "";
+      document.getElementById("google-scholar").value  = data.google_scholar || "";
+      document.getElementById("linkedin").value        = data.linkedin       || "";
+      window._profileId = data.id;
+    } catch (e) {
+      console.error("Failed to load profile", e);
+    }
   }
   loadProfile();
 
@@ -290,21 +226,21 @@
     try {
       const body = {
         display_name: document.getElementById("display-name").value.trim() || null,
-        email:        document.getElementById("email").value.trim() || null,
-        phone:        document.getElementById("phone").value.trim() || null,
-        avatar_url:   selectedAvatarUrl || null,
+        email:        document.getElementById("email").value.trim()         || null,
+        phone:        document.getElementById("phone").value.trim()         || null,
       };
       const res  = await fetch(`${WORKER}/members/${window._profileId}`, {
         method: "PUT", headers: authHeaders(), body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.error) return showMsg("msg-profile", data.error, true);
-      // Update session so navbar shows new name/avatar on next page load
       session.display_name = body.display_name;
-      session.avatar_url   = body.avatar_url;
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
       document.getElementById("display-heading").textContent = body.display_name || session.username;
+      document.getElementById("avatar-initials").textContent = (body.display_name || session.username)[0].toUpperCase();
       showMsg("msg-profile", "Profile saved!", false);
+    } catch (e) {
+      showMsg("msg-profile", e.message, true);
     } finally {
       btn.disabled = false; btn.textContent = "Save Profile";
     }
@@ -326,6 +262,8 @@
       const data = await res.json();
       if (data.error) return showMsg("msg-research", data.error, true);
       showMsg("msg-research", "Research IDs saved!", false);
+    } catch (e) {
+      showMsg("msg-research", e.message, true);
     } finally {
       btn.disabled = false; btn.textContent = "Save Research IDs";
     }
@@ -341,11 +279,11 @@
     if (/[a-z]/.test(pwd)) score++;
     if (/[0-9]/.test(pwd)) score++;
     if (/[^A-Za-z0-9]/.test(pwd)) score++;
-    if (score <= 2) return { score, pct: 20,  label: "Too weak",    color: "#ef4444" };
-    if (score <= 3) return { score, pct: 40,  label: "Weak",        color: "#f97316" };
-    if (score <= 4) return { score, pct: 65,  label: "Fair",        color: "#eab308" };
-    if (score <= 5) return { score, pct: 85,  label: "Strong",      color: "#22c55e" };
-    return             { score, pct: 100, label: "Very strong",  color: "#16a34a" };
+    if (score <= 2) return { score, pct: 20,  label: "Too weak",   color: "#ef4444" };
+    if (score <= 3) return { score, pct: 40,  label: "Weak",       color: "#f97316" };
+    if (score <= 4) return { score, pct: 65,  label: "Fair",       color: "#eab308" };
+    if (score <= 5) return { score, pct: 85,  label: "Strong",     color: "#22c55e" };
+    return             { score, pct: 100, label: "Very strong", color: "#16a34a" };
   }
 
   document.getElementById("new-pwd").addEventListener("input", e => {
@@ -386,11 +324,7 @@
       return showMsg("msg-security", "Current password is incorrect.", true);
     }
 
-    const membersRes = await fetch(`${WORKER}/members`, { headers: authHeaders() }).then(r => r.json());
-    const me = Array.isArray(membersRes) ? membersRes.find(m => m.username === session.username) : null;
-    if (!me) return showMsg("msg-security", "Could not find your account.", true);
-
-    const updateRes = await fetch(`${WORKER}/members/${me.id}`, {
+    const updateRes = await fetch(`${WORKER}/members/${window._profileId}`, {
       method: "PUT", headers: authHeaders(),
       body: JSON.stringify({ password: newPwd }),
     }).then(r => r.json());
