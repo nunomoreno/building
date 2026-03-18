@@ -301,9 +301,9 @@
       const saveFields = async () => {
         setSaving(true); await api.saveSettings("booking-fields", allFields); setSaving(false); onUpdate();
       };
-      const togglePerm = async (m) => {
+      const togglePerm = async (m, resourceId) => {
         const perms   = m.permissions||[];
-        const updated = perms.includes("bookings") ? perms.filter(p=>p!=="bookings") : [...perms,"bookings"];
+        const updated = perms.includes(resourceId) ? perms.filter(p=>p!==resourceId) : [...perms, resourceId];
         await api.updateMember(m.id,{permissions:updated}); onUpdate();
       };
       const addField    = ()       => setCurrentFields([...currentFields,{id:`f${Date.now()}`,label:"New Field",type:"text",options:[]}]);
@@ -361,6 +361,10 @@
                         <input type="checkbox" checked={editRes.approval_required||false} onChange={e=>setEditRes({...editRes,approval_required:e.target.checked})}/>
                         Requires admin approval
                       </label>
+                      <label className={labelCls}>MAX DAYS AHEAD (0 = unlimited)</label>
+                      <input type="number" min="0" value={editRes.max_days_ahead ?? 0}
+                        onChange={e=>setEditRes({...editRes,max_days_ahead:Number(e.target.value)})}
+                        className={inputCls}/>
                       <div className="flex gap-2">
                         <button onClick={saveResource} disabled={saving}
                           className="text-xs px-3.5 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 disabled:opacity-70">Save</button>
@@ -373,7 +377,7 @@
                     <div key={r.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 mb-2">
                       <div>
                         <span className="text-[13px] font-semibold text-slate-800">{r.name}</span>
-                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"}</span>
+                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={()=>setEditRes(r)}
@@ -436,19 +440,37 @@
 
               {tab==="permissions"&&(
                 <div>
-                  <div className="text-[13px] font-semibold text-slate-800 mb-3">Booking Permissions</div>
-                  {members.map(m=>(
-                    <div key={m.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 mb-2">
-                      <div className="text-[13px] font-semibold text-slate-800">
-                        {m.username}
-                        {m.role==="admin"&&<span className="ml-1.5 text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
-                      </div>
-                      <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
-                        <input type="checkbox" checked={m.role==="admin"||(m.permissions||[]).includes("bookings")} disabled={m.role==="admin"} onChange={()=>togglePerm(m)}/>
-                        Can book
-                      </label>
-                    </div>
-                  ))}
+                  <div className="text-[13px] font-semibold text-slate-800 mb-3">Booking Permissions per Resource</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="text-left py-2 pr-4 text-slate-500 font-semibold">User</th>
+                          {resources.map(r=>(
+                            <th key={r.id} className="text-center py-2 px-3 text-slate-500 font-semibold whitespace-nowrap">{r.name}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {members.map(m=>(
+                          <tr key={m.id} className="border-b border-slate-100">
+                            <td className="py-2.5 pr-4">
+                              <span className="text-[13px] font-semibold text-slate-800">{m.username}</span>
+                              {m.role==="admin"&&<span className="ml-1.5 text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
+                            </td>
+                            {resources.map(r=>(
+                              <td key={r.id} className="text-center py-2.5 px-3">
+                                <input type="checkbox"
+                                  checked={m.role==="admin"||(m.permissions||[]).includes(r.id)}
+                                  disabled={m.role==="admin"}
+                                  onChange={()=>togglePerm(m, r.id)}/>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
@@ -590,7 +612,8 @@
       });
 
       const isAdmin = user?.role === "admin";
-      const canBook = true;
+      const currentMember = members.find(m => m.username === user?.username);
+      const canBook = isAdmin || (selectedRes != null && Array.isArray(currentMember?.permissions) && currentMember.permissions.includes(selectedRes.id));
 
       const loadBase = async () => {
         setLoadError(null);
@@ -666,6 +689,9 @@
                   <div className={`text-[10px] mt-0.5 ${r.approval_required?"text-orange-400":"text-green-400"}`}>
                     {r.approval_required?"⚠ Approval required":"✓ Auto-confirm"}
                   </div>
+                  {r.max_days_ahead > 0 && (
+                    <div className="text-[10px] text-slate-500 mt-0.5">📅 Up to {r.max_days_ahead} days ahead</div>
+                  )}
                 </div>
               ))}
             </div>

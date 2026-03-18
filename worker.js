@@ -30,7 +30,7 @@ async function checkRateLimit(env, ip, route) {
 // ── Session ──────────────────────────────────────────────────────────────────
 async function validateSession(sb, token) {
   if (!token) return null;
-  const data = await sb(`members?select=id,username,role,session_expires_at&session_token=eq.${encodeURIComponent(token)}&limit=1`);
+  const data = await sb(`members?select=id,username,role,permissions,session_expires_at&session_token=eq.${encodeURIComponent(token)}&limit=1`);
   if (!Array.isArray(data) || !data.length) return null;
   const m = data[0];
   if (!m.session_expires_at || Date.now() > new Date(m.session_expires_at).getTime()) return null;
@@ -624,10 +624,20 @@ export default {
         const invalid = sanitiseBooking(body);
         if (invalid) return errRes(ch, invalid, 400, "VALIDATION_ERROR");
         const { resource_id, date, start_time, end_time } = body;
+        const canBook = sessionUser.role === "admin" ||
+          (Array.isArray(sessionUser.permissions) && sessionUser.permissions.includes(resource_id));
+        if (!canBook) return errRes(ch, "You do not have permission to book this resource", 403, "FORBIDDEN");
         if (new Date(start_time) < new Date()) return errRes(ch, "Cannot book in the past", 400, "PAST_BOOKING");
         if (await hasOverlap(sb, resource_id, date, start_time, end_time)) return errRes(ch, "This time slot is already booked", 409, "OVERLAP");
-        const resource        = await sb(`resources?id=eq.${resource_id}&select=approval_required&limit=1`);
+        const resource        = await sb(`resources?id=eq.${resource_id}&select=approval_required,max_days_ahead&limit=1`);
         const approvalRequired = resource[0]?.approval_required ?? true;
+        const maxDaysAhead = resource[0]?.max_days_ahead;
+        if (maxDaysAhead) {
+          const maxDate = new Date();
+          maxDate.setDate(maxDate.getDate() + maxDaysAhead);
+          if (new Date(date) > maxDate)
+            return errRes(ch, `Cannot book more than ${maxDaysAhead} days in advance`, 400, "TOO_FAR_AHEAD");
+        }
         const status = sessionUser?.role === "admin" || !approvalRequired ? "approved" : "pending";
         const data   = await sb("bookings", "POST", { ...body, username: sessionUser.username, status });
         if (data?.code === "23P01") return errRes(ch, "Time slot was just taken", 409, "OVERLAP");
