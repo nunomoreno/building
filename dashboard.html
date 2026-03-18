@@ -128,18 +128,18 @@
     document.getElementById("navbar").innerHTML = `
       <div class="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
         <a href="dashboard.html" class="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
-        <span class="text-slate-600 text-xs hidden sm:inline">CaixaResearch Core Facilities</span>
+        <span class="text-slate-600 text-xs hidden sm:inline">CaixaResearch platform</span>
         <div class="ml-auto flex items-center gap-2 flex-wrap">
           <a href="kanban.html"   ${navLink}>📋 Kanban</a>
           <a href="booking.html"  ${navLink}>📅 Bookings</a>
           <a href="requests.html" ${navLink}>📝 Requests</a>
-          ${isAdmin ? `<a href="users.html" ${navLink}>👥 Users</a>` : ""}
-          <span class="text-xs text-slate-500 flex items-center gap-1.5">
-            <span class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">${username[0].toUpperCase()}</span>
+          ${isAdmin ? `<a href="users.html"   ${navLink}>👥 Users</a>` : ""}
+          ${isAdmin ? `<a href="pricing.html" ${navLink}>💰 Pricing</a>` : ""}
+          <a href="profile.html" ${navLink} style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
+            <span style="width:20px;height:20px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#cbd5e1">${username[0].toUpperCase()}</span>
             ${username}
-            ${isAdmin ? `<span class="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>` : ""}
-          </span>
-          <a href="profile.html" ${navLink}>🔑 Password</a>
+            ${isAdmin ? `<span style="font-size:9px;background:#2563eb;color:#fff;border-radius:9999px;padding:1px 6px;font-weight:600">admin</span>` : ""}
+          </a>
           <button onclick="localStorage.removeItem('${SESSION_KEY}');window.location.href='index.html'"
             class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-sans">Sign out</button>
         </div>

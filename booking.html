@@ -138,12 +138,13 @@
             <a href="kanban.html"   className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📋 Kanban</a>
             <a href="booking.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-blue-600 bg-blue-600 text-white no-underline">📅 Bookings</a>
             <a href="requests.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📝 Requests</a>
-            {isAdmin && <a href="users.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">👥 Users</a>}
-            <span className="text-xs text-slate-500">
-              👤 {user.username}
-              {isAdmin && <span className="ml-1.5 text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
-            </span>
-            <a href="profile.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">🔑 Password</a>
+            {isAdmin && <a href="users.html"   className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">👥 Users</a>}
+            {isAdmin && <a href="pricing.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">💰 Pricing</a>}
+            <a href="profile.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700 flex items-center gap-1.5">
+              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-700 text-slate-300 font-bold text-[10px]">{user.username[0].toUpperCase()}</span>
+              {user.username}
+              {isAdmin && <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
+            </a>
             <button onClick={logout} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 cursor-pointer font-[inherit] hover:bg-slate-700">Sign out</button>
           </div>
         </div>
@@ -283,7 +284,7 @@
     }
 
     // ── Admin Panel ──────────────────────────────────────────────────────────
-    function AdminPanel({resources, members, onUpdate, onClose, isGlobalAdmin, myAdminResources}) {
+    function AdminPanel({resources, members, pricing, onUpdate, onClose, isGlobalAdmin, myAdminResources}) {
       const visibleResources = isGlobalAdmin ? resources : myAdminResources;
       const [tab,          setTab]           = useState(isGlobalAdmin ? "resources" : "permissions");
       const [editRes,      setEditRes]       = useState(null);
@@ -375,6 +376,11 @@
                         <option value="">— None —</option>
                         {members.map(m=><option key={m.id} value={m.username}>{m.username}</option>)}
                       </select>
+                      <label className={labelCls}>PRICING SKU (per hour)</label>
+                      <select value={editRes.sku_id||""} onChange={e=>setEditRes({...editRes,sku_id:e.target.value})} className={inputCls}>
+                        <option value="">— No pricing —</option>
+                        {(pricing?.skus||[]).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
                       <div className="flex gap-2">
                         <button onClick={saveResource} disabled={saving}
                           className="text-xs px-3.5 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 disabled:opacity-70">Save</button>
@@ -387,7 +393,7 @@
                     <div key={r.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 mb-2">
                       <div>
                         <span className="text-[13px] font-semibold text-slate-800">{r.name}</span>
-                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"} · admin: {r.admin_username||"—"}</span>
+                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"} · admin: {r.admin_username||"—"} · sku: {(pricing?.skus||[]).find(s=>s.id===r.sku_id)?.name||"—"}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={()=>setEditRes(r)}
@@ -640,6 +646,7 @@
       const [bookings,    setBookings]    = useState([]);
       const [members,     setMembers]     = useState([]);
       const [allFields,   setAllFields]   = useState({});
+      const [pricing,     setPricing]     = useState({ skus: [] });
       const [loading,     setLoading]     = useState(true);
       const [loadError,   setLoadError]   = useState(null);
       const [showAdmin,   setShowAdmin]   = useState(false);
@@ -656,11 +663,12 @@
       const loadBase = async () => {
         setLoadError(null);
         try {
-          const [r,m,f] = await Promise.all([api.getResources(), api.getMembers(), api.getSettings("booking-fields")]);
+          const [r,m,f,p] = await Promise.all([api.getResources(), api.getMembers(), api.getSettings("booking-fields"), api.getSettings("pricing")]);
           const resList = Array.isArray(r) ? r : [];
           setResources(resList);
           setMembers(Array.isArray(m) ? m : []);
           setAllFields(f && typeof f==="object" ? f : {});
+          setPricing(p && Array.isArray(p.skus) ? p : { skus: [] });
           setSelectedRes(s => s || resList[0] || null);
           setLoading(false);
         } catch { setLoadError("Could not load data. Please refresh."); setLoading(false); }
@@ -691,7 +699,7 @@
 
       return (
         <div className="font-sans h-screen flex flex-col">
-          {showAdmin && <AdminPanel resources={resources} members={members} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}
+          {showAdmin && <AdminPanel resources={resources} members={members} pricing={pricing} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}
             isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}/>}
 
           <Navbar user={user} />

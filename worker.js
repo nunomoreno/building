@@ -213,10 +213,12 @@ export default {
 
         return json({
           success: true, token, expires,
-          username: data[0].username,
-          role:     data[0].role || "user",
-          group_id:   membership?.group_id   || null,
-          group_role: membership?.role        || null,
+          username:     data[0].username,
+          role:         data[0].role || "user",
+          display_name: data[0].display_name || null,
+          avatar_url:   data[0].avatar_url   || null,
+          group_id:     membership?.group_id  || null,
+          group_role:   membership?.role       || null,
         });
       } catch (e) { return errRes(ch, e.message, 500); }
     }
@@ -238,10 +240,18 @@ export default {
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
+    // ── GET /me ───────────────────────────────────────────────────────────────
+    if (path === "/me" && method === "GET") {
+      try {
+        const rows = await sb(`members?id=eq.${sessionUser.id}&select=id,username,email,role,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url&limit=1`);
+        return json(rows[0] || {});
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
     // ── GET /members ──────────────────────────────────────────────────────────
     if (path === "/members" && method === "GET") {
       try {
-        const members = await sb("members?select=id,username,email,role,permissions");
+        const members = await sb("members?select=id,username,email,role,permissions,display_name,phone,orcid_id,google_scholar,linkedin,avatar_url");
         // Attach group membership to each member
         const memberships = await sb("group_members?select=member_id,group_id,role");
         const byMember = Object.fromEntries((Array.isArray(memberships) ? memberships : []).map(m => [m.member_id, m]));
@@ -551,6 +561,7 @@ export default {
     // ── POST /settings/:key ───────────────────────────────────────────────────
     if (path.startsWith("/settings/") && method === "POST") {
       try {
+        if (sessionUser?.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
         const key      = path.split("/").pop();
         const value    = await request.json();
         const existing = await sb(`settings?key=eq.${key}`);

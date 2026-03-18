@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kerno — Pricing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="min-h-screen bg-slate-50 font-sans">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
+    const SESSION_KEY = "kerno_session";
+
+    const session = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    if (!session || Date.now() > new Date(session.expires).getTime()) {
+      localStorage.removeItem(SESSION_KEY);
+      window.location.href = "index.html?expired=1";
+    }
+    if (session.role !== "admin") {
+      window.location.href = "dashboard.html";
+    }
+
+    const authH = () => ({ "Content-Type": "application/json", "X-Session-Token": session.token });
+    const logout = () => { localStorage.removeItem(SESSION_KEY); window.location.href = "index.html"; };
+
+    const TIERS = ["internal", "cracs", "academia", "industry"];
+    const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
+
+    const emptyRow = () => ({ id: crypto.randomUUID(), name: "", internal: "", cracs: "", academia: "", industry: "" });
+    const inputCls = "w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans";
+    const priceCls = "w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right";
+
+    function App() {
+      const [skus,    setSkus]    = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [saving,  setSaving]  = useState(false);
+      const [msg,     setMsg]     = useState(null);
+
+      useEffect(() => {
+        fetch(`${WORKER}/settings/pricing`, { headers: authH() })
+          .then(r => r.json())
+          .then(data => {
+            setSkus(Array.isArray(data?.skus) && data.skus.length ? data.skus : [emptyRow()]);
+            setLoading(false);
+          })
+          .catch(() => { setSkus([emptyRow()]); setLoading(false); });
+      }, []);
+
+      const updateSku = (id, field, val) =>
+        setSkus(prev => prev.map(s => s.id === id ? { ...s, [field]: val } : s));
+
+      const addRow = () => setSkus(prev => [...prev, emptyRow()]);
+
+      const removeRow = (id) => setSkus(prev => prev.filter(s => s.id !== id));
+
+      const save = async () => {
+        setSaving(true); setMsg(null);
+        try {
+          const payload = {
+            skus: skus
+              .filter(s => s.name.trim())
+              .map(s => ({
+                id:       s.id,
+                name:     s.name.trim(),
+                internal: parseFloat(s.internal) || 0,
+                cracs:    parseFloat(s.cracs)    || 0,
+                academia: parseFloat(s.academia) || 0,
+                industry: parseFloat(s.industry) || 0,
+              }))
+          };
+          const res  = await fetch(`${WORKER}/settings/pricing`, {
+            method: "POST", headers: authH(), body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (data.error) setMsg({ text: data.error, ok: false });
+          else            setMsg({ text: "Pricing saved!", ok: true });
+        } catch (e) {
+          setMsg({ text: e.message, ok: false });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-slate-50">
+          {/* Navbar */}
+          <nav className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+            <a href="dashboard.html" className="text-[15px] font-bold text-white no-underline">⚙️ Kerno</a>
+            <span className="text-slate-600">›</span>
+            <span className="text-[13px] text-slate-400">Pricing</span>
+            <div className="ml-auto flex gap-2 items-center flex-wrap">
+              <a href="kanban.html"   className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📋 Kanban</a>
+              <a href="booking.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📅 Bookings</a>
+              <a href="requests.html" className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">📝 Requests</a>
+              <a href="users.html"    className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">👥 Users</a>
+              <a href="pricing.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-blue-600 bg-blue-600 text-white no-underline">💰 Pricing</a>
+              <a href="profile.html"  className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700">
+                👤 {session.display_name || session.username}
+              </a>
+              <button onClick={logout} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 cursor-pointer font-[inherit] hover:bg-slate-700">Sign out</button>
+            </div>
+          </nav>
+
+          <main className="max-w-5xl mx-auto px-4 py-10">
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Pricing</h1>
+              <p className="text-sm text-slate-400 mt-1">Define service SKUs with per-category hourly rates. Calendars reference a SKU for usage billing.</p>
+            </div>
+
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700">Service SKUs</span>
+                <button onClick={addRow}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 font-sans">
+                  + Add SKU
+                </button>
+              </div>
+
+              {loading ? (
+                <div className="p-8 text-center text-sm text-slate-400">Loading…</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100">
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-52">SKU Name</th>
+                        {TIERS.map(t => (
+                          <th key={t} className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-32">
+                            {TIER_LABELS[t]}
+                            <span className="block font-normal text-slate-400 normal-case">€/hr</span>
+                          </th>
+                        ))}
+                        <th className="w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {skus.map((sku, i) => (
+                        <tr key={sku.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                          <td className="px-4 py-2.5">
+                            <input
+                              value={sku.name}
+                              onChange={e => updateSku(sku.id, "name", e.target.value)}
+                              placeholder="e.g. Illumina Sequencing"
+                              className={inputCls}
+                            />
+                          </td>
+                          {TIERS.map(t => (
+                            <td key={t} className="px-4 py-2.5">
+                              <div className="relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400">€</span>
+                                <input
+                                  type="number" min="0" step="0.01"
+                                  value={sku[t]}
+                                  onChange={e => updateSku(sku.id, t, e.target.value)}
+                                  placeholder="0.00"
+                                  className="w-full text-xs pl-6 pr-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right"
+                                />
+                              </div>
+                            </td>
+                          ))}
+                          <td className="px-3 py-2.5">
+                            <button onClick={() => removeRow(sku.id)}
+                              className="text-slate-300 hover:text-red-400 bg-transparent border-none cursor-pointer text-lg leading-none font-sans"
+                              title="Remove">×</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {skus.length === 0 && (
+                        <tr><td colSpan={6} className="text-center text-sm text-slate-400 py-8">No SKUs yet. Click "+ Add SKU" to start.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between gap-3">
+                {msg ? (
+                  <span className={`text-sm ${msg.ok ? "text-emerald-600" : "text-red-600"}`}>{msg.ok ? "✓ " : "✗ "}{msg.text}</span>
+                ) : <span />}
+                <button onClick={save} disabled={saving}
+                  className="text-sm px-5 py-2 rounded-xl bg-blue-600 text-white border-none cursor-pointer hover:bg-blue-700 disabled:opacity-60 font-sans font-semibold">
+                  {saving ? "Saving…" : "Save Pricing"}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-700">
+              <strong>Note:</strong> After saving, assign SKUs to calendars in the Bookings admin panel → Resources tab. Prices are per hour.
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

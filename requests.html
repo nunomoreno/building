@@ -79,13 +79,13 @@
           <a href="kanban.html"   className={link}>📋 Kanban</a>
           <a href="booking.html"  className={link}>📅 Bookings</a>
           <a href="requests.html" className={active}>📝 Requests</a>
-          {isAdmin && <a href="users.html" className={link}>👥 Users</a>}
-          <span className="text-xs text-slate-500 flex items-center gap-1.5">
-            <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-200">{user.username[0].toUpperCase()}</span>
+          {isAdmin && <a href="users.html"   className={link}>👥 Users</a>}
+          {isAdmin && <a href="pricing.html" className={link}>💰 Pricing</a>}
+          <a href="profile.html" className={`${link} flex items-center gap-1.5`}>
+            <span className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold text-slate-200">{user.username[0].toUpperCase()}</span>
             {user.username}
-            {isAdmin && <span className="text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>}
-          </span>
-          <a href="profile.html" className={link}>🔑 Password</a>
+            {isAdmin && <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>}
+          </a>
           <button onClick={logout} className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-sans">Sign out</button>
         </div>
       </div>
