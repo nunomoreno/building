@@ -138,8 +138,8 @@
     function MdEditor({ value, onChange, placeholder, rows = 4 }) {
       const [preview, setPreview] = React.useState(false);
       const ref = React.useRef(null);
-      const b = "text-[11px] px-1.5 py-0.5 rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 cursor-pointer leading-none";
-      const sep = <span className="w-px h-3 bg-slate-200 mx-0.5 inline-block self-center"/>;
+      const b = "flex items-center justify-center min-w-[22px] h-[22px] px-1 rounded hover:bg-slate-200 cursor-pointer text-slate-500 hover:text-slate-800 border-none bg-transparent font-sans transition-colors text-[11px] select-none";
+      const sep = <span style={{width:1,height:12,background:"#e2e8f0",margin:"0 2px",display:"inline-block",alignSelf:"center"}}/>;
 
       const wrap = (before, after, ph) => {
         const el = ref.current; if (!el) return;
@@ -156,31 +156,38 @@
         onChange(has ? value.slice(0, ls) + value.slice(ls + prefix.length) : value.slice(0, ls) + prefix + value.slice(ls));
         requestAnimationFrame(() => el.focus());
       };
+      const md = e => e.preventDefault();
       const html = () => typeof marked !== 'undefined'
         ? marked.parse((value || "").replace(/==(.+?)==/g, '<mark>$1</mark>'))
         : (value || "");
 
       return (
-        <div className="border border-slate-200 rounded-xl overflow-hidden">
-          <div onMouseDown={e => e.preventDefault()} className="flex items-center gap-0.5 px-2 py-1.5 bg-slate-50 border-b border-slate-200 flex-wrap">
-            <button className={b} onClick={() => wrap("**","**","bold")}><strong>B</strong></button>
-            <button className={b} onClick={() => wrap("_","_","italic")} style={{fontStyle:"italic"}}>I</button>
+        <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
+          <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:1,background:"#f8fafc",padding:"3px 4px",borderBottom:"1px solid #e2e8f0"}}>
+            <button className={b} title="Bold"          onMouseDown={e=>{md(e);wrap("**","**","bold")}}><strong>B</strong></button>
+            <button className={b} title="Italic"        onMouseDown={e=>{md(e);wrap("_","_","italic")}} style={{fontStyle:"italic"}}>I</button>
+            <button className={b} title="Strikethrough" onMouseDown={e=>{md(e);wrap("~~","~~","text")}} style={{textDecoration:"line-through"}}>S</button>
             {sep}
-            <button className={b} onClick={() => line("- ")} style={{letterSpacing:-1}}>• —</button>
-            <button className={b} onClick={() => line("1. ")} style={{letterSpacing:-1}}>1. —</button>
+            <button className={b} title="Heading 1"    onMouseDown={e=>{md(e);line("# ")}}  style={{fontWeight:700}}>H1</button>
+            <button className={b} title="Heading 2"    onMouseDown={e=>{md(e);line("## ")}} style={{fontWeight:700,fontSize:10}}>H2</button>
             {sep}
-            <button className={b} onClick={() => wrap("`","`","code")} style={{fontFamily:"monospace"}}>&lt;/&gt;</button>
-            <div className="flex-1"/>
-            <button onMouseDown={e => { e.preventDefault(); setPreview(p => !p); }}
-              className={`${b} ${preview ? "bg-blue-50 text-blue-600 border-blue-200" : ""}`}>
+            <button className={b} title="Bullet list"   onMouseDown={e=>{md(e);line("- ")}}  style={{letterSpacing:-1}}>• —</button>
+            <button className={b} title="Numbered list" onMouseDown={e=>{md(e);line("1. ")}} style={{letterSpacing:-1}}>1. —</button>
+            {sep}
+            <button className={b} title="Inline code"  onMouseDown={e=>{md(e);wrap("`","`","code")}} style={{fontFamily:"monospace",fontWeight:600}}>&lt;/&gt;</button>
+            <button className={b} title="Blockquote"   onMouseDown={e=>{md(e);line("> ")}} style={{fontWeight:700,fontSize:13}}>&ldquo;</button>
+            <button className={b} title="Highlight"    onMouseDown={e=>{md(e);wrap("==","==","text")}} style={{background:"#fef08a",color:"#713f12"}}>★</button>
+            <div style={{flex:1}}/>
+            <button className={b} title={preview?"Switch to edit":"Preview rendered"} onMouseDown={e=>{md(e);setPreview(p=>!p);}}
+              style={preview?{background:"#eff6ff",color:"#2563eb"}:{}}>
               {preview ? "Edit" : "Preview"}
             </button>
           </div>
           {preview
-            ? <div className="md-content px-3 py-2 text-sm text-slate-700 min-h-[80px]" dangerouslySetInnerHTML={{ __html: html() }}/>
+            ? <div className="md-content" style={{padding:"8px 12px",fontSize:13,color:"#334155",minHeight:80}} dangerouslySetInnerHTML={{ __html: html() }}/>
             : <textarea ref={ref} value={value || ""} onChange={e => onChange(e.target.value)}
                 rows={rows} placeholder={placeholder}
-                className="w-full text-sm px-3 py-2 outline-none resize-y border-none"/>
+                style={{width:"100%",fontSize:13,padding:"6px 10px",outline:"none",resize:"vertical",border:"none",boxSizing:"border-box"}}/>
           }
         </div>
       );
@@ -709,10 +716,8 @@
           {/* Day headers */}
           <div style={{display:"grid",gridTemplateColumns:"60px repeat(7,1fr)",minWidth:600}} className="sticky top-0 z-10 bg-white border-b-2 border-slate-200">
             <div className="p-2 flex items-start justify-center pt-2.5">
-              {resource?.description && (
-                <button onClick={() => setShowDesc(d => !d)} title="Resource description"
-                  className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
-              )}
+              <button onClick={() => setShowDesc(d => !d)} title={resource?.description ? "Resource description" : "No description set — admin can add one in ⚙ Admin"}
+                className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
             </div>
             {days.map((day,i)=>{
               const isToday = fmt(day)===fmt(new Date());
@@ -729,11 +734,15 @@
           </div>
 
           {/* Description panel */}
-          {showDesc && resource?.description && (
-            <div className="mx-4 mt-3 mb-1 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-slate-700 md-content"
-              dangerouslySetInnerHTML={{ __html: typeof marked !== 'undefined'
-                ? marked.parse(resource.description.replace(/==(.+?)==/g, '<mark>$1</mark>'))
-                : resource.description }}/>
+          {showDesc && (
+            resource?.description
+              ? <div className="mx-4 mt-3 mb-1 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-slate-700 md-content"
+                  dangerouslySetInnerHTML={{ __html: typeof marked !== 'undefined'
+                    ? marked.parse(resource.description.replace(/==(.+?)==/g, '<mark>$1</mark>'))
+                    : resource.description }}/>
+              : <div className="mx-4 mt-3 mb-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-400 italic">
+                  No description set for this resource. Admins can add one in ⚙ Admin → edit the resource.
+                </div>
           )}
 
           {/* Full-day row */}

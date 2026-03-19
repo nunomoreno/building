@@ -12,6 +12,11 @@
   <script>if (typeof marked !== 'undefined') marked.use({ gfm: true });</script>
   <style>
     ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .md-content h1{font-size:1.15em;font-weight:700;margin-bottom:.4em}
+    .md-content h2{font-size:1em;font-weight:700;margin-bottom:.3em}
+    .md-content p{margin-bottom:.5em} .md-content ul,.md-content ol{padding-left:1.2em;margin-bottom:.5em}
+    .md-content code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:.85em}
+    .md-content strong{font-weight:700} mark{background:#fef08a;padding:1px 2px;border-radius:2px}
   </style>
 </head>
 <body>
@@ -118,6 +123,65 @@
           </div>
           <button onClick={logout} className="text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">Sign out</button>
         </div>
+      </div>
+    );
+  }
+
+  // ── Markdown editor ────────────────────────────────────────────────────────
+  function MdEditor({ value, onChange, placeholder, rows = 4 }) {
+    const [preview, setPreview] = useState(false);
+    const ref = React.useRef(null);
+    const b = "flex items-center justify-center min-w-[22px] h-[22px] px-1 rounded hover:bg-slate-200 cursor-pointer text-slate-500 hover:text-slate-800 border-none bg-transparent font-sans transition-colors text-[11px] select-none";
+    const sep = <span style={{width:1,height:12,background:"#e2e8f0",margin:"0 2px",display:"inline-block",alignSelf:"center"}}/>;
+
+    const wrap = (before, after, ph) => {
+      const el = ref.current; if (!el) return;
+      const s = el.selectionStart, e = el.selectionEnd;
+      const sel = value.slice(s, e) || ph || "";
+      onChange(value.slice(0, s) + before + sel + after + value.slice(e));
+      requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + before.length, s + before.length + sel.length); });
+    };
+    const line = (prefix) => {
+      const el = ref.current; if (!el) return;
+      const pos = el.selectionStart;
+      const ls = value.lastIndexOf('\n', pos - 1) + 1;
+      const has = value.slice(ls).startsWith(prefix);
+      onChange(has ? value.slice(0, ls) + value.slice(ls + prefix.length) : value.slice(0, ls) + prefix + value.slice(ls));
+      requestAnimationFrame(() => el.focus());
+    };
+    const md = e => e.preventDefault();
+    const html = () => typeof marked !== 'undefined'
+      ? marked.parse((value || "").replace(/==(.+?)==/g, '<mark>$1</mark>'))
+      : (value || "");
+
+    return (
+      <div style={{border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:1,background:"#f8fafc",padding:"3px 4px",borderBottom:"1px solid #e2e8f0"}}>
+          <button className={b} title="Bold"          onMouseDown={e=>{md(e);wrap("**","**","bold")}}><strong>B</strong></button>
+          <button className={b} title="Italic"        onMouseDown={e=>{md(e);wrap("_","_","italic")}} style={{fontStyle:"italic"}}>I</button>
+          <button className={b} title="Strikethrough" onMouseDown={e=>{md(e);wrap("~~","~~","text")}} style={{textDecoration:"line-through"}}>S</button>
+          {sep}
+          <button className={b} title="Heading 1"    onMouseDown={e=>{md(e);line("# ")}}  style={{fontWeight:700}}>H1</button>
+          <button className={b} title="Heading 2"    onMouseDown={e=>{md(e);line("## ")}} style={{fontWeight:700,fontSize:10}}>H2</button>
+          {sep}
+          <button className={b} title="Bullet list"   onMouseDown={e=>{md(e);line("- ")}}  style={{letterSpacing:-1}}>• —</button>
+          <button className={b} title="Numbered list" onMouseDown={e=>{md(e);line("1. ")}} style={{letterSpacing:-1}}>1. —</button>
+          {sep}
+          <button className={b} title="Inline code"  onMouseDown={e=>{md(e);wrap("`","`","code")}} style={{fontFamily:"monospace",fontWeight:600}}>&lt;/&gt;</button>
+          <button className={b} title="Blockquote"   onMouseDown={e=>{md(e);line("> ")}} style={{fontWeight:700,fontSize:13}}>&ldquo;</button>
+          <button className={b} title="Highlight"    onMouseDown={e=>{md(e);wrap("==","==","text")}} style={{background:"#fef08a",color:"#713f12"}}>★</button>
+          <div style={{flex:1}}/>
+          <button className={b} title={preview?"Switch to edit":"Preview rendered"} onMouseDown={e=>{md(e);setPreview(p=>!p);}}
+            style={preview?{background:"#eff6ff",color:"#2563eb"}:{}}>
+            {preview ? "Edit" : "Preview"}
+          </button>
+        </div>
+        {preview
+          ? <div style={{padding:"8px 12px",fontSize:13,color:"#334155",minHeight:80}} dangerouslySetInnerHTML={{ __html: html() }}/>
+          : <textarea ref={ref} value={value || ""} onChange={e => onChange(e.target.value)}
+              rows={rows} placeholder={placeholder}
+              style={{width:"100%",fontSize:13,padding:"6px 10px",outline:"none",resize:"vertical",border:"none",boxSizing:"border-box"}}/>
+        }
       </div>
     );
   }
@@ -348,14 +412,16 @@
         </div>
         <div className="flex items-center gap-2 mb-5">
           <p className="text-sm text-slate-400">Submit a service request to the platforms team.</p>
-          {typeConfig?.description && (
-            <button onClick={() => setShowDesc(d => !d)} title="About this request type"
-              className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
-          )}
+          <button onClick={() => setShowDesc(d => !d)} title={typeConfig?.description ? "About this request type" : "No description yet — admin can add one in ⚙ Configure"}
+            className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
         </div>
-        {showDesc && typeConfig?.description && (
-          <div className="mb-5 text-sm text-slate-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3"
-            dangerouslySetInnerHTML={{ __html: renderDesc(typeConfig.description) }}/>
+        {showDesc && (
+          typeConfig?.description
+            ? <div className="md-content mb-5 text-sm text-slate-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3"
+                dangerouslySetInnerHTML={{ __html: renderDesc(typeConfig.description) }}/>
+            : <div className="mb-5 text-sm text-slate-400 italic bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                No description configured for this request type. Admins can add one in ⚙ Configure.
+              </div>
         )}
 
         <div className="flex gap-2 flex-wrap mb-6">
@@ -718,10 +784,9 @@
               </div>
             </div>
             <div className="mb-4">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Description (markdown, shown via ⓘ in the form)</label>
-              <textarea value={cfg.description || ""} onChange={e => setcfg({ ...cfg, description: e.target.value })}
-                rows={3} placeholder="Describe this request type… (markdown supported)"
-                className={inputCls + " resize-y"} />
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Description (markdown — shown via ⓘ in the submission form)</label>
+              <MdEditor value={cfg.description || ""} onChange={v => setcfg({ ...cfg, description: v })}
+                placeholder="Describe this request type… (markdown supported)" rows={3}/>
             </div>
             <label className="flex items-center gap-3 mb-5 cursor-pointer select-none">
               <div className={`relative w-10 h-5 rounded-full transition-colors ${cfg.is_store ? "bg-violet-600" : "bg-slate-200"}`}>
