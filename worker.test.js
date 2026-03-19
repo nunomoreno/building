@@ -336,6 +336,124 @@ describe('POST /bookings — input validation', () => {
   });
 });
 
+// ── DELETE /bookings — authorization & tolerance ───────────────────────────────
+
+describe('DELETE /bookings/:id', () => {
+  const RES_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  const stubForDelete = (sessionOverrides, bookingOverrides, resourceOverrides) => {
+    const member  = sessionMember(sessionOverrides);
+    const booking = { resource_id: RES_ID, username: 'alice', date: '2099-12-01', start_time: '09:00', ...bookingOverrides };
+    const resource = { admin_username: null, delete_tolerance_hours: 0, ...resourceOverrides };
+    stubFetch([
+      ['members?select=',                          [member]],
+      [`bookings?id=eq.bk-1&select=`,              [booking]],
+      [`resources?id=eq.${RES_ID}&select=`,        [resource]],
+      [`bookings?id=eq.bk-1`,                      {}],
+    ]);
+    return member;
+  };
+
+  it('allows owner to delete their own booking', async () => {
+    stubForDelete({ username: 'alice', role: 'user' }, {}, {});
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'DELETE', session: 'tok' }), ENV);
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks non-owner non-admin from deleting', async () => {
+    stubForDelete({ username: 'bob', role: 'user' }, { username: 'alice' }, {});
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'DELETE', session: 'tok' }), ENV);
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('FORBIDDEN');
+  });
+
+  it('allows global admin to delete any booking', async () => {
+    stubForDelete({ username: 'admin', role: 'admin' }, { username: 'alice' }, {});
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'DELETE', session: 'tok' }), ENV);
+    expect(res.status).toBe(200);
+  });
+
+  it('allows resource admin to delete any booking on their resource', async () => {
+    stubForDelete({ username: 'resadmin', role: 'user' }, { username: 'alice' }, { admin_username: 'resadmin' });
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'DELETE', session: 'tok' }), ENV);
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks delete within tolerance window', async () => {
+    // booking start is 1 hour from now — tolerance is 2h → we are inside the window
+    const soon = new Date(Date.now() + 60 * 60 * 1000); // 1h from now
+    const date  = soon.toISOString().split('T')[0];
+    const hh    = String(soon.getUTCHours()).padStart(2, '0');
+    const mm    = String(soon.getUTCMinutes()).padStart(2, '0');
+    stubForDelete({ username: 'alice', role: 'user' }, { date, start_time: `${hh}:${mm}` }, { delete_tolerance_hours: 2 });
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'DELETE', session: 'tok' }), ENV);
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('DELETE_TOLERANCE');
+  });
+
+  it('allows delete outside tolerance window', async () => {
+    // booking is 5 days away — tolerance is 2h → fine to delete
+    stubForDelete({ username: 'alice', role: 'user' }, { date: '2099-12-10', start_time: '09:00' }, { delete_tolerance_hours: 2 });
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'DELETE', session: 'tok' }), ENV);
+    expect(res.status).toBe(200);
+  });
+});
+
+// ── PUT /bookings — release ────────────────────────────────────────────────────
+
+describe('PUT /bookings/:id — release', () => {
+  const RES_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
+
+  it('allows owner to release within tolerance window', async () => {
+    const soon = new Date(Date.now() + 60 * 60 * 1000); // 1h from now
+    const date  = soon.toISOString().split('T')[0];
+    const hh    = String(soon.getUTCHours()).padStart(2, '0');
+    const mm    = String(soon.getUTCMinutes()).padStart(2, '0');
+    const member  = sessionMember({ username: 'alice', role: 'user' });
+    const booking  = { resource_id: RES_ID, username: 'alice', date, start_time: `${hh}:${mm}` };
+    const resource = { admin_username: null, delete_tolerance_hours: 2 };
+    stubFetch([
+      ['members?select=',                   [member]],
+      [`bookings?id=eq.bk-1&select=`,       [booking]],
+      [`resources?id=eq.${RES_ID}&select=`, [resource]],
+      ['bookings?id=eq.bk-1',               {}],
+    ]);
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'PUT', session: 'tok', body: { status: 'released' } }), ENV);
+    expect(res.status).toBe(200);
+  });
+
+  it('blocks release outside tolerance window (too early)', async () => {
+    const member   = sessionMember({ username: 'alice', role: 'user' });
+    const booking  = { resource_id: RES_ID, username: 'alice', date: '2099-12-10', start_time: '09:00' };
+    const resource = { admin_username: null, delete_tolerance_hours: 2 };
+    stubFetch([
+      ['members?select=',                   [member]],
+      [`bookings?id=eq.bk-1&select=`,       [booking]],
+      [`resources?id=eq.${RES_ID}&select=`, [resource]],
+    ]);
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'PUT', session: 'tok', body: { status: 'released' } }), ENV);
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('TOO_EARLY_TO_RELEASE');
+  });
+
+  it('blocks non-owner from releasing', async () => {
+    const soon = new Date(Date.now() + 60 * 60 * 1000);
+    const date  = soon.toISOString().split('T')[0];
+    const hh    = String(soon.getUTCHours()).padStart(2, '0');
+    const mm    = String(soon.getUTCMinutes()).padStart(2, '0');
+    const member   = sessionMember({ username: 'bob', role: 'user' });
+    const booking  = { resource_id: RES_ID, username: 'alice', date, start_time: `${hh}:${mm}` };
+    const resource = { admin_username: null, delete_tolerance_hours: 2 };
+    stubFetch([
+      ['members?select=',                   [member]],
+      [`bookings?id=eq.bk-1&select=`,       [booking]],
+      [`resources?id=eq.${RES_ID}&select=`, [resource]],
+    ]);
+    const res = await worker.fetch(req('/bookings/bk-1', { method: 'PUT', session: 'tok', body: { status: 'released' } }), ENV);
+    expect(res.status).toBe(403);
+  });
+});
+
 // ── 404 ───────────────────────────────────────────────────────────────────────
 
 describe('404', () => {

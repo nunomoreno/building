@@ -83,7 +83,7 @@ const UUID_RE    = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 const ISO_RE  = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/; // plain HH:MM or HH:MM:SS
 const EMAIL_RE   = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const STATUS_SET = new Set(["pending", "approved", "cancelled", "rejected"]);
+const STATUS_SET = new Set(["pending", "approved", "cancelled", "rejected", "released"]);
 
 function sanitiseBooking(body) {
   const { resource_id, start_time, end_time, status, notes } = body;
@@ -129,14 +129,18 @@ async function generateWeeklyReport(env) {
     const t   = await res.text(); return t ? JSON.parse(t) : {};
   };
   const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const [projects, logs, members, weekRequests, grantsRaw] = await Promise.all([
+  const weekStart  = oneWeekAgo.split("T")[0];
+  const [projects, logs, members, weekRequests, grantsRaw, weekBookings, resources] = await Promise.all([
     sb("projects?select=id,data"),
     sb(`logs?timestamp=gte.${oneWeekAgo}&limit=100`),
-    sb("members?select=username,email"),
+    sb("members?select=username,email,pricing_tier"),
     sb(`requests?status=eq.approved&reviewed_at=gte.${oneWeekAgo}&select=type,username,metadata,reviewed_at`),
     sb("grants?active=eq.true&select=id,code,name,tier"),
+    sb(`bookings?status=in.(approved,released)&date=gte.${weekStart}&select=username,date,start_time,end_time,full_day,resource_id,grant_id,status`),
+    sb("resources?select=id,name,sku_id"),
   ]);
-  const grantMap = Object.fromEntries((Array.isArray(grantsRaw) ? grantsRaw : []).map(g => [g.id, g]));
+  const grantMap    = Object.fromEntries((Array.isArray(grantsRaw)    ? grantsRaw    : []).map(g => [g.id, g]));
+  const resourceMap = Object.fromEntries((Array.isArray(resources) ? resources : []).map(r => [r.id, r]));
   const blocked = projects.flatMap(r =>
     (r.data?.tasks || []).filter(t => t.col === "Blocked").map(t => ({ task: t.title, project: r.data?.name }))
   );
@@ -166,9 +170,31 @@ async function generateWeeklyReport(env) {
     ? newApprovals.map(r => `- ${r.username}: ${r.type}`).join("\n")
     : "none";
 
-  const financialSection = completedOrders.length
-    ? `Completed store orders (all time, currently Done):\n${completedLines.join("\n")}\nTotal value of completed orders: EUR ${completedTotal.toFixed(2)}\n\nRequests approved this week: ${approvalsText}`
-    : `No completed store orders.\nRequests approved this week: ${approvalsText}`;
+  // Bookings this week (approved + released) that have a priced resource
+  const skuMap = {};
+  (Array.isArray(resources) ? resources : []).forEach(r => { if (r.sku_id) skuMap[r.id] = r; });
+  const pricedBookings = (Array.isArray(weekBookings) ? weekBookings : []).filter(b => skuMap[b.resource_id]);
+  const bookingLines = pricedBookings.map(b => {
+    const res   = resourceMap[b.resource_id] || {};
+    const grant = b.grant_id ? grantMap[b.grant_id] : null;
+    const hrs   = b.full_day ? 8 : (() => {
+      if (!b.start_time || !b.end_time) return 0;
+      const [sh, sm] = b.start_time.split(":").map(Number);
+      const [eh, em] = b.end_time.split(":").map(Number);
+      return Math.max(0, (eh * 60 + em - sh * 60 - sm) / 60);
+    })();
+    const releasedTag = b.status === "released" ? " [released]" : "";
+    const grantTag    = grant ? ` [${grant.code}]` : "";
+    return `- ${b.username} · ${res.name || b.resource_id} · ${b.date} · ${hrs}h${grantTag}${releasedTag}`;
+  });
+
+  const financialSection = completedOrders.length || bookingLines.length
+    ? [
+        completedOrders.length ? `Completed store orders:\n${completedLines.join("\n")}\nTotal: EUR ${completedTotal.toFixed(2)}` : "",
+        bookingLines.length    ? `Resource bookings this week:\n${bookingLines.join("\n")}` : "",
+        `Requests approved this week: ${approvalsText}`,
+      ].filter(Boolean).join("\n\n")
+    : `No completed store orders or priced bookings this week.\nRequests approved this week: ${approvalsText}`;
 
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -735,8 +761,27 @@ export default {
         const id   = path.split("/").pop();
         const body = await request.json();
         delete body.username; // never allow changing the original booker
-        if (body.status && !["cancelled"].includes(body.status) && sessionUser?.role !== "admin")
-          return errRes(ch, "Only admins can approve or reject bookings", 403, "FORBIDDEN");
+        if (body.status) {
+          const nonAdminStatuses = new Set(["cancelled", "released"]);
+          if (!nonAdminStatuses.has(body.status) && sessionUser?.role !== "admin")
+            return errRes(ch, "Only admins can approve or reject bookings", 403, "FORBIDDEN");
+          if (body.status === "released") {
+            const existing = await sb(`bookings?id=eq.${id}&select=resource_id,username,date,start_time&limit=1`);
+            const cur = Array.isArray(existing) && existing[0];
+            if (!cur) return errRes(ch, "Booking not found", 404, "NOT_FOUND");
+            const res = (await sb(`resources?id=eq.${cur.resource_id}&select=admin_username,delete_tolerance_hours&limit=1`))[0];
+            const isOwner    = cur.username === sessionUser.username;
+            const isResAdmin = res?.admin_username === sessionUser.username;
+            if (!isOwner && !isResAdmin && sessionUser.role !== "admin")
+              return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+            const toleranceHours = res?.delete_tolerance_hours || 0;
+            if (toleranceHours > 0 && cur.start_time) {
+              const cutoff = new Date(new Date(`${cur.date}T${cur.start_time}`).getTime() - toleranceHours * 3_600_000);
+              if (new Date() <= cutoff)
+                return errRes(ch, "Release is only available within the tolerance window", 400, "TOO_EARLY_TO_RELEASE");
+            }
+          }
+        }
         if (body.start_time || body.end_time) {
           const existing = await sb(`bookings?id=eq.${id}&select=resource_id,date,start_time,end_time&limit=1`);
           const cur = Array.isArray(existing) && existing[0];
@@ -754,7 +799,22 @@ export default {
     // ── DELETE /bookings/:id ──────────────────────────────────────────────────
     if (path.startsWith("/bookings/") && method === "DELETE") {
       try {
-        await sb(`bookings?id=eq.${path.split("/").pop()}`, "DELETE");
+        const id = path.split("/").pop();
+        const existing = await sb(`bookings?id=eq.${id}&select=resource_id,username,date,start_time&limit=1`);
+        const bk = Array.isArray(existing) && existing[0];
+        if (!bk) return errRes(ch, "Booking not found", 404, "NOT_FOUND");
+        const res = (await sb(`resources?id=eq.${bk.resource_id}&select=admin_username,delete_tolerance_hours&limit=1`))[0];
+        const isOwner    = bk.username === sessionUser.username;
+        const isResAdmin = res?.admin_username === sessionUser.username;
+        if (!isOwner && !isResAdmin && sessionUser.role !== "admin")
+          return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const toleranceHours = res?.delete_tolerance_hours || 0;
+        if (toleranceHours > 0 && bk.start_time) {
+          const cutoff = new Date(new Date(`${bk.date}T${bk.start_time}`).getTime() - toleranceHours * 3_600_000);
+          if (new Date() > cutoff)
+            return errRes(ch, `Cannot delete within ${toleranceHours}h of booking start — use Release instead`, 403, "DELETE_TOLERANCE");
+        }
+        await sb(`bookings?id=eq.${id}`, "DELETE");
         return json({ success: true });
       } catch (e) { return errRes(ch, e.message, 500); }
     }

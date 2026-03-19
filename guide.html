@@ -103,8 +103,9 @@
 
     <a href="#bookings" class="nav-link" style="margin-top:2px;">Bookings</a>
     <a href="#bookings-calendar" class="nav-sub">Calendar grid</a>
-    <a href="#bookings-approval" class="nav-sub">Approval workflow</a>
-    <a href="#bookings-grants"   class="nav-sub">Grant assignment</a>
+    <a href="#bookings-approval"         class="nav-sub">Approval workflow</a>
+    <a href="#bookings-delete-tolerance" class="nav-sub">Delete tolerance &amp; Release</a>
+    <a href="#bookings-grants"           class="nav-sub">Grant assignment &amp; financials</a>
 
     <a href="#requests" class="nav-link" style="margin-top:2px;">Service Requests</a>
     <a href="#requests-submit" class="nav-sub">Submitting</a>
@@ -449,14 +450,35 @@
           <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Rejected</span>
           <span class="text-slate-400 text-xs mx-1">or</span>
           <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">Cancelled</span>
+          <span class="text-slate-400 text-xs mx-1">or</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-600">Released</span>
         </div>
         <p class="text-sm text-slate-600 leading-relaxed mb-6">
           Resources without approval required move directly to <strong>Approved</strong> on submission. Admins manage pending bookings from the admin panel on the right side of the bookings page.
         </p>
 
-        <h3 id="bookings-grants" class="section text-base font-semibold text-slate-800 mb-3">Grant assignment</h3>
+        <h3 id="bookings-delete-tolerance" class="section text-base font-semibold text-slate-800 mb-3">Delete tolerance &amp; Release</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          Admins can configure a <strong>Delete tolerance</strong> (in hours) per resource. This prevents last-minute cancellations that leave slots empty with no time for others to book.
+        </p>
+        <ul class="text-sm text-slate-600 space-y-2 mb-4 ml-4 list-disc">
+          <li><strong>Before the tolerance window</strong> — the <em>Delete</em> button is shown. Deleting removes the booking completely.</li>
+          <li><strong>Inside the tolerance window</strong> (within X hours of the booking start) — the <em>Delete</em> button is replaced by an amber <em>Release</em> button.</li>
+        </ul>
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+          <p class="text-sm text-amber-800"><strong>Release</strong> — the booking is hidden from the calendar so the slot appears free and others can book it, but the entry <strong>remains in the financial report</strong>. Use this if you cannot attend but the cost should still be charged.</p>
+        </div>
         <p class="text-sm text-slate-600 leading-relaxed mb-6">
-          When creating a booking you can assign it to a grant — only grants where your username is listed as a member are shown. The booking cost will appear in the Dashboard expense table under that grant code, enabling per-grant financial tracking.
+          Only the booking owner, the resource's calendar admin, or a global admin can delete or release a booking. The tolerance and calendar admin are configured per resource in the Admin panel (<strong>⚙ Admin → Resources</strong>).
+        </p>
+
+        <h3 id="bookings-grants" class="section text-base font-semibold text-slate-800 mb-3">Grant assignment &amp; financial report</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-4">
+          When creating a booking you can assign it to a grant — only grants where your username is listed as a member are shown. <strong>Approved and Released</strong> bookings on resources with a pricing SKU appear automatically in the Dashboard expense table. The cost is calculated as:
+        </p>
+        <p class="text-sm font-mono bg-slate-100 rounded-lg px-4 py-2 mb-4">cost = duration (hours) × SKU rate (EUR/h, by tier)</p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Full-day bookings count as 8 hours. The tier is taken from the grant if one is assigned, otherwise from the user's pricing tier. Released bookings are shown with an amber <em>released</em> badge in the report.
         </p>
       </section>
 

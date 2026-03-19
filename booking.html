@@ -219,10 +219,29 @@
 
       const del = async () => {
         if (!confirm("Delete this booking?")) return;
-        await api.deleteBooking(booking.id); onDelete();
+        setSaving(true);
+        const res = await api.deleteBooking(booking.id);
+        setSaving(false);
+        if (res?.code === "DELETE_TOLERANCE") { setSaveError(res.error); return; }
+        onDelete();
+      };
+
+      const release = async () => {
+        if (!confirm("Release this booking? It will be removed from the calendar but kept in the financial report. Others can book this slot.")) return;
+        setSaving(true);
+        await api.updateBooking(booking.id, { status: "released" });
+        setSaving(false);
+        onSave();
       };
 
       const canEdit = isAdmin || !booking?.id || booking?.username === username;
+
+      // Determine if we're inside the delete tolerance window
+      const toleranceHours = resource?.delete_tolerance_hours || 0;
+      const inToleranceWindow = toleranceHours > 0 && booking?.id && booking?.date && booking?.start_time && !booking?.full_day && (() => {
+        const cutoff = new Date(new Date(`${booking.date}T${booking.start_time}`).getTime() - toleranceHours * 3_600_000);
+        return new Date() > cutoff;
+      })();
 
       const inputCls = "w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400";
       const labelCls = "text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5";
@@ -263,6 +282,7 @@
                   <label className={labelCls}>END</label>
                   <select value={endTime} onChange={e=>setEndTime(e.target.value)} disabled={!canEdit} className={inputCls}>
                     {getSlots(slotMins).map(s=><option key={s.label} value={s.label}>{s.label}</option>)}
+                    <option value="24:00">24:00</option>
                   </select>
                 </div>
               </div>
@@ -329,8 +349,14 @@
                   className={`flex-1 text-sm py-2.5 rounded-xl bg-blue-600 text-white border-none cursor-pointer font-semibold hover:bg-blue-700 transition-colors ${saving?"opacity-70":""}`}>
                   {saving?"Saving…":isNew?"Create Booking":"Save Changes"}
                 </button>
-                {!isNew&&<button onClick={del}
-                  className="text-sm px-3.5 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100 transition-colors">Delete</button>}
+                {!isNew && !inToleranceWindow && (
+                  <button onClick={del} disabled={saving}
+                    className="text-sm px-3.5 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100 transition-colors">Delete</button>
+                )}
+                {!isNew && inToleranceWindow && (
+                  <button onClick={release} disabled={saving} title={`Within ${toleranceHours}h tolerance window — entry stays in financial report`}
+                    className="text-sm px-3.5 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-600 cursor-pointer hover:bg-amber-100 transition-colors">Release</button>
+                )}
               </div>
             )}
           </div>
@@ -426,6 +452,10 @@
                       <input type="number" min="0" value={editRes.max_days_ahead ?? 0}
                         onChange={e=>setEditRes({...editRes,max_days_ahead:Number(e.target.value)})}
                         className={inputCls}/>
+                      <label className={labelCls}>DELETE TOLERANCE (hours before booking, 0 = no limit)</label>
+                      <input type="number" min="0" value={editRes.delete_tolerance_hours ?? 0}
+                        onChange={e=>setEditRes({...editRes,delete_tolerance_hours:Number(e.target.value)})}
+                        className={inputCls}/>
                       <label className={labelCls}>CALENDAR ADMIN</label>
                       <select value={editRes.admin_username||""} onChange={e=>setEditRes({...editRes,admin_username:e.target.value})} className={inputCls}>
                         <option value="">— None —</option>
@@ -448,7 +478,7 @@
                     <div key={r.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 mb-2">
                       <div>
                         <span className="text-[13px] font-semibold text-slate-800">{r.name}</span>
-                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"} · admin: {r.admin_username||"—"} · sku: {(pricing?.skus||[]).find(s=>s.id===r.sku_id)?.name||"—"}</span>
+                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"} · {r.delete_tolerance_hours > 0 ? `${r.delete_tolerance_hours}h tolerance` : "no tolerance"} · admin: {r.admin_username||"—"} · sku: {(pricing?.skus||[]).find(s=>s.id===r.sku_id)?.name||"—"}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={()=>setEditRes(r)}
@@ -558,6 +588,7 @@
       const days        = Array.from({length:7},(_,i)=>addDays(weekStart,i));
       const color       = "#3b82f6";
       const slotMins    = resource?.slot_duration || 30;
+      const visibleBookings = bookings.filter(b => b.status !== "released");
       const SLOTS       = slotMins === 0 ? [] : getSlots(slotMins);
       const fullDayOnly = slotMins === 0 || resource?.booking_type === "fullday";
 
@@ -633,7 +664,7 @@
             <div className="px-2 py-1 text-[10px] text-slate-400 flex items-center">All day</div>
             {days.map((day,di)=>{
               const dateStr = fmt(day);
-              const fdBookings = bookings.filter(b=>b.date===dateStr&&b.full_day);
+              const fdBookings = visibleBookings.filter(b=>b.date===dateStr&&b.full_day);
               return (
                 <div key={di} className="border-l border-slate-200 min-h-[24px] p-0.5"
                   onClick={()=>fullDayOnly&&canBook&&setModal({booking:null,slot:null,date:dateStr})}>
@@ -659,7 +690,7 @@
                   </div>
                   {days.map((day,di)=>{
                     const dateStr   = fmt(day);
-                    const dBookings = si===0 ? bookings.filter(b=>b.date===dateStr&&!b.full_day) : [];
+                    const dBookings = si===0 ? visibleBookings.filter(b=>b.date===dateStr&&!b.full_day) : [];
                     return (
                       <div key={di} className="slot-row"
                         style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",position:"relative",background:"#fff"}}

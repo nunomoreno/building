@@ -257,7 +257,7 @@
       return { resource: res.name || b.resource_id, user: m.display_name || b.username,
                 date: b.date, start: b.start_time || "—", end: b.end_time || "—",
                 full_day: b.full_day, hours: hrs, tier, rate, cost,
-                grant: grant?.code || "" };
+                grant: grant?.code || "", released: b.status === "released" };
     });
   }
 
@@ -303,7 +303,7 @@
   function renderExpenses() {
     const yearStr = String(expenseYear);
     let bookings  = _allBookings.filter(b =>
-      b.status === "approved" && b.date && b.date.startsWith(yearStr)
+      (b.status === "approved" || b.status === "released") && b.date && b.date.startsWith(yearStr)
     );
 
     if (expenseScope === "mine") {
@@ -329,7 +329,7 @@
 
     const tableEl = document.getElementById("expense-table");
     if (!rows.length) {
-      tableEl.innerHTML = `<p class="text-xs text-slate-400 py-2">No approved bookings with pricing in ${expenseYear}.</p>`;
+      tableEl.innerHTML = `<p class="text-xs text-slate-400 py-2">No approved or released bookings with pricing in ${expenseYear}.</p>`;
       return;
     }
 
@@ -349,7 +349,7 @@
         <tbody>
           ${rows.map(r => `
             <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-              <td class="py-2 pr-3 text-slate-700 font-medium max-w-[140px] truncate">${esc(r.resource)}${r.type === "order" ? `<span class="ml-1 text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>` : ""}</td>
+              <td class="py-2 pr-3 text-slate-700 font-medium max-w-[140px] truncate">${esc(r.resource)}${r.type === "order" ? `<span class="ml-1 text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>` : ""}${r.released ? `<span class="ml-1 text-[9px] bg-amber-100 text-amber-600 rounded-full px-1.5 py-0.5">released</span>` : ""}</td>
               <td class="py-2 pr-3 text-slate-600 max-w-[100px] truncate">${esc(r.user)}</td>
               <td class="py-2 pr-3 text-slate-500">${esc(r.date)}</td>
               <td class="py-2 pr-3 text-slate-500">${r.type === "order" ? `${r.hours} units` : `${r.hours % 1 === 0 ? r.hours : r.hours.toFixed(1)}h${r.full_day ? " (full)" : ""}`}</td>
@@ -364,7 +364,7 @@
   function downloadCSV() {
     const yearStr = String(expenseYear);
     let bookings  = _allBookings.filter(b =>
-      b.status === "approved" && b.date && b.date.startsWith(yearStr)
+      (b.status === "approved" || b.status === "released") && b.date && b.date.startsWith(yearStr)
     );
     if (expenseScope === "mine") {
       bookings = bookings.filter(b => b.username === username);
