@@ -280,7 +280,7 @@
     }
 
     // ── AI Chat ──────────────────────────────────────────────────────────────
-    function AIChat({ scope, onRefresh, username }) {
+    function AIChat({ scope, onRefresh, username, activeProject }) {
       const [messages,      setMessages]      = useState([]);
       const [input,         setInput]         = useState("");
       const [asking,        setAsking]        = useState(false);
@@ -317,9 +317,12 @@
         const newMessages = [...messages, { role: "user", content: userMsg }];
         setMessages(newMessages); setInput("");
         try {
+          const projectContext = activeProject
+            ? JSON.stringify({ id: activeProject.id, name: activeProject.name, owner: activeProject.owner_username, tasks: (activeProject.tasks || []).filter(t => t.col !== "Billed") }, null, 2)
+            : JSON.stringify(scopedProjects.map(p => ({ id: p.id, name: p.name, taskCount: (p.tasks||[]).length })), null, 2);
           const result = await api.ai({
             model: "claude-sonnet-4-20250514", max_tokens: 1000,
-            system: `You are a helpful assistant managing a Kanban board. Current data:\n\n${JSON.stringify(scopedProjects, null, 2)}\n\nSupported actions:\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId.`,
+            system: `You are a helpful assistant for a Kanban board used by a research core facility.\n\n${activeProject ? `Current project:\n${projectContext}` : `No project selected. All projects:\n${projectContext}`}\n\nSupported actions (only for the current project):\n- add_task: { type, projectId, task: { col, title, notes } }\n- move_task: { type, projectId, taskId, col }\n- update_task: { type, projectId, taskId, updates }\n- delete_task: { type, projectId, taskId }\n\nIf performing a write operation, append at the very end:\n<ACTION>{"type":"...","projectId":"...",...}</ACTION>\n\nUse the project's id field for projectId. Cols: "To Do", "In Progress", "Blocked", "Done".`,
             messages: newMessages,
           });
           if (!result) { setError("No response — please try again."); setAsking(false); return; }
@@ -1046,7 +1049,7 @@
 
             {panel && (
               <div className="w-80 shrink-0 border-l border-slate-200 flex flex-col bg-white">
-                {panel === "ai"    && <AIChat scope={scope} onRefresh={loadData} username={user.username} />}
+                {panel === "ai"    && <AIChat scope={scope} onRefresh={loadData} username={user.username} activeProject={activeProject} />}
                 {panel === "log"   && <AuditLog />}
 
               </div>
