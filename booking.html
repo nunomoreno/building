@@ -255,11 +255,15 @@
               <div className="flex gap-2.5 mb-3">
                 <div className="flex-1">
                   <label className={labelCls}>START</label>
-                  <input type="time" step={slotMins * 60} value={startTime} onChange={e=>setStartTime(e.target.value)} disabled={!canEdit} className={inputCls}/>
+                  <select value={startTime} onChange={e=>setStartTime(e.target.value)} disabled={!canEdit} className={inputCls}>
+                    {getSlots(slotMins).map(s=><option key={s.label} value={s.label}>{s.label}</option>)}
+                  </select>
                 </div>
                 <div className="flex-1">
                   <label className={labelCls}>END</label>
-                  <input type="time" step={slotMins * 60} value={endTime} onChange={e=>setEndTime(e.target.value)} disabled={!canEdit} className={inputCls}/>
+                  <select value={endTime} onChange={e=>setEndTime(e.target.value)} disabled={!canEdit} className={inputCls}>
+                    {getSlots(slotMins).map(s=><option key={s.label} value={s.label}>{s.label}</option>)}
+                  </select>
                 </div>
               </div>
             )}
