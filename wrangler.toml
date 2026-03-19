@@ -1,0 +1,13 @@
+name = "morning-mud-283c"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# KV namespace for rate limiting and session cache
+# TODO: replace preview_id with your real KV namespace IDs
+# Run: wrangler kv namespace list  →  to find your IDs
+kv_namespaces = [
+  { binding = "RATE_LIMIT_KV", id = "REPLACE_WITH_REAL_KV_ID", preview_id = "REPLACE_WITH_PREVIEW_KV_ID" }
+]
+
+[triggers]
+crons = ["0 8 * * 1"]

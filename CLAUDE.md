@@ -15,6 +15,7 @@ Hosted on GitHub Pages at `https://nunomoreno.github.io/building`.
 | Database | Supabase (`hyppwlvmwqcjgphhmzwr.supabase.co`) |
 | Email | Brevo API from `lists@cirklo.org` |
 | AI | Anthropic API (`claude-sonnet-4-20250514`) via the Worker |
+| Testing | Vitest (`npm test`) against worker.js |
 
 ---
 
@@ -28,28 +29,49 @@ index.html      Login only (plain JS, no React). On success stores session in
 
 dashboard.html  Stats hub (plain JS). Shows active projects, team members,
                 total requests, recent requests, team panel, audit log.
-                No React.
+                Financial report: expense table filtered to finalized tasks
+                (task.finalized && !task.exclude_from_financial). No React.
 
 kanban.html     React. Per-user Kanban board. Three scope views:
                   - Mine: projects where data.owner_username === me
                   - Mentioned: projects where any task note contains @me
                   - Group: all projects from group members (leader/manager only)
-                Right-side panels: AI assistant (scope-aware), Audit Log,
-                Users & Groups (admin only).
+                Right-side panels: AI assistant (active-project scoped), Audit Log.
+                Markdown WYSIWYG notes (marked.js CDN, toolbar).
+                Billed tasks: col="Billed" is internal — hidden from board grid,
+                shown in a separate section below. Per-card "Bill →" button
+                (only on cards with store_order items).
 
 booking.html    React. Weekly calendar grid for resource bookings.
                 Admin panel: resources, custom fields per resource,
                 booking permissions. Overlap prevention (DB + Worker).
+                Mobile: resource sidebar is a drawer (☰ hamburger).
 
 requests.html   React. Service request submission and review.
                 Types: Genomics, Cell Sorting, Other (configurable).
                 On approval → creates a Kanban project with all metadata
                 as a single To Do task. Brevo email on approve/reject.
 
+guide.html      Static HTML user guide (plain JS, no React).
+                Left sidebar TOC (mobile drawer). Covers all features.
+
+grants.html     React. Grant management (code, name, tier, funds, members).
+                Grants can be linked to bookings and store orders.
+
+pricing.html    React. Admin-only pricing configuration.
+
+users.html      React. Admin-only user and group management.
+
+profile.html    React. User profile page.
+
 worker.js       Cloudflare Worker. Single file, all routes.
                 Handles: auth, projects, bookings, requests, groups,
-                members, logs, settings, resources, AI proxy,
+                members, logs, settings, resources, grants, AI proxy,
                 weekly report cron (Mon 8am UTC).
+
+worker.test.js  Vitest test suite for worker.js (run with `npm test`).
+wrangler.toml   Cloudflare Worker config + KV binding.
+package.json    Scripts: test (vitest run), deploy (wrangler deploy).
 ```
 
 ---
@@ -62,8 +84,16 @@ members       id, username, password (sha256), email, role (admin|user),
 
 projects      id, project_id (text), data (jsonb), created_at, updated_at
               data shape: { id, name, owner_username, group_id?, source?,
-                            tasks: [{ id, col, title, notes }] }
-              cols: "To Do" | "In Progress" | "Blocked" | "Done"
+                            archived?: bool,
+                            tasks: [{ id, col, title, notes, assignee?,
+                                      finalized?, exclude_from_financial?,
+                                      store_order?: { items: [], total: number } }] }
+              cols: "To Do" | "In Progress" | "Blocked" | "Done" | "Billed"
+              Note: "Billed" is internal — not shown in COLUMNS list, tasks
+              with col="Billed" are filtered out of the board grid and shown
+              in a separate section. finalized=true means the task has been
+              billed. exclude_from_financial=true means it won't appear in
+              the dashboard expense report.
 
 bookings      id, resource_id (uuid), username, date, start_time, end_time,
               full_day (bool), notes, status (pending|approved|cancelled|rejected),
@@ -88,6 +118,9 @@ settings      key (text PK), value (jsonb), updated_at
                 "booking-fields"  → { [resource_id]: Field[] }
                 "request-types"   → { [typeKey]: { label, approver_role, fields: Field[] } }
               Field shape: { id, label, type (text|dropdown|multiselect), options[] }
+
+grants        id, code, name, tier (internal|cracs|academia|industry),
+              funds (numeric), members (text[]), created_at
 ```
 
 ---
@@ -129,9 +162,33 @@ Worker filters by `data.owner_username`. Legacy projects with no owner
 are treated as owned by the requesting user.
 
 **AI scoping**
-`AIChat` component fetches `api.getProjects(scope)` independently on mount.
-Only the scoped project list is sent in the Claude system prompt.
+`AIChat` receives `activeProject` prop. When a project is open, the system
+prompt contains only that project's non-Billed tasks. Falls back to a compact
+list of all scoped projects if no project is active.
 Worker is a pure proxy for `/ai` — no server-side project injection.
+
+**Billing flow (per task)**
+1. Task card shows "Bill →" button only if `task.store_order?.items?.length > 0`
+2. Click opens `FinalizeTaskModal` with toggle: "Include in financial report" (default ON)
+3. On confirm: `task.col = "Billed"`, `task.finalized = true`,
+   `task.exclude_from_financial = !includeFinancial`
+4. Billed tasks move out of the board grid into a "Billed" section below.
+5. "↩ reopen" restores `col = "Done"`, clears finalized flags.
+
+**Dashboard financial report**
+Reads `task.finalized && !task.exclude_from_financial && task.store_order?.items?.length`
+across ALL projects. Filterable by year and scope (mine/group/all).
+
+**Project archiving**
+Sidebar "Finalize project →" sets `data.archived = true` — removes from active
+board (no financial aspect; financial is per-task).
+
+**Markdown notes**
+Notes field uses `marked.js` CDN (global `marked`, not `window.marked`).
+Configured with `marked.use({ gfm: true })`. `==text==` → `<mark>` highlight.
+Toolbar uses `onMouseDown={e => e.preventDefault()}` to preserve textarea
+selection when clicking buttons. List buttons use text labels ("• —", "1. —")
+— avoid SVG `<line>` inside Babel standalone (causes silent parse failures).
 
 **Overlap prevention (bookings)**
 Two-layer: Worker pre-check query + Postgres `EXCLUDE USING gist` constraint.
@@ -146,6 +203,30 @@ Brevo email fires to requester's email.
 Cloudflare Cron: `0 8 * * 1` (Monday 8am UTC).
 Fetches blocked tasks + last week's logs → Claude generates HTML email →
 Brevo sends to all members with an email address.
+
+**Mobile responsiveness**
+All pages are responsive. Key patterns used:
+- Navbars: nav links hidden on mobile (`hidden sm:inline-flex`), accessible via user dropdown
+- Sidebars (kanban, booking): mobile drawer pattern — fixed overlay + slide-in panel,
+  toggled by `☰` button in the sub-bar
+- Kanban board grid: `overflow-x-auto` wrapper, `minWidth: 720` on grid
+- Kanban AI/Log panels: full-screen overlay on mobile (`fixed inset-0`), `md:relative`
+- guide.html sidebar: CSS `transform: translateX(-100%)` drawer with `.open` class
+
+---
+
+## Testing
+
+```bash
+npm install        # first time only (installs vitest + wrangler)
+npm test           # runs vitest against worker.test.js
+npm run deploy     # deploys worker.js via wrangler
+```
+
+Previously identified bugs — all fixed:
+1. `DELETE /projects/:id` — now checks ownership (owner or admin only)
+2. `/test-store` — added to `bypassRoutes`
+3. `getGroupUsernames` — removed redundant `&members.select=username` param
 
 ---
 

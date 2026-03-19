@@ -58,7 +58,7 @@ async function getGroupMemberIds(sb, groupId) {
 // Returns array of usernames in a group
 async function getGroupUsernames(sb, groupId) {
   const rows = await sb(
-    `group_members?group_id=eq.${groupId}&select=members(username)&members.select=username`
+    `group_members?group_id=eq.${groupId}&select=members(username)`
   );
   // Supabase embedded resource
   if (Array.isArray(rows)) return rows.map(r => r.members?.username).filter(Boolean);
@@ -225,7 +225,7 @@ export default {
 
     // ── Session gate ─────────────────────────────────────────────────────────
     const publicRoutes = new Set(["/login", "/register"]);
-    const bypassRoutes = new Set(["/debug", "/test-report", "/test-email", "/test-bookings"]);
+    const bypassRoutes = new Set(["/debug", "/test-report", "/test-email", "/test-bookings", "/test-store"]);
     let sessionUser = null;
     if (!publicRoutes.has(path)) {
       sessionUser = await validateSession(sb, request.headers.get("X-Session-Token"), env.RATE_LIMIT_KV);
@@ -530,7 +530,11 @@ export default {
     // ── DELETE /projects/:id ──────────────────────────────────────────────────
     if (path.startsWith("/projects/") && method === "DELETE") {
       try {
-        const id = path.split("/").pop();
+        const id       = path.split("/").pop();
+        const existing = await sb(`projects?id=eq.${id}&select=data&limit=1`);
+        const owner    = existing[0]?.data?.owner_username;
+        if (owner && owner !== sessionUser.username && sessionUser.role !== "admin")
+          return errRes(ch, "Forbidden", 403, "FORBIDDEN");
         await sb(`projects?id=eq.${id}`, "DELETE");
         return json({ success: true });
       } catch (e) { return errRes(ch, e.message, 500); }
