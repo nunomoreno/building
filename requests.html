@@ -424,7 +424,8 @@
         <div className="flex items-center gap-2 mb-5">
           <p className="text-sm text-slate-400">Submit a service request to the platforms team.</p>
           <button onClick={() => setShowDesc(d => !d)} title={typeConfig?.description ? "About this request type" : "No description yet — admin can add one in ⚙ Configure"}
-            className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
+            style={{fontSize:18,lineHeight:1,background:"none",border:"none",cursor:"pointer",padding:2,borderRadius:"50%",transition:"color .15s"}}
+            className={showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}>ⓘ</button>
         </div>
         {showDesc && (
           typeConfig?.description

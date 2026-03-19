@@ -20,6 +20,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; min-height: 100vh; }
     .slot-row:hover { background: #eff6ff !important; cursor: pointer; }
+    .drag-over { background: #dbeafe !important; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
     /* ── Button system ───────────────────────────────────────────────── */
@@ -97,7 +98,7 @@
         ? safeFetch(`${WORKER}/resources/${r.id}`, { method:"PUT",    headers: authHeaders(), body: JSON.stringify(r) })
         : safeFetch(`${WORKER}/resources`,         { method:"POST",   headers: authHeaders(), body: JSON.stringify(r) }),
       deleteResource:(id)      => safeFetch(`${WORKER}/resources/${id}`,  { method:"DELETE", headers: authHeaders() }),
-      getBookings:   ()        => safeFetch(`${WORKER}/bookings?limit=200`, { headers: authHeaders() }),
+      getBookings:   ()        => safeFetch(`${WORKER}/bookings?limit=500`, { headers: authHeaders() }),
       saveBooking:   (b)       => safeFetch(`${WORKER}/bookings`,         { method:"POST",   headers: authHeaders(), body: JSON.stringify(b) }),
       updateBooking: (id,data) => safeFetch(`${WORKER}/bookings/${id}`,   { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
       deleteBooking: (id)      => safeFetch(`${WORKER}/bookings/${id}`,   { method:"DELETE", headers: authHeaders() }),
@@ -115,6 +116,44 @@
     const addDays    = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
     const minsToTime = (m) => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
     const slotIndex  = (time, slotMins=30) => { const [h,m]=time.split(":").map(Number); return Math.floor((h*60+m)/slotMins); };
+
+    // ── Metadata heuristic mapper ────────────────────────────────────────────
+    function mapMetadata(sourceFields, targetFields, sourceMeta) {
+      const result = {};
+      for (const tf of targetFields) {
+        const tLabel = tf.label.toLowerCase().trim();
+        let sf = sourceFields.find(f => f.label.toLowerCase().trim() === tLabel);
+        if (!sf) sf = sourceFields.find(f => {
+          const s = f.label.toLowerCase().trim();
+          return s.includes(tLabel) || tLabel.includes(s);
+        });
+        if (sf && sourceMeta[sf.id] != null && sourceMeta[sf.id] !== "") {
+          if (tf.type === "dropdown" && tf.options?.length) {
+            if ((tf.options).includes(sourceMeta[sf.id])) result[tf.id] = sourceMeta[sf.id];
+          } else {
+            result[tf.id] = sourceMeta[sf.id];
+          }
+        }
+      }
+      return result;
+    }
+
+    // ── Repeat date generator ────────────────────────────────────────────────
+    function generateDates(startStr, mode, untilStr) {
+      if (!startStr || !untilStr || !mode || mode === "none") return startStr ? [startStr] : [];
+      const dates = [];
+      const cur   = new Date(startStr + "T00:00:00");
+      const until = new Date(untilStr  + "T00:00:00");
+      if (isNaN(cur.getTime()) || isNaN(until.getTime()) || cur > until) return [];
+      const cap = new Date(cur); cap.setFullYear(cap.getFullYear() + 1);
+      const end = until < cap ? until : cap;
+      const step = mode === "daily" ? 1 : 7;
+      while (cur <= end && dates.length < 366) {
+        dates.push(fmt(new Date(cur)));
+        cur.setDate(cur.getDate() + step);
+      }
+      return dates;
+    }
 
     // ── Options tag editor ───────────────────────────────────────────────────
     function OptionsEditor({ options, onChange }) {
@@ -262,22 +301,43 @@
     // ── Booking Form Modal ───────────────────────────────────────────────────
     const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
 
-    function BookingModal({booking, resource, fields, onSave, onDelete, onClose, isAdmin, username, initialSlot, initialDate, grants}) {
-      const isNew     = !booking?.id;
-      const slotMins  = resource?.slot_duration || 30;
-      const defaultStart = initialSlot != null ? minsToTime(initialSlot * slotMins) : (booking?.start_time || "09:00");
-      const defaultEnd   = initialSlot != null ? minsToTime((initialSlot + 1) * slotMins) : (booking?.end_time || minsToTime(slotMins === 0 ? 60 : slotMins));
+    function BookingModal({
+      booking, resource, fields, onSave, onDelete, onClose,
+      isAdmin, username, initialStart, initialEnd, initialDate, grants,
+      allBookings,
+      moveFromId, moveFromName,
+    }) {
+      const isNew    = !booking?.id;
+      const isMoveOp = !!moveFromId;
+      const slotMins = resource?.slot_duration || 30;
 
-      const [date,      setDate]      = useState(booking?.date      || initialDate || fmt(new Date()));
-      const [startTime, setStartTime] = useState(defaultStart);
-      const [endTime,   setEndTime]   = useState(defaultEnd);
-      const [fullDay,   setFullDay]   = useState(booking?.full_day  || slotMins === 0);
-      const [notes,     setNotes]     = useState(booking?.notes     || "");
-      const [meta,      setMeta]      = useState(booking?.metadata  || {});
-      const [grantId,   setGrantId]   = useState(booking?.grant_id || "");
-      const [status,    setStatus]    = useState(booking?.status    || (resource?.approval_required ? "pending" : "approved"));
-      const [saving,    setSaving]    = useState(false);
-      const [saveError, setSaveError] = useState(null);
+      const [date,       setDate]       = useState(booking?.date      || initialDate || fmt(new Date()));
+      const [startTime,  setStartTime]  = useState(initialStart || booking?.start_time || "09:00");
+      const [endTime,    setEndTime]    = useState(initialEnd   || booking?.end_time   || minsToTime(slotMins === 0 ? 60 : slotMins));
+      const [fullDay,    setFullDay]    = useState(booking?.full_day  || slotMins === 0);
+      const [notes,      setNotes]      = useState(booking?.notes     || "");
+      const [meta,       setMeta]       = useState(booking?.metadata  ? Object.fromEntries(Object.entries(booking.metadata).filter(([k])=>k!=="__series_id")) : {});
+      const [grantId,    setGrantId]    = useState(booking?.grant_id || "");
+      const [status,     setStatus]     = useState(booking?.status    || (resource?.approval_required ? "pending" : "approved"));
+      const [saving,     setSaving]     = useState(false);
+      const [saveError,  setSaveError]  = useState(null);
+      const [repeatMode, setRepeatMode] = useState("none");
+      const [repeatUntil,setRepeatUntil]= useState("");
+
+      // Series info
+      const seriesId            = booking?.metadata?.__series_id;
+      const seriesBookings      = seriesId ? (allBookings||[]).filter(b => b.metadata?.__series_id === seriesId) : [];
+      const todayStr            = fmt(new Date());
+      const futureSeriesBookings= seriesBookings.filter(b => b.date >= todayStr);
+
+      const maxRepeatDate = (() => {
+        const d = date ? new Date(date + "T00:00:00") : new Date();
+        d.setFullYear(d.getFullYear() + 1);
+        return fmt(d);
+      })();
+
+      const repeatDates  = (repeatMode !== "none" && repeatUntil) ? generateDates(date, repeatMode, repeatUntil) : null;
+      const repeatCount  = repeatDates ? repeatDates.length : 1;
 
       const save = async () => {
         setSaving(true); setSaveError(null);
@@ -286,36 +346,68 @@
           full_day: fullDay,
           start_time: fullDay ? null : startTime,
           end_time:   fullDay ? null : endTime,
-          notes, metadata: meta, grant_id: grantId || null, status,
+          notes, grant_id: grantId || null, status,
         };
-        const res = isNew ? await api.saveBooking(payload) : await api.updateBooking(booking.id, payload);
-        if (res?.error || res?.code === "OVERLAP") {
-          setSaveError(res?.code === "OVERLAP" ? "This time slot is already booked — please choose another." : res.error || "Could not save booking.");
-          setSaving(false); return;
+
+        if ((isNew || isMoveOp) && repeatMode !== "none" && repeatUntil && repeatDates?.length) {
+          const sid = `s${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
+          let errors = [];
+          for (const d of repeatDates) {
+            const r = await api.saveBooking({...payload, date: d, metadata: {...meta, __series_id: sid}});
+            if (r?.error || r?.code === "OVERLAP") errors.push(d);
+          }
+          if (moveFromId) await api.deleteBooking(moveFromId);
+          if (errors.length) {
+            setSaveError(`${errors.length} booking(s) could not be created (overlap or error). Others were saved.`);
+            setSaving(false); return;
+          }
+        } else {
+          const prevSeriesId = booking?.metadata?.__series_id;
+          const metaFull = prevSeriesId ? {...meta, __series_id: prevSeriesId} : meta;
+          const r = isNew || isMoveOp
+            ? await api.saveBooking({...payload, metadata: metaFull})
+            : await api.updateBooking(booking.id, {...payload, metadata: metaFull});
+          if (r?.error || r?.code === "OVERLAP") {
+            setSaveError(r?.code === "OVERLAP" ? "This time slot is already booked — please choose another." : r.error || "Could not save booking.");
+            setSaving(false); return;
+          }
+          if (moveFromId) await api.deleteBooking(moveFromId);
         }
+
         setSaving(false); onSave();
       };
 
       const del = async () => {
         if (!confirm("Delete this booking?")) return;
         setSaving(true);
-        const res = await api.deleteBooking(booking.id);
+        const r = await api.deleteBooking(booking.id);
         setSaving(false);
-        if (res?.code === "DELETE_TOLERANCE") { setSaveError(res.error); return; }
+        if (r?.code === "DELETE_TOLERANCE") { setSaveError(r.error); return; }
         onDelete();
       };
 
-      const release = async () => {
-        if (!confirm("Release this booking? It will be removed from the calendar but kept in the financial report. Others can book this slot.")) return;
+      const delSingle = async () => {
+        if (!confirm("Delete only this entry from the series?")) return;
+        setSaving(true); await api.deleteBooking(booking.id); setSaving(false); onDelete();
+      };
+
+      const delSeries = async (scope) => {
+        const toDelete = scope === "all" ? seriesBookings : futureSeriesBookings;
+        if (!toDelete.length) return;
+        const label = scope === "all" ? `all ${toDelete.length}` : `${toDelete.length} future`;
+        if (!confirm(`Delete ${label} booking(s) in this series?`)) return;
         setSaving(true);
-        await api.updateBooking(booking.id, { status: "released" });
-        setSaving(false);
-        onSave();
+        for (const b of toDelete) await api.deleteBooking(b.id);
+        setSaving(false); onDelete();
+      };
+
+      const release = async () => {
+        if (!confirm("Release this booking? It stays in the financial report but frees the slot.")) return;
+        setSaving(true); await api.updateBooking(booking.id, { status: "released" }); setSaving(false); onSave();
       };
 
       const canEdit = isAdmin || !booking?.id || booking?.username === username;
 
-      // Determine if we're inside the delete tolerance window
       const toleranceHours = resource?.delete_tolerance_hours || 0;
       const inToleranceWindow = toleranceHours > 0 && booking?.id && booking?.date && booking?.start_time && !booking?.full_day && (() => {
         const cutoff = new Date(new Date(`${booking.date}T${booking.start_time}`).getTime() - toleranceHours * 3_600_000);
@@ -327,22 +419,37 @@
 
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={onClose}>
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:w-[440px] max-h-[90vh] overflow-y-auto shadow-2xl" onMouseDown={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 w-full sm:w-[460px] max-h-[90vh] overflow-y-auto shadow-2xl" onMouseDown={e=>e.stopPropagation()}>
+
+            {/* Header */}
             <div className="flex justify-between items-center mb-4">
               <div>
-                <div className="text-[15px] font-bold text-slate-900">{isNew?"New Booking":resource?.name}</div>
-                {!isNew&&<div className="text-xs text-slate-500 mt-0.5">{booking.username}</div>}
-                {resource?.approval_required&&isNew&&<div className="text-[11px] text-orange-600 mt-1">⚠ Requires admin approval</div>}
+                <div className="text-[15px] font-bold text-slate-900">
+                  {isMoveOp ? `Move to ${resource?.name}` : isNew ? "New Booking" : resource?.name}
+                </div>
+                {!isNew && !isMoveOp && <div className="text-xs text-slate-500 mt-0.5">{booking.username}</div>}
+                {resource?.approval_required && (isNew || isMoveOp) && <div className="text-[11px] text-orange-600 mt-1">⚠ Requires admin approval</div>}
+                {seriesId && !isNew && (
+                  <div className="text-[11px] text-violet-600 mt-0.5">↻ Series · {seriesBookings.length} total · {futureSeriesBookings.length} future</div>
+                )}
               </div>
               <button onClick={onClose} className="text-lg bg-transparent border-none cursor-pointer text-slate-400 leading-none hover:text-slate-600">✕</button>
             </div>
 
+            {/* Move banner */}
+            {isMoveOp && moveFromName && (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-xs text-blue-700 mb-4">
+                ↔ Moving from <strong>{moveFromName}</strong> — confirm details and fill any required fields.
+              </div>
+            )}
+
+            {/* Date */}
             <div className="mb-3">
               <label className={labelCls}>DATE</label>
               <input type="date" value={date} onChange={e=>setDate(e.target.value)} disabled={!canEdit} className={inputCls}/>
             </div>
 
-            {resource?.booking_type!=="fullday" && slotMins !== 0 && (
+            {resource?.booking_type !== "fullday" && slotMins !== 0 && (
               <label className="flex items-center gap-2 text-sm text-slate-500 mb-3 cursor-pointer">
                 <input type="checkbox" checked={fullDay} onChange={e=>setFullDay(e.target.checked)} disabled={!canEdit}/>
                 Full day
@@ -380,7 +487,6 @@
                   <div className="mt-1.5 text-[11px] text-slate-500 flex gap-3">
                     <span className="bg-slate-100 rounded px-1.5 py-0.5">Tier: <strong>{TIER_LABELS[g.tier]||g.tier}</strong></span>
                     {g.funds > 0 && <span className="bg-slate-100 rounded px-1.5 py-0.5">Budget: <strong>€{g.funds.toLocaleString()}</strong></span>}
-                    {(g.members||[]).length > 0 && <span className="bg-slate-100 rounded px-1.5 py-0.5">{g.members.length} member{g.members.length !== 1 ? "s" : ""}</span>}
                   </div>
                 ) : null; })()}
               </div>
@@ -399,13 +505,41 @@
               </div>
             ))}
 
-            <div className="mb-4">
+            <div className="mb-3">
               <label className={labelCls}>NOTES</label>
               <textarea value={notes} onChange={e=>setNotes(e.target.value)} disabled={!canEdit} rows={3}
                 className={`${inputCls} resize-y`}/>
             </div>
 
-            {isAdmin && !isNew && (
+            {/* Repeat (new / move operations) */}
+            {(isNew || isMoveOp) && canEdit && (
+              <div className="mb-3 bg-slate-50 rounded-xl p-3 border border-slate-200">
+                <label className={labelCls}>REPEAT</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select value={repeatMode} onChange={e=>{setRepeatMode(e.target.value);setRepeatUntil("");}}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="none">No repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                  {repeatMode !== "none" && (
+                    <>
+                      <span className="text-xs text-slate-500">until</span>
+                      <input type="date" value={repeatUntil} onChange={e=>setRepeatUntil(e.target.value)}
+                        min={date || fmt(new Date())} max={maxRepeatDate}
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-blue-500 flex-1"/>
+                    </>
+                  )}
+                </div>
+                {repeatMode !== "none" && repeatUntil && repeatDates && (
+                  <div className="text-[11px] text-violet-600 mt-1.5">
+                    ↻ {repeatDates.length} booking{repeatDates.length!==1?"s":""} will be created · max 1 year ahead
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isAdmin && !isNew && !isMoveOp && (
               <div className="mb-4">
                 <label className={labelCls}>STATUS</label>
                 <select value={status} onChange={e=>setStatus(e.target.value)} className={inputCls}>
@@ -423,16 +557,42 @@
             )}
 
             {canEdit && (
-              <div className="flex gap-2">
-                <button onClick={save} disabled={saving} className="btn btn-md btn-primary flex-1">
-                  {saving?"Saving…":isNew?"Create Booking":"Save Changes"}
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={save} disabled={saving} className="btn btn-md btn-primary" style={{flex:"1 1 auto"}}>
+                  {saving ? "Saving…"
+                    : isMoveOp ? "Confirm Move"
+                    : isNew
+                      ? (repeatDates && repeatDates.length > 1 ? `Create ${repeatDates.length} Bookings` : "Create Booking")
+                      : "Save Changes"}
                 </button>
-                {!isNew && !inToleranceWindow && (
-                  <button onClick={del} disabled={saving} className="btn btn-md btn-danger">Delete</button>
-                )}
-                {!isNew && inToleranceWindow && (
-                  <button onClick={release} disabled={saving} title={`Within ${toleranceHours}h tolerance window — entry stays in financial report`}
-                    className="btn btn-md btn-warning">Release</button>
+
+                {!isNew && !isMoveOp && (
+                  seriesId ? (
+                    <>
+                      <button onClick={delSingle} disabled={saving} title="Delete only this entry" className="btn btn-md btn-danger">
+                        This
+                      </button>
+                      {futureSeriesBookings.length > 0 && (
+                        <button onClick={()=>delSeries("future")} disabled={saving}
+                          title={`Delete ${futureSeriesBookings.length} future entries from today`}
+                          className="btn btn-md btn-danger-fill">
+                          Future ({futureSeriesBookings.length})
+                        </button>
+                      )}
+                      {isAdmin && seriesBookings.length > 0 && (
+                        <button onClick={()=>delSeries("all")} disabled={saving}
+                          title={`Delete all ${seriesBookings.length} entries in series (including past)`}
+                          className="btn btn-md btn-danger-fill">
+                          All ({seriesBookings.length})
+                        </button>
+                      )}
+                    </>
+                  ) : inToleranceWindow ? (
+                    <button onClick={release} disabled={saving} title={`Within ${toleranceHours}h tolerance window`}
+                      className="btn btn-md btn-warning">Release</button>
+                  ) : (
+                    <button onClick={del} disabled={saving} className="btn btn-md btn-danger">Delete</button>
+                  )
                 )}
               </div>
             )}
@@ -480,12 +640,10 @@
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onMouseDown={onClose}>
           <div className="w-full sm:w-[580px] max-h-[90vh] flex flex-col bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl" onMouseDown={e=>e.stopPropagation()}>
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div className="text-[15px] font-bold text-slate-900">⚙️ Admin</div>
               <button onClick={onClose} className="text-lg bg-transparent border-none cursor-pointer text-slate-400 hover:text-slate-600">✕</button>
             </div>
-            {/* Tab bar */}
             <div className="flex border-b border-slate-200">
               {(isGlobalAdmin ? ["resources","fields","permissions"] : ["permissions"]).map(t=>(
                 <button key={t} onClick={()=>setTab(t)}
@@ -497,7 +655,6 @@
                 </button>
               ))}
             </div>
-            {/* Content */}
             <div className="flex-1 overflow-y-auto p-5">
 
               {tab==="resources"&&(
@@ -556,7 +713,7 @@
                     <div key={r.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 mb-2">
                       <div>
                         <span className="text-[13px] font-semibold text-slate-800">{r.name}</span>
-                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · {r.max_days_ahead ? `${r.max_days_ahead}d ahead` : "any time"} · {r.delete_tolerance_hours > 0 ? `${r.delete_tolerance_hours}h tolerance` : "no tolerance"} · admin: {r.admin_username||"—"} · sku: {(pricing?.skus||[]).find(s=>s.id===r.sku_id)?.name||"—"}</span>
+                        <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · admin: {r.admin_username||"—"}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={()=>setEditRes(r)} className="btn btn-xs btn-secondary">Edit</button>
@@ -654,78 +811,197 @@
       );
     }
 
-    // ── Weekly Calendar ──────────────────────────────────────────────────────
-    function WeeklyCalendar({resource, weekStart, bookings, fields, user, isAdmin, canBook, onRefresh, onRequestAccess, grants}) {
-      const [modal,     setModal]     = useState(null);
-      const [requested, setRequested] = useState(false);
-      const [requesting,setRequesting]= useState(false);
-      const [showDesc,  setShowDesc]  = useState(false);
-      const days        = Array.from({length:7},(_,i)=>addDays(weekStart,i));
-      const color       = "#3b82f6";
-      const slotMins    = resource?.slot_duration || 30;
-      const visibleBookings = bookings.filter(b => b.status !== "released");
-      const SLOTS       = slotMins === 0 ? [] : getSlots(slotMins);
-      const fullDayOnly = slotMins === 0 || resource?.booking_type === "fullday";
+    // ── Weekly Calendar (multi-resource) ─────────────────────────────────────
+    function WeeklyCalendar({ resources, weekStart, allBookings, allFields, user, isAdmin, canBookResource, onRefresh, onRequestAccess, grants }) {
+      const [modal,      setModal]      = useState(null);   // { booking, startTime, endTime, date, resId }
+      const [dropModal,  setDropModal]  = useState(null);   // { prefill, targetResource, targetFields, moveFromId, moveFromName }
+      const [showDesc,   setShowDesc]   = useState(false);
+      const [requested,  setRequested]  = useState({});
+      const [requesting, setRequesting] = useState({});
+      const dragRef = useRef(null);
 
-      const getTop = (b) => {
+      const numRes   = resources.length;
+      const resource = resources[0];  // for single-resource helpers
+
+      // Display grid always uses 30-min rows so multi-resource with different slot_durations aligns
+      const displaySlotMins = 30;
+      const fullDayOnly = numRes === 1 && (resource?.slot_duration === 0 || resource?.booking_type === "fullday");
+      const DISPLAY_SLOTS = fullDayOnly ? [] : getSlots(displaySlotMins);
+
+      const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+      // Pixel helpers based on 30-min display scale
+      const minutesToPx = (m) => m / displaySlotMins * SLOT_H;
+      const getTop    = (b) => {
         if (b.full_day) return 0;
-        const [h,m] = b.start_time.split(":").map(Number);
-        return Math.floor((h*60+m)/slotMins) * SLOT_H;
+        const [h, m] = b.start_time.split(":").map(Number);
+        return minutesToPx(h * 60 + m);
       };
       const getHeight = (b) => {
-        if (b.full_day) return SLOTS.length * SLOT_H;
-        const [sh,sm] = b.start_time.split(":").map(Number);
-        const [eh,em] = b.end_time.split(":").map(Number);
-        return Math.max(((eh*60+em)-(sh*60+sm))/slotMins, 1) * SLOT_H;
+        if (b.full_day) return minutesToPx(24 * 60);
+        const [sh, sm] = b.start_time.split(":").map(Number);
+        const [eh, em] = b.end_time.split(":").map(Number);
+        const dur = (eh * 60 + em) - (sh * 60 + sm);
+        return Math.max(minutesToPx(Math.max(dur, 15)), SLOT_H * 0.6);
       };
 
-      const handleRequestAccess = async () => {
-        setRequesting(true);
-        const res = await onRequestAccess(resource.id);
-        setRequesting(false);
-        if (res?.success) setRequested(true);
+      // ── Drag handlers ────────────────────────────────────────────────────
+      const handleDragStart = (e, booking, resId) => {
+        dragRef.current = { booking, resId };
+        e.dataTransfer.effectAllowed = "move";
+        e.stopPropagation();
       };
+
+      const finishDrop = (e, targetDate, slotIdx, targetResId, dropFullDay) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove("drag-over");
+        const drag = dragRef.current; dragRef.current = null;
+        if (!drag || !canBookResource(targetResId)) return;
+
+        const targetRes    = resources.find(r => r.id === targetResId);
+        const sourceFields = allFields[drag.resId] || [];
+        const targetFields = allFields[targetResId] || [];
+        const mappedMeta   = mapMetadata(sourceFields, targetFields, drag.booking.metadata || {});
+
+        const targetSlotMins = targetRes?.slot_duration || 30;
+        let newStart = drag.booking.start_time || "09:00";
+        let newEnd   = drag.booking.end_time   || minsToTime(targetSlotMins);
+
+        if (slotIdx != null && !drag.booking.full_day) {
+          const dropMins    = slotIdx * displaySlotMins;
+          const [sh, sm]    = newStart.split(":").map(Number);
+          const [eh, em]    = newEnd.split(":").map(Number);
+          const origDur     = Math.max((eh * 60 + em) - (sh * 60 + sm), targetSlotMins);
+          const snappedStart = Math.round(dropMins / targetSlotMins) * targetSlotMins;
+          newStart = minsToTime(snappedStart);
+          newEnd   = minsToTime(snappedStart + origDur);
+        }
+
+        const sourceResName = drag.resId !== targetResId
+          ? resources.find(r => r.id === drag.resId)?.name || null
+          : null;
+
+        setDropModal({
+          prefill: {
+            date:      targetDate,
+            start_time: newStart,
+            end_time:   newEnd,
+            full_day:   dropFullDay || (drag.booking.full_day && slotIdx == null),
+            notes:      drag.booking.notes || "",
+            metadata:   mappedMeta,
+            grant_id:   drag.booking.grant_id || "",
+          },
+          targetResource: targetRes,
+          targetFields,
+          moveFromId:   drag.booking.id,
+          moveFromName: sourceResName,
+        });
+      };
+
+      const dragOver = e => { e.preventDefault(); e.currentTarget.classList.add("drag-over"); };
+      const dragLeave= e => e.currentTarget.classList.remove("drag-over");
+
+      // ── Open regular modal ───────────────────────────────────────────────
+      const openModal = (booking, slotIdx, dateStr, resId) => {
+        const res          = resources.find(r => r.id === resId) || resource;
+        const targetSlotMins = res?.slot_duration || 30;
+        let initialStart = null, initialEnd = null;
+        if (slotIdx != null) {
+          const snapStart = Math.round(slotIdx * displaySlotMins / targetSlotMins) * targetSlotMins;
+          initialStart = minsToTime(snapStart);
+          initialEnd   = minsToTime(snapStart + targetSlotMins);
+        }
+        setModal({ booking: booking || null, initialStart, initialEnd, date: dateStr, resId });
+      };
+
+      // Request access handlers
+      const handleRequestAccess = async (resId) => {
+        setRequesting(p => ({...p, [resId]: true}));
+        const r = await onRequestAccess(resId);
+        setRequesting(p => ({...p, [resId]: false}));
+        if (r?.success) setRequested(p => ({...p, [resId]: true}));
+      };
+
+      const gridCols = `60px repeat(${7 * numRes}, 1fr)`;
+      const minW     = 60 + 7 * numRes * (numRes > 1 ? 85 : 90);
+
+      const modalResource = modal ? resources.find(r => r.id === modal.resId) || resource : null;
+      const modalFields   = modal ? (allFields[modal.resId] || []) : [];
 
       return (
         <div className="flex-1 overflow-y-auto overflow-x-auto">
-          {!canBook && resource && (
-            <div className="m-4 flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+
+          {/* No-permission banners */}
+          {resources.filter(r => !canBookResource(r.id)).map(r => (
+            <div key={r.id} className="mx-4 mt-3 flex items-center justify-between gap-4 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <span className="text-sm text-amber-800">
-                You don't have permission to book <strong>{resource.name}</strong>.
-                {resource.admin_username
-                  ? <> Please ask <strong>{resource.admin_username}</strong> for access.</>
-                  : <> Please ask an administrator for access.</>}
+                No permission to book <strong>{r.name}</strong>.
+                {r.admin_username ? <> Ask <strong>{r.admin_username}</strong> for access.</> : <> Ask an administrator.</>}
               </span>
-              {!requested && (
-                <button onClick={handleRequestAccess} disabled={requesting} className="btn btn-sm btn-amber-fill shrink-0">
-                  {requesting ? "Sending…" : "Request access"}
+              {!requested[r.id] && (
+                <button onClick={()=>handleRequestAccess(r.id)} disabled={requesting[r.id]} className="btn btn-sm btn-amber-fill shrink-0">
+                  {requesting[r.id] ? "Sending…" : "Request access"}
                 </button>
               )}
-              {requested && <span className="shrink-0 text-xs text-green-600 font-semibold">✓ Request sent!</span>}
+              {requested[r.id] && <span className="shrink-0 text-xs text-green-600 font-semibold">✓ Sent!</span>}
             </div>
-          )}
+          ))}
+
+          {/* Regular booking modal */}
           {modal && (
             <BookingModal
-              booking={modal.booking||{}} resource={resource} fields={fields}
-              isAdmin={isAdmin} username={user.username}
-              initialSlot={modal.slot} initialDate={modal.date}
-              grants={grants||[]}
-              onSave={()=>{setModal(null);onRefresh();}}
-              onDelete={()=>{setModal(null);onRefresh();}}
-              onClose={()=>setModal(null)}
+              booking={modal.booking || {}}
+              resource={modalResource}
+              fields={modalFields}
+              isAdmin={isAdmin}
+              username={user.username}
+              initialStart={modal.initialStart}
+              initialEnd={modal.initialEnd}
+              initialDate={modal.date}
+              grants={grants || []}
+              allBookings={allBookings}
+              onSave={() => { setModal(null); onRefresh(); }}
+              onDelete={() => { setModal(null); onRefresh(); }}
+              onClose={() => setModal(null)}
             />
           )}
 
-          {/* Day headers */}
-          <div style={{display:"grid",gridTemplateColumns:"60px repeat(7,1fr)",minWidth:600}} className="sticky top-0 z-10 bg-white border-b-2 border-slate-200">
+          {/* Drag-drop move modal */}
+          {dropModal && (
+            <BookingModal
+              booking={dropModal.prefill}
+              resource={dropModal.targetResource}
+              fields={dropModal.targetFields}
+              isAdmin={isAdmin}
+              username={user.username}
+              initialStart={dropModal.prefill?.start_time}
+              initialEnd={dropModal.prefill?.end_time}
+              initialDate={dropModal.prefill?.date}
+              grants={grants || []}
+              allBookings={allBookings}
+              moveFromId={dropModal.moveFromId}
+              moveFromName={dropModal.moveFromName}
+              onSave={() => { setDropModal(null); onRefresh(); }}
+              onDelete={() => { setDropModal(null); onRefresh(); }}
+              onClose={() => setDropModal(null)}
+            />
+          )}
+
+          {/* ── Day header row ── */}
+          <div style={{display:"grid", gridTemplateColumns:gridCols, minWidth:minW}}
+            className="sticky top-0 z-10 bg-white border-b-2 border-slate-200">
             <div className="p-2 flex items-start justify-center pt-2.5">
-              <button onClick={() => setShowDesc(d => !d)} title={resource?.description ? "Resource description" : "No description set — admin can add one in ⚙ Admin"}
-                className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
+              {numRes === 1 && (
+                <button onClick={() => setShowDesc(d => !d)}
+                  title={resource?.description ? "Resource description" : "No description set — admin can add one in ⚙ Admin"}
+                  style={{fontSize:18,lineHeight:1,background:"none",border:"none",cursor:"pointer",padding:2,borderRadius:"50%",transition:"color .15s"}}
+                  className={showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}>ⓘ</button>
+              )}
             </div>
-            {days.map((day,i)=>{
-              const isToday = fmt(day)===fmt(new Date());
+            {days.map((day, di) => {
+              const isToday = fmt(day) === fmt(new Date());
               return (
-                <div key={i} className="py-2 px-1 text-center border-l border-slate-200">
+                <div key={di} style={{gridColumn:`span ${numRes}`}} className="py-2 px-1 text-center border-l border-slate-200">
                   <div className="text-[11px] text-slate-400">{day.toLocaleDateString("en",{weekday:"short"})}</div>
                   <div style={{width:26,height:26,lineHeight:"26px",margin:"2px auto 0",borderRadius:"50%",background:isToday?"#eff6ff":"transparent"}}
                     className={`text-[13px] font-bold ${isToday?"text-blue-600":"text-slate-800"}`}>
@@ -736,69 +1012,151 @@
             })}
           </div>
 
-          {/* Description panel */}
-          {showDesc && (
+          {/* ── Resource sub-headers (multi-view only) ── */}
+          {numRes > 1 && (
+            <div style={{display:"grid", gridTemplateColumns:gridCols, minWidth:minW}} className="bg-white border-b border-slate-200 sticky top-[56px] z-10">
+              <div/>
+              {days.flatMap((_, di) =>
+                resources.map((res, ri) => (
+                  <div key={`${di}-${ri}`} style={{
+                    borderLeft: ri === 0 ? "1px solid #e2e8f0" : "1px solid #f1f5f9",
+                    padding: "3px 4px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: COLORS[ri % COLORS.length],
+                    textAlign: "center",
+                    overflow: "hidden",
+                    whiteSpace: "nowrap",
+                    textOverflow: "ellipsis",
+                    background: COLORS[ri % COLORS.length] + "0d",
+                  }}>
+                    {res.name}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* ── Description panel (single-view) ── */}
+          {numRes === 1 && showDesc && (
             resource?.description
               ? <div className="mx-4 mt-3 mb-1 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-slate-700 md-content"
                   dangerouslySetInnerHTML={{ __html: typeof marked !== 'undefined'
                     ? marked.parse(resource.description.replace(/==(.+?)==/g, '<mark>$1</mark>'))
                     : resource.description }}/>
               : <div className="mx-4 mt-3 mb-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-400 italic">
-                  No description set for this resource. Admins can add one in ⚙ Admin → edit the resource.
+                  No description set. Admins can add one in ⚙ Admin → edit the resource.
                 </div>
           )}
 
-          {/* Full-day row */}
-          <div style={{display:"grid",gridTemplateColumns:"60px repeat(7,1fr)",minWidth:600}} className="border-b-2 border-slate-200 bg-slate-50">
+          {/* ── Full-day row ── */}
+          <div style={{display:"grid", gridTemplateColumns:gridCols, minWidth:minW}} className="border-b-2 border-slate-200 bg-slate-50">
             <div className="px-2 py-1 text-[10px] text-slate-400 flex items-center">All day</div>
-            {days.map((day,di)=>{
-              const dateStr = fmt(day);
-              const fdBookings = visibleBookings.filter(b=>b.date===dateStr&&b.full_day);
-              return (
-                <div key={di} className="border-l border-slate-200 min-h-[24px] p-0.5"
-                  onClick={()=>fullDayOnly&&canBook&&setModal({booking:null,slot:null,date:dateStr})}>
-                  {fdBookings.map(b=>(
-                    <div key={b.id}
-                      style={{fontSize:10,fontWeight:600,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"2px 6px",marginBottom:2,cursor:"pointer",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}
-                      onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
-                      {b.username} · {b.status}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
+            {days.flatMap((day, di) =>
+              resources.map((res, ri) => {
+                const dateStr   = fmt(day);
+                const fdBookings = allBookings.filter(b =>
+                  b.resource_id === res.id && b.date === dateStr && b.full_day && b.status !== "released"
+                );
+                const resColor     = COLORS[ri % COLORS.length];
+                const canCreate    = res.booking_type !== "timeslot";
+                return (
+                  <div key={`${di}-${ri}`}
+                    className="border-l border-slate-200 min-h-[24px] p-0.5"
+                    style={{borderLeftColor: ri === 0 ? "#e2e8f0" : "#f1f5f9"}}
+                    onDragOver={dragOver}
+                    onDragLeave={dragLeave}
+                    onDrop={e => finishDrop(e, dateStr, null, res.id, true)}
+                    onClick={() => canCreate && canBookResource(res.id) && openModal(null, null, dateStr, res.id)}>
+                    {fdBookings.map(b => (
+                      <div key={b.id}
+                        draggable={isAdmin || b.username === user.username}
+                        onDragStart={e => handleDragStart(e, b, res.id)}
+                        style={{
+                          fontSize:10, fontWeight:600,
+                          background: STATUS_BG[b.status],
+                          color: STATUS_COLOR[b.status],
+                          borderLeft: `3px solid ${resColor}`,
+                          borderRadius:3, padding:"2px 6px", marginBottom:2,
+                          cursor:"grab", overflow:"hidden",
+                          whiteSpace:"nowrap", textOverflow:"ellipsis",
+                        }}
+                        onClick={e => {e.stopPropagation(); openModal(b, null, null, res.id);}}>
+                        {b.username} · {b.status}
+                        {b.metadata?.__series_id && <span style={{marginLeft:3,opacity:.6}}>↻</span>}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            )}
           </div>
 
-          {/* Time grid — hidden for full-day-only resources */}
+          {/* ── Time grid ── */}
           {!fullDayOnly && (
-            <div style={{display:"grid",gridTemplateColumns:"60px repeat(7,1fr)",minWidth:600}}>
-              {SLOTS.map((slot,si)=>(
+            <div style={{display:"grid", gridTemplateColumns:gridCols, minWidth:minW}}>
+              {DISPLAY_SLOTS.map((slot, si) => (
                 <React.Fragment key={si}>
-                  <div style={{height:SLOT_H,borderBottom:"1px solid #f1f5f9"}} className="flex items-start justify-end pr-2 pt-0.5">
-                    {slot.m===0&&<span className="text-[10px] text-slate-400">{slot.label}</span>}
+                  {/* Time label */}
+                  <div style={{height:SLOT_H, borderBottom:"1px solid #f1f5f9"}} className="flex items-start justify-end pr-2 pt-0.5">
+                    {slot.m === 0 && <span className="text-[10px] text-slate-400">{slot.label}</span>}
                   </div>
-                  {days.map((day,di)=>{
-                    const dateStr   = fmt(day);
-                    const dBookings = si===0 ? visibleBookings.filter(b=>b.date===dateStr&&!b.full_day) : [];
-                    return (
-                      <div key={di} className="slot-row"
-                        style={{height:SLOT_H,borderBottom:`1px solid ${slot.m===0?"#e2e8f0":"#f8fafc"}`,borderLeft:"1px solid #e2e8f0",position:"relative",background:"#fff"}}
-                        onClick={()=>canBook&&setModal({booking:null,slot:si,date:dateStr})}>
-                        {si===0&&dBookings.map(b=>(
-                          <div key={b.id}
-                            style={{position:"absolute",top:getTop(b)+1,left:2,right:2,height:getHeight(b)-2,background:color+"22",borderLeft:`3px solid ${STATUS_COLOR[b.status]||"#94a3b8"}`,borderRadius:4,padding:"2px 6px",zIndex:5,overflow:"hidden",cursor:"pointer"}}
-                            onClick={e=>{e.stopPropagation();setModal({booking:b,slot:null,date:null});}}>
-                            <div style={{fontSize:10,fontWeight:700,color:"#1e293b",lineHeight:1.3}}>{b.username}</div>
-                            <div style={{fontSize:9,color:"#64748b"}}>{b.start_time}–{b.end_time}</div>
-                            {Object.entries(b.metadata||{}).slice(0,1).map(([k,v])=>(
-                              <div key={k} style={{fontSize:9,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{v}</div>
-                            ))}
-                            <div style={{position:"absolute",top:2,right:4,fontSize:9,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"1px 4px",fontWeight:600,textTransform:"capitalize"}}>{b.status}</div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })}
+
+                  {/* Day × Resource cells */}
+                  {days.flatMap((day, di) =>
+                    resources.map((res, ri) => {
+                      const dateStr   = fmt(day);
+                      const resColor  = COLORS[ri % COLORS.length];
+                      const isTimeslotRes = res.slot_duration !== 0 && res.booking_type !== "fullday";
+                      // Only render booking chips in the first slot row (si===0), positioned absolutely
+                      const dBookings = si === 0
+                        ? allBookings.filter(b =>
+                            b.resource_id === res.id && b.date === dateStr &&
+                            !b.full_day && b.status !== "released"
+                          )
+                        : [];
+                      return (
+                        <div key={`${di}-${ri}`}
+                          className="slot-row"
+                          style={{
+                            height: SLOT_H,
+                            borderBottom: `1px solid ${slot.m === 0 ? "#e2e8f0" : "#f8fafc"}`,
+                            borderLeft: `1px solid ${ri === 0 ? "#e2e8f0" : "#f1f5f9"}`,
+                            position: "relative",
+                            background: "#fff",
+                          }}
+                          onDragOver={dragOver}
+                          onDragLeave={dragLeave}
+                          onDrop={e => finishDrop(e, dateStr, si, res.id, false)}
+                          onClick={() => isTimeslotRes && canBookResource(res.id) && openModal(null, si, dateStr, res.id)}>
+                          {si === 0 && dBookings.map(b => (
+                            <div key={b.id}
+                              draggable={isAdmin || b.username === user.username}
+                              onDragStart={e => handleDragStart(e, b, res.id)}
+                              style={{
+                                position: "absolute",
+                                top: getTop(b) + 1,
+                                left: 2, right: 2,
+                                height: getHeight(b) - 2,
+                                background: resColor + "22",
+                                borderLeft: `3px solid ${STATUS_COLOR[b.status] || "#94a3b8"}`,
+                                borderRadius: 4, padding: "2px 6px",
+                                zIndex: 5, overflow: "hidden", cursor: "grab",
+                              }}
+                              onClick={e => {e.stopPropagation(); openModal(b, null, null, res.id);}}>
+                              <div style={{fontSize:10,fontWeight:700,color:"#1e293b",lineHeight:1.3}}>{b.username}</div>
+                              <div style={{fontSize:9,color:"#64748b"}}>{b.start_time}–{b.end_time}</div>
+                              {Object.entries(b.metadata||{}).filter(([k])=>k!=="__series_id").slice(0,1).map(([k,v])=>(
+                                <div key={k} style={{fontSize:9,color:"#64748b",overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>{v}</div>
+                              ))}
+                              <div style={{position:"absolute",top:2,right:4,fontSize:9,background:STATUS_BG[b.status],color:STATUS_COLOR[b.status],borderRadius:3,padding:"1px 4px",fontWeight:600,textTransform:"capitalize"}}>{b.status}</div>
+                              {b.metadata?.__series_id && <div style={{position:"absolute",bottom:2,right:4,fontSize:9,color:"#94a3b8",lineHeight:1}}>↻</div>}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })
+                  )}
                 </React.Fragment>
               ))}
             </div>
@@ -818,8 +1176,7 @@
       });
 
       const [resources,      setResources]      = useState([]);
-      const [selectedRes,    setSelectedRes]    = useState(null);
-      const [bookings,       setBookings]       = useState([]);
+      const [selectedResIds, setSelectedResIds] = useState([]);
       const [allBookings,    setAllBookings]    = useState([]);
       const [members,        setMembers]        = useState([]);
       const [allFields,      setAllFields]      = useState({});
@@ -829,20 +1186,28 @@
       const [loadError,      setLoadError]      = useState(null);
       const [showAdmin,      setShowAdmin]      = useState(false);
       const [resourceSearch, setResourceSearch] = useState("");
-      const [weekStart,   setWeekStart]   = useState(()=>{
-        const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d;
+      const [weekStart, setWeekStart] = useState(() => {
+        const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d;
       });
 
-      const isAdmin         = user?.role === "admin";
-      const currentMember   = members.find(m => m.username === user?.username);
+      const isAdmin          = user?.role === "admin";
+      const currentMember    = members.find(m => m.username === user?.username);
       const myAdminResources = resources.filter(r => r.admin_username === user?.username);
       const isCalendarAdmin  = myAdminResources.length > 0;
-      const canBook = isAdmin || (selectedRes != null && Array.isArray(currentMember?.permissions) && currentMember.permissions.includes(selectedRes.id));
+
+      const canBookResource = (resId) =>
+        isAdmin || (Array.isArray(currentMember?.permissions) && currentMember.permissions.includes(resId));
+
+      const toggleResource = (resId) => {
+        setSelectedResIds(prev =>
+          prev.includes(resId) ? prev.filter(id => id !== resId) : [...prev, resId]
+        );
+      };
 
       const loadBase = async () => {
         setLoadError(null);
         try {
-          const [r,m,f,p,g,b] = await Promise.all([
+          const [r, m, f, p, g, b] = await Promise.all([
             api.getResources(), api.getMembers(), api.getSettings("booking-fields"),
             api.getSettings("pricing"), api.getGrants(), api.getBookings(),
           ]);
@@ -851,27 +1216,26 @@
           setResources(resList);
           setAllBookings(bList);
           setMembers(Array.isArray(m) ? m : []);
-          setAllFields(f && typeof f==="object" ? f : {});
+          setAllFields(f && typeof f === "object" ? f : {});
           setPricing(p && Array.isArray(p.skus) ? p : { skus: [] });
           const allGrants = Array.isArray(g) ? g : [];
-          setGrants(user?.role === "admin" ? allGrants : allGrants.filter(gr => (gr.members || []).includes(user?.username)));
-          setSelectedRes(s => s || resList[0] || null);
+          setGrants(user?.role === "admin" ? allGrants : allGrants.filter(gr => (gr.members||[]).includes(user?.username)));
+          setSelectedResIds(prev => {
+            const valid = prev.filter(id => resList.some(r => r.id === id));
+            return valid.length > 0 ? valid : resList.length > 0 ? [resList[0].id] : [];
+          });
           setLoading(false);
         } catch { setLoadError("Could not load data. Please refresh."); setLoading(false); }
       };
 
-      const loadBookings = async () => {
-        if (!selectedRes) return;
+      const refreshBookings = async () => {
         try {
           const b = await api.getBookings();
-          const bList = Array.isArray(b) ? b : [];
-          setAllBookings(bList);
-          setBookings(bList.filter(bk=>bk.resource_id===selectedRes.id));
-        } catch { setBookings([]); }
+          setAllBookings(Array.isArray(b) ? b : []);
+        } catch {}
       };
 
-      useEffect(()=>{ if(user) loadBase(); else setLoading(false); }, []);
-      useEffect(()=>{ if(selectedRes) loadBookings(); }, [selectedRes, weekStart]);
+      useEffect(() => { if (user) loadBase(); else setLoading(false); }, []);
 
       if (!user)     return null;
       if (loading)   return <div className="p-8 text-slate-400">Loading…</div>;
@@ -883,21 +1247,27 @@
       );
 
       // Usage-sorted + search-filtered resource list
-      const usageCount   = allBookings.reduce((acc, b) => { acc[b.resource_id] = (acc[b.resource_id]||0)+1; return acc; }, {});
-      const sortedRes    = [...resources].sort((a,b) => (usageCount[b.id]||0) - (usageCount[a.id]||0));
-      const searchLower  = resourceSearch.trim().toLowerCase();
-      const filteredRes  = searchLower
+      const usageCount  = allBookings.reduce((acc, b) => { acc[b.resource_id] = (acc[b.resource_id]||0)+1; return acc; }, {});
+      const sortedRes   = [...resources].sort((a, b) => (usageCount[b.id]||0) - (usageCount[a.id]||0));
+      const searchLower = resourceSearch.trim().toLowerCase();
+      const filteredRes = searchLower
         ? sortedRes.filter(r => r.name.toLowerCase().includes(searchLower) || (r.description||"").toLowerCase().includes(searchLower))
         : sortedRes.slice(0, 20);
-      const hasMore      = !searchLower && sortedRes.length > 20;
+      const hasMore = !searchLower && sortedRes.length > 20;
 
-      const currentFields = selectedRes ? (allFields[selectedRes.id]||[]) : [];
+      const selectedResources = resources.filter(r => selectedResIds.includes(r.id));
+      const compareMode       = selectedResIds.length > 1;
+
       const weekLabel = `${weekStart.toLocaleDateString("en",{month:"short",day:"numeric"})} – ${addDays(weekStart,6).toLocaleDateString("en",{month:"short",day:"numeric",year:"numeric"})}`;
 
       return (
         <div className="font-sans h-screen flex flex-col bg-slate-50">
-          {showAdmin && <AdminPanel resources={resources} members={members} pricing={pricing} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}
-            isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}/>}
+          {showAdmin && (
+            <AdminPanel resources={resources} members={members} pricing={pricing}
+              onUpdate={() => { loadBase(); }}
+              onClose={() => setShowAdmin(false)}
+              isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}/>
+          )}
 
           <Navbar user={user} />
 
@@ -906,16 +1276,26 @@
             <div className="flex items-center justify-between gap-3 mb-2.5">
               <div>
                 <h1 className="text-base font-bold text-slate-900">Bookings</h1>
-                <p className="text-xs text-slate-400">Select a resource to view its calendar.</p>
+                <p className="text-xs text-slate-400">
+                  {compareMode
+                    ? <span>Comparing <strong>{selectedResIds.length}</strong> calendars — click a pill to toggle.</span>
+                    : "Click a resource to view its calendar. Select multiple to compare side by side."}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 {resources.length > 4 && (
-                  <input value={resourceSearch} onChange={e=>setResourceSearch(e.target.value)}
+                  <input value={resourceSearch} onChange={e => setResourceSearch(e.target.value)}
                     placeholder="Search resources…"
                     className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 w-36 sm:w-48"/>
                 )}
+                {compareMode && (
+                  <button onClick={() => setSelectedResIds(prev => [prev[0]])}
+                    className="btn btn-xs btn-secondary">
+                    Single view
+                  </button>
+                )}
                 {(isAdmin || isCalendarAdmin) && (
-                  <button onClick={()=>setShowAdmin(true)} className="btn btn-sm btn-secondary">
+                  <button onClick={() => setShowAdmin(true)} className="btn btn-sm btn-secondary">
                     ⚙ {isAdmin ? "Admin" : "Calendars"}
                   </button>
                 )}
@@ -924,21 +1304,28 @@
             {resources.length === 0
               ? <div className="text-sm text-slate-400">
                   {isAdmin
-                    ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>
+                    ? <span>No resources yet. <button onClick={() => setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>
                     : "No resources available."}
                 </div>
               : <div className="flex gap-2 flex-wrap">
-                  {filteredRes.map(r => (
-                    <button key={r.id} onClick={()=>setSelectedRes(r)}
-                      className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer whitespace-nowrap ${
-                        selectedRes?.id===r.id
-                          ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold"
-                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
-                      {r.name}
-                      {r.approval_required && <span className="ml-1.5 text-[10px] text-orange-500">⚠</span>}
-                      {(usageCount[r.id]||0) > 0 && <span className="ml-1.5 text-[10px] text-slate-400">{usageCount[r.id]}</span>}
-                    </button>
-                  ))}
+                  {filteredRes.map(r => {
+                    const isSelected = selectedResIds.includes(r.id);
+                    const resIdx     = resources.indexOf(r);
+                    const color      = COLORS[resIdx % COLORS.length];
+                    return (
+                      <button key={r.id} onClick={() => toggleResource(r.id)}
+                        className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer whitespace-nowrap ${
+                          isSelected
+                            ? "text-white font-semibold"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+                        style={isSelected ? {background: color, borderColor: color} : {}}>
+                        {compareMode && isSelected && <span style={{marginRight:4,opacity:.8}}>✓</span>}
+                        {r.name}
+                        {r.approval_required && <span className="ml-1.5 text-[10px] opacity-70">⚠</span>}
+                        {(usageCount[r.id]||0) > 0 && !isSelected && <span className="ml-1.5 text-[10px] text-slate-400">{usageCount[r.id]}</span>}
+                      </button>
+                    );
+                  })}
                   {hasMore && (
                     <span className="text-xs text-slate-400 self-center pl-1">+{sortedRes.length-20} more — use search</span>
                   )}
@@ -951,18 +1338,28 @@
 
           {/* Week navigation toolbar */}
           <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center gap-2 shrink-0">
-            <button onClick={()=>setWeekStart(addDays(weekStart,-7))} className="btn btn-sm btn-secondary">‹</button>
+            <button onClick={() => setWeekStart(addDays(weekStart,-7))} className="btn btn-sm btn-secondary">‹</button>
             <span className="text-sm font-semibold text-slate-700 min-w-[140px] sm:min-w-[200px] text-center">{weekLabel}</span>
-            <button onClick={()=>setWeekStart(addDays(weekStart,7))} className="btn btn-sm btn-secondary">›</button>
-            <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}} className="btn btn-xs btn-secondary">Today</button>
+            <button onClick={() => setWeekStart(addDays(weekStart,7))} className="btn btn-sm btn-secondary">›</button>
+            <button onClick={() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); setWeekStart(d); }} className="btn btn-xs btn-secondary">Today</button>
           </div>
 
           {/* Calendar area */}
           <div className="flex-1 overflow-hidden bg-white mx-4 sm:mx-6 my-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-            {selectedRes
-              ? <WeeklyCalendar key={selectedRes.id} resource={selectedRes} weekStart={weekStart} bookings={bookings}
-                  fields={currentFields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadBookings}
-                  onRequestAccess={api.requestAccess} grants={grants}/>
+            {selectedResources.length > 0
+              ? <WeeklyCalendar
+                  key={selectedResIds.join(",")}
+                  resources={selectedResources}
+                  weekStart={weekStart}
+                  allBookings={allBookings}
+                  allFields={allFields}
+                  user={user}
+                  isAdmin={isAdmin}
+                  canBookResource={canBookResource}
+                  onRefresh={refreshBookings}
+                  onRequestAccess={api.requestAccess}
+                  grants={grants}
+                />
               : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
                   Select a resource above to view its calendar.
                 </div>
