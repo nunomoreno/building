@@ -21,6 +21,18 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; }
     .msg-bubble { white-space: pre-wrap; line-height: 1.5; font-size: 13px; padding: 10px 14px; border-radius: 12px; max-width: 80%; }
+    /* ── Button system ───────────────────────────────────────────────── */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;border:1px solid transparent;border-radius:8px;font-weight:500;line-height:1.2;transition:background .12s,border-color .12s;font-family:inherit;white-space:nowrap}
+    .btn:disabled,.btn[disabled]{opacity:.55;cursor:not-allowed;pointer-events:none}
+    .btn-xs{font-size:11px;padding:4px 10px} .btn-sm{font-size:12px;padding:6px 13px}
+    .btn-md{font-size:13px;padding:9px 18px;font-weight:600} .btn-block{width:100%;justify-content:center}
+    .btn-primary{background:#2563eb;color:#fff} .btn-primary:hover{background:#1d4ed8}
+    .btn-secondary{background:#fff;color:#475569;border-color:#e2e8f0} .btn-secondary:hover{background:#f8fafc;border-color:#cbd5e1}
+    .btn-danger{background:#fef2f2;color:#dc2626;border-color:#fecaca} .btn-danger:hover{background:#fee2e2;border-color:#fca5a5}
+    .btn-danger-fill{background:#dc2626;color:#fff} .btn-danger-fill:hover{background:#b91c1c}
+    .btn-warning{background:#fffbeb;color:#b45309;border-color:#fde68a} .btn-warning:hover{background:#fef3c7}
+    .btn-success{background:#059669;color:#fff} .btn-success:hover{background:#047857}
+    .btn-violet{background:#7c3aed;color:#fff} .btn-violet:hover{background:#6d28d9}
   </style>
 </head>
 <body>
@@ -370,7 +382,7 @@
             <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") ask(); }} placeholder="Ask or give instructions…"
               className="flex-1 text-sm px-2.5 py-1.5 rounded-lg border border-slate-300 outline-none focus:border-blue-400 font-sans" />
             <button onClick={ask} disabled={asking || !input.trim()}
-              className="text-sm px-3.5 py-1.5 rounded-lg bg-blue-600 text-white border-none cursor-pointer font-semibold hover:bg-blue-700 disabled:opacity-60 font-sans">Send</button>
+              className="btn btn-sm btn-primary">Send</button>
           </div>
         </div>
       );
@@ -798,8 +810,8 @@
               <span className="font-medium text-slate-700">{project.name}</span> will be removed from the active board. Individual tasks can still be finalized for the financial report.
             </p>
             <div className="flex gap-2 justify-end">
-              <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer font-sans hover:bg-slate-50">Cancel</button>
-              <button onClick={onConfirm} className="text-xs px-3 py-1.5 rounded-lg bg-slate-600 text-white border-none cursor-pointer font-sans hover:bg-slate-700">Close project</button>
+              <button onClick={onClose} className="btn btn-sm btn-secondary">Cancel</button>
+              <button onClick={onConfirm} className="btn btn-sm btn-primary">Close project</button>
             </div>
           </div>
         </div>
@@ -827,9 +839,9 @@
               </button>
             </div>
             <div className="flex gap-2 justify-end">
-              <button onClick={onClose} className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer font-sans hover:bg-slate-50">Cancel</button>
+              <button onClick={onClose} className="btn btn-sm btn-secondary">Cancel</button>
               <button onClick={() => onConfirm(includeFinancial)}
-                className="text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white border-none cursor-pointer font-sans hover:bg-violet-700">Bill →</button>
+                className="btn btn-sm btn-violet">Bill →</button>
             </div>
           </div>
         </div>

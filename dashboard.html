@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kerno — Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;border:1px solid transparent;border-radius:8px;font-weight:500;line-height:1.2;transition:background .12s,border-color .12s;font-family:inherit;white-space:nowrap}
+    .btn:disabled{opacity:.55;cursor:not-allowed;pointer-events:none}
+    .btn-xs{font-size:11px;padding:4px 10px} .btn-sm{font-size:12px;padding:6px 13px}
+    .btn-secondary{background:#fff;color:#475569;border-color:#e2e8f0} .btn-secondary:hover{background:#f8fafc;border-color:#cbd5e1}
+    .btn-success{background:#059669;color:#fff} .btn-success:hover{background:#047857}
+    .btn-primary{background:#2563eb;color:#fff} .btn-primary:hover{background:#1d4ed8}
+  </style>
 </head>
 <body class="min-h-screen bg-slate-50 font-sans">
 
@@ -71,8 +79,8 @@
       <span class="text-sm font-semibold text-slate-800">💰 Resource Usage Costs</span>
       <div class="flex items-center gap-2 flex-wrap">
         <select id="expense-year" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white"></select>
-        <div id="expense-scope-wrap" class="flex rounded-lg overflow-hidden border border-slate-200 text-xs"></div>
-        <button id="expense-csv" class="text-xs px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition font-medium">⬇ Download CSV</button>
+        <div id="expense-scope-wrap" class="flex gap-1"></div>
+        <button id="expense-csv" class="btn btn-sm btn-success">⬇ Download CSV</button>
       </div>
     </div>
     <div class="px-6 py-4">
@@ -447,13 +455,11 @@
       const btn = document.createElement("button");
       btn.textContent = label;
       btn.dataset.scope = val;
-      btn.className = `px-3 py-1.5 text-xs font-medium transition ${val === expenseScope
-        ? "bg-violet-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`;
+      btn.className = `btn btn-xs ${val === expenseScope ? "btn-violet" : "btn-secondary"}`;
       btn.addEventListener("click", () => {
         expenseScope = val;
         scopeWrap.querySelectorAll("button").forEach(b => {
-          b.className = `px-3 py-1.5 text-xs font-medium transition ${b.dataset.scope === val
-            ? "bg-violet-600 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`;
+          b.className = `btn btn-xs ${b.dataset.scope === val ? "btn-violet" : "btn-secondary"}`;
         });
         renderExpenses();
       });

@@ -12,6 +12,18 @@
   <script>if (typeof marked !== 'undefined') marked.use({ gfm: true });</script>
   <style>
     ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    /* ── Button system ───────────────────────────────────────────────── */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;border:1px solid transparent;border-radius:8px;font-weight:500;line-height:1.2;transition:background .12s,border-color .12s;font-family:inherit;white-space:nowrap}
+    .btn:disabled,.btn[disabled]{opacity:.55;cursor:not-allowed;pointer-events:none}
+    .btn-xs{font-size:11px;padding:4px 10px} .btn-sm{font-size:12px;padding:6px 13px}
+    .btn-md{font-size:13px;padding:9px 18px;font-weight:600} .btn-block{width:100%;justify-content:center}
+    .btn-primary{background:#2563eb;color:#fff} .btn-primary:hover{background:#1d4ed8}
+    .btn-secondary{background:#fff;color:#475569;border-color:#e2e8f0} .btn-secondary:hover{background:#f8fafc;border-color:#cbd5e1}
+    .btn-danger{background:#fef2f2;color:#dc2626;border-color:#fecaca} .btn-danger:hover{background:#fee2e2;border-color:#fca5a5}
+    .btn-danger-fill{background:#dc2626;color:#fff} .btn-danger-fill:hover{background:#b91c1c}
+    .btn-warning{background:#fffbeb;color:#b45309;border-color:#fde68a} .btn-warning:hover{background:#fef3c7}
+    .btn-success{background:#059669;color:#fff} .btn-success:hover{background:#047857}
+    .btn-violet{background:#7c3aed;color:#fff} .btn-violet:hover{background:#6d28d9}
     .md-content h1{font-size:1.15em;font-weight:700;margin-bottom:.4em}
     .md-content h2{font-size:1em;font-weight:700;margin-bottom:.3em}
     .md-content p{margin-bottom:.5em} .md-content ul,.md-content ol{padding-left:1.2em;margin-bottom:.5em}
@@ -210,8 +222,7 @@
             onKeyDown={e => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); }}}
             placeholder="Type option, press Enter…"
             className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-          <button onMouseDown={add}
-            className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer">Add</button>
+          <button onMouseDown={add} className="btn btn-xs btn-primary">Add</button>
         </div>
       </div>
     );
@@ -481,8 +492,7 @@
         {error   && <div className="flex items-center gap-2 mt-4 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5 text-sm text-red-600">⚠ {error}</div>}
         {success && <div className="flex items-center gap-2 mt-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-sm text-emerald-600">✅ Request submitted successfully!</div>}
 
-        <button onClick={submit} disabled={saving || success}
-          className="mt-5 w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm cursor-pointer">
+        <button onClick={submit} disabled={saving || success} className="btn btn-md btn-primary btn-block mt-5">
           {saving ? "Submitting…" : "Submit Request"}
         </button>
       </div>
@@ -691,23 +701,17 @@
                       )}
                       {error && <div className="text-xs text-red-600 mb-2">⚠ {error}</div>}
                       <div className="flex gap-2">
-                        <button onClick={() => review("approved")} disabled={saving}
-                          className="flex-1 text-xs py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold border-0 cursor-pointer disabled:opacity-60">
+                        <button onClick={() => review("approved")} disabled={saving} className="btn btn-sm btn-success flex-1">
                           {saving ? "…" : "✅ Approve"}
                         </button>
-                        <button onClick={() => review("rejected")} disabled={saving}
-                          className="flex-1 text-xs py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold border-0 cursor-pointer disabled:opacity-60">
+                        <button onClick={() => review("rejected")} disabled={saving} className="btn btn-sm btn-danger-fill flex-1">
                           {saving ? "…" : "❌ Reject"}
                         </button>
-                        <button onClick={() => { setReviewing(null); setReason(""); setError(null); }}
-                          className="text-xs px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-500 cursor-pointer hover:border-slate-300">Cancel</button>
+                        <button onClick={() => { setReviewing(null); setReason(""); setError(null); }} className="btn btn-sm btn-secondary">Cancel</button>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => startReview(r)}
-                      className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold border-0 cursor-pointer mt-1 transition">
-                      Review →
-                    </button>
+                    <button onClick={() => startReview(r)} className="btn btn-sm btn-primary mt-1">Review →</button>
                   )
                 )}
 
@@ -767,7 +771,7 @@
             <input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder="New type…"
               className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 w-28"
               onKeyDown={e => e.key === "Enter" && addType()} />
-            <button onClick={addType} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer">+</button>
+            <button onClick={addType} className="btn btn-xs btn-primary">+</button>
           </div>
         </div>
 
@@ -800,7 +804,7 @@
               <>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fields</span>
-                  <button onClick={addField} className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white border-0 cursor-pointer">+ Add field</button>
+                  <button onClick={addField} className="btn btn-xs btn-primary">+ Add field</button>
                 </div>
                 <div className="space-y-2 mb-5">
                   {cfg.fields.map(f => (
@@ -814,8 +818,7 @@
                           <option value="dropdown">Dropdown</option>
                           <option value="multiselect">Multiselect</option>
                         </select>
-                        <button onClick={() => delField(f.id)}
-                          className="text-xs px-2.5 py-1.5 rounded-lg border border-red-100 bg-red-50 text-red-500 cursor-pointer hover:bg-red-100">✕</button>
+                        <button onClick={() => delField(f.id)} className="btn btn-xs btn-danger">✕</button>
                       </div>
                       {(f.type === "dropdown" || f.type === "multiselect") && (
                         <OptionsEditor options={f.options || []} onChange={opts => updField(f.id, "options", opts)} />
@@ -828,8 +831,7 @@
           </>
         )}
 
-        <button onClick={save} disabled={saving}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors shadow-sm cursor-pointer border-0">
+        <button onClick={save} disabled={saving} className="btn btn-md btn-primary btn-block">
           {saving ? "Saving…" : "Save Configuration"}
         </button>
       </div>
