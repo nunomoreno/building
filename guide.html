@@ -6,405 +6,711 @@
   <title>Kerno — User Guide</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { font-family: 'Inter', system-ui, sans-serif; }
-    .prose h2 { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin-top: 2rem; margin-bottom: 0.5rem; }
-    .prose h3 { font-size: 1rem; font-weight: 600; color: #334155; margin-top: 1.25rem; margin-bottom: 0.35rem; }
-    .prose p  { color: #475569; line-height: 1.65; margin-bottom: 0.6rem; }
-    .prose ul  { color: #475569; padding-left: 1.25rem; margin-bottom: 0.6rem; list-style: disc; }
-    .prose ol  { color: #475569; padding-left: 1.25rem; margin-bottom: 0.6rem; list-style: decimal; }
-    .prose li  { margin-bottom: 0.25rem; line-height: 1.6; }
-    .prose a   { color: #2563eb; text-decoration: underline; }
-    kbd { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 1px 6px; font-size: 0.78rem; font-family: monospace; color: #334155; }
-    .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-    .badge-admin   { background: #fee2e2; color: #b91c1c; }
-    .badge-leader  { background: #ede9fe; color: #6d28d9; }
-    .badge-manager { background: #e0f2fe; color: #0369a1; }
-    .badge-user    { background: #f0fdf4; color: #15803d; }
-    .section-anchor { scroll-margin-top: 5rem; }
-    .callout { border-left: 3px solid #93c5fd; background: #eff6ff; border-radius: 0 6px 6px 0; padding: 10px 14px; margin: 0.75rem 0; }
-    .callout-warn { border-left-color: #fbbf24; background: #fffbeb; }
-    .callout-tip  { border-left-color: #34d399; background: #f0fdf4; }
-    .toc-link { display: block; padding: 3px 0; color: #64748b; font-size: 0.875rem; text-decoration: none; }
-    .toc-link:hover { color: #2563eb; }
-    .toc-sub { padding-left: 1rem; }
+    html { scroll-behavior: smooth; }
+    body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* Sidebar link styles */
+    .nav-link {
+      display: block; padding: 6px 12px; border-radius: 6px;
+      font-size: 13px; color: #94a3b8; text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-link:hover { background: #1e293b; color: #e2e8f0; }
+    .nav-link.active { background: #2563eb; color: #fff; }
+    .nav-sub {
+      display: block; padding: 4px 12px 4px 22px; border-radius: 6px;
+      font-size: 12px; color: #64748b; text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-sub:hover { background: #1e293b; color: #cbd5e1; }
+    .nav-sub.active { color: #93c5fd; }
+
+    /* Section scroll offset */
+    .section { scroll-margin-top: 55px; }
+
+    /* Keyboard key styling */
+    kbd {
+      display: inline-block; padding: 1px 6px; border-radius: 4px;
+      background: #f1f5f9; border: 1px solid #cbd5e1;
+      font-size: 11px; font-family: system-ui, sans-serif; color: #475569;
+    }
+
+    /* Inline code */
+    code {
+      background: #f1f5f9; border-radius: 4px; padding: 1px 5px;
+      font-size: 12px; font-family: ui-monospace, monospace; color: #334155;
+    }
+
+    /* Custom scrollbar for sidebar */
+    aside::-webkit-scrollbar { width: 4px; }
+    aside::-webkit-scrollbar-track { background: transparent; }
+    aside::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; }
+
+    /* Mobile sidebar */
+    @media (max-width: 767px) {
+      #guide-sidebar { transform: translateX(-100%); transition: transform 0.25s ease; }
+      #guide-sidebar.open { transform: translateX(0); }
+      #main-content { margin-left: 0 !important; }
+      #sidebar-overlay { display: block; }
+      #sidebar-overlay.hidden { display: none; }
+    }
+    @media (min-width: 768px) {
+      #toc-toggle { display: none !important; }
+      #sidebar-overlay { display: none !important; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
 
-  <!-- Top bar -->
-  <header class="sticky top-0 z-50 bg-white border-b border-slate-200 px-6 py-3 flex items-center gap-4 shadow-sm">
-    <a href="index.html" class="text-slate-400 hover:text-slate-700 text-sm">← Back to Kerno</a>
-    <span class="text-slate-200">|</span>
-    <span class="font-bold text-slate-800 text-sm">Kerno User Guide</span>
-    <span class="ml-auto text-xs text-slate-400">CaixaResearch Core Facilities</span>
-  </header>
+<!-- ── Top Nav ─────────────────────────────────────────────────────────────── -->
+<nav style="background:#0f172a; padding:10px 16px; display:flex; align-items:center; gap:10px; position:fixed; top:0; left:0; right:0; z-index:50; height:44px;">
+  <button id="toc-toggle" onclick="toggleSidebar()" style="background:none; border:none; color:#94a3b8; font-size:18px; cursor:pointer; padding:0 4px; line-height:1;">☰</button>
+  <a href="dashboard.html" style="font-size:15px; font-weight:700; color:#fff; text-decoration:none;">&#9881;&#65039; Kerno</a>
+  <span style="color:#475569; font-size:13px;" class="hidden sm:inline">›</span>
+  <span style="font-size:13px; color:#94a3b8;" class="hidden sm:inline">User Guide</span>
+  <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+    <a href="dashboard.html" style="font-size:11px; padding:4px 10px; border-radius:5px; border:1px solid #334155; background:#1e293b; color:#94a3b8; text-decoration:none;" class="hidden sm:inline">&#128202; Dashboard</a>
+    <a href="kanban.html"    style="font-size:11px; padding:4px 10px; border-radius:5px; border:1px solid #334155; background:#1e293b; color:#94a3b8; text-decoration:none;" class="hidden sm:inline">&#128203; Kanban</a>
+    <a href="booking.html"   style="font-size:11px; padding:4px 10px; border-radius:5px; border:1px solid #334155; background:#1e293b; color:#94a3b8; text-decoration:none;" class="hidden sm:inline">&#128197; Bookings</a>
+    <a href="requests.html"  style="font-size:11px; padding:4px 10px; border-radius:5px; border:1px solid #334155; background:#1e293b; color:#94a3b8; text-decoration:none;" class="hidden sm:inline">&#128221; Requests</a>
+  </div>
+</nav>
 
-  <div class="max-w-5xl mx-auto px-4 py-10 flex gap-8">
+<!-- ── Layout ──────────────────────────────────────────────────────────────── -->
+<div id="sidebar-overlay" class="hidden fixed inset-0 bg-black/50 z-30" onclick="toggleSidebar()"></div>
+<div class="flex" style="padding-top: 44px; min-height: 100vh;">
 
-    <!-- Sidebar TOC -->
-    <aside class="hidden lg:block w-56 shrink-0">
-      <div class="sticky top-20">
-        <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Contents</p>
-        <nav class="flex flex-col gap-0.5">
-          <a href="#getting-started" class="toc-link font-medium">Getting started</a>
-          <a href="#roles"           class="toc-link font-medium">Roles</a>
-          <a href="#dashboard"       class="toc-link font-medium">Dashboard</a>
-          <a href="#kanban"          class="toc-link font-medium">Kanban board</a>
-          <a href="#kanban-scopes"   class="toc-link toc-sub">Scope views</a>
-          <a href="#kanban-cards"    class="toc-link toc-sub">Cards &amp; tasks</a>
-          <a href="#kanban-billing"  class="toc-link toc-sub">Billing a card</a>
-          <a href="#kanban-ai"       class="toc-link toc-sub">AI assistant</a>
-          <a href="#kanban-archive"  class="toc-link toc-sub">Closing a project</a>
-          <a href="#bookings"        class="toc-link font-medium">Bookings</a>
-          <a href="#requests"        class="toc-link font-medium">Service requests</a>
-          <a href="#admin"           class="toc-link font-medium">Admin tasks</a>
-          <a href="#tips"            class="toc-link font-medium">Tips &amp; shortcuts</a>
-        </nav>
-      </div>
-    </aside>
+  <!-- ── Sidebar ────────────────────────────────────────────────────────── -->
+  <aside id="guide-sidebar" style="width:216px; min-width:216px; background:#0f172a; position:fixed; top:44px; left:0; bottom:0; overflow-y:auto; padding:20px 8px 40px; z-index:40;">
+    <p style="font-size:10px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.1em; padding:0 12px; margin-bottom:10px;">Contents</p>
 
-    <!-- Main content -->
-    <main class="flex-1 min-w-0 prose">
+    <a href="#getting-started" class="nav-link">Getting Started</a>
 
-      <h1 class="text-2xl font-bold text-slate-900 mb-1">Kerno Platform Guide</h1>
-      <p class="text-slate-400 text-sm mb-8">Internal platform for CaixaResearch Core Facilities — Platforms team</p>
+    <a href="#dashboard" class="nav-link" style="margin-top:2px;">Dashboard</a>
+    <a href="#dashboard-overview"  class="nav-sub">Overview stats</a>
+    <a href="#dashboard-expenses"  class="nav-sub">Expenses &amp; CSV</a>
 
-      <!-- GETTING STARTED -->
-      <section id="getting-started" class="section-anchor">
-        <h2>Getting started</h2>
+    <a href="#kanban" class="nav-link" style="margin-top:2px;">Kanban Board</a>
+    <a href="#kanban-scopes"   class="nav-sub">Scope views</a>
+    <a href="#kanban-projects" class="nav-sub">Projects</a>
+    <a href="#kanban-tasks"    class="nav-sub">Task cards</a>
+    <a href="#kanban-markdown" class="nav-sub">Markdown toolbar</a>
+    <a href="#kanban-store"    class="nav-sub">Store orders</a>
+    <a href="#kanban-billing"  class="nav-sub">Billing tasks</a>
+    <a href="#kanban-billed"   class="nav-sub">Billed section</a>
+    <a href="#kanban-ai"       class="nav-sub">AI Assistant</a>
+    <a href="#kanban-audit"    class="nav-sub">Audit Log</a>
 
-        <h3>Logging in</h3>
-        <p>Navigate to <a href="index.html">index.html</a>. Enter your username and password. After a successful login:</p>
-        <ul>
-          <li><strong>Admins</strong> are redirected to the Dashboard.</li>
-          <li><strong>All other users</strong> are redirected to the Kanban board.</li>
-        </ul>
-        <div class="callout">
-          Your session lasts <strong>8 hours</strong>. If the page redirects you to login with an "expired" message, just sign in again — your work is saved in the database.
+    <a href="#bookings" class="nav-link" style="margin-top:2px;">Bookings</a>
+    <a href="#bookings-calendar" class="nav-sub">Calendar grid</a>
+    <a href="#bookings-approval" class="nav-sub">Approval workflow</a>
+    <a href="#bookings-grants"   class="nav-sub">Grant assignment</a>
+
+    <a href="#requests" class="nav-link" style="margin-top:2px;">Service Requests</a>
+    <a href="#requests-submit" class="nav-sub">Submitting</a>
+    <a href="#requests-review" class="nav-sub">Review &amp; approval</a>
+    <a href="#requests-flow"   class="nav-sub">Kanban flow</a>
+
+    <a href="#grants" class="nav-link" style="margin-top:2px;">Grants</a>
+
+    <a href="#tips" class="nav-link" style="margin-top:2px;">Tips &amp; Shortcuts</a>
+  </aside>
+
+  <!-- ── Main content ──────────────────────────────────────────────────── -->
+  <main id="main-content" style="margin-left:216px;" class="flex-1 overflow-y-auto">
+    <div class="max-w-3xl mx-auto px-4 sm:px-10 py-10">
+
+      <!-- ── Getting Started ─────────────────────────────────────────── -->
+      <section id="getting-started" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl shrink-0">&#128274;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Getting Started</h2>
         </div>
 
-        <h3>Navigation</h3>
-        <p>The top-right corner of each page shows your username and a sign-out link. Use the browser's address bar or any in-page link to move between pages:</p>
-        <ul>
-          <li><a href="dashboard.html">dashboard.html</a> — Stats and overview</li>
-          <li><a href="kanban.html">kanban.html</a> — Project board</li>
-          <li><a href="booking.html">booking.html</a> — Resource bookings</li>
-          <li><a href="requests.html">requests.html</a> — Service requests</li>
-        </ul>
-      </section>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Kerno is the internal platform for CaixaResearch Core Facilities. It combines project tracking, resource bookings, service requests, and financial reporting in a single interface hosted on GitHub Pages.
+        </p>
 
-      <!-- ROLES -->
-      <section id="roles" class="section-anchor">
-        <h2>Roles</h2>
-        <p>Every user has one role that controls what they can see and do across the platform.</p>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm border-collapse mt-2 mb-4">
+        <h3 class="text-base font-semibold text-slate-800 mb-2">Logging in</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-5">
+          Open <code>index.html</code> and enter your username and password. Sessions last <strong>8 hours</strong> — after that you will be redirected to the login page automatically. After login, admins land on <code>dashboard.html</code>; all other users land on <code>booking.html</code>.
+        </p>
+
+        <h3 class="text-base font-semibold text-slate-800 mb-3">Roles</h3>
+        <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
+          <table class="w-full text-sm">
             <thead>
-              <tr class="bg-slate-100 text-left">
-                <th class="px-3 py-2 font-semibold text-slate-700 rounded-tl border border-slate-200">Role</th>
-                <th class="px-3 py-2 font-semibold text-slate-700 border border-slate-200">Who</th>
-                <th class="px-3 py-2 font-semibold text-slate-700 rounded-tr border border-slate-200">Capabilities</th>
+              <tr class="bg-slate-50 border-b border-slate-200">
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Role</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Capabilities</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td class="px-3 py-2 border border-slate-200"><span class="badge badge-admin">admin</span></td>
-                <td class="px-3 py-2 border border-slate-200">Platform managers</td>
-                <td class="px-3 py-2 border border-slate-200">Full access. Manage groups, approve bookings, review requests, see all projects, access Users &amp; Groups panel.</td>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="bg-white">
+                <td class="px-4 py-3">
+                  <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">Admin</span>
+                </td>
+                <td class="px-4 py-3 text-slate-600">Full access. Manages groups, approves bookings, reviews requests, manages grants and users.</td>
               </tr>
-              <tr class="bg-slate-50">
-                <td class="px-3 py-2 border border-slate-200"><span class="badge badge-leader">leader</span></td>
-                <td class="px-3 py-2 border border-slate-200">Group scientists / PIs</td>
-                <td class="px-3 py-2 border border-slate-200">See all projects and bookings for their group. Can query the AI with group context.</td>
+              <tr class="bg-white">
+                <td class="px-4 py-3">
+                  <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">Leader</span>
+                </td>
+                <td class="px-4 py-3 text-slate-600">Group scientist. Sees all projects, bookings, and requests within the group. AI queries with group scope.</td>
               </tr>
-              <tr>
-                <td class="px-3 py-2 border border-slate-200"><span class="badge badge-manager">manager</span></td>
-                <td class="px-3 py-2 border border-slate-200">Lab operations</td>
-                <td class="px-3 py-2 border border-slate-200">Same as leader — group-wide visibility and AI group queries.</td>
+              <tr class="bg-white">
+                <td class="px-4 py-3">
+                  <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">Manager</span>
+                </td>
+                <td class="px-4 py-3 text-slate-600">Lab operations. Same access as Leader — sees all group projects and bookings.</td>
               </tr>
-              <tr class="bg-slate-50">
-                <td class="px-3 py-2 border border-slate-200"><span class="badge badge-user">user</span></td>
-                <td class="px-3 py-2 border border-slate-200">Regular members</td>
-                <td class="px-3 py-2 border border-slate-200">Own projects + projects where they are @mentioned. Own bookings and requests.</td>
+              <tr class="bg-white">
+                <td class="px-4 py-3">
+                  <span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">User</span>
+                </td>
+                <td class="px-4 py-3 text-slate-600">Standard member. Sees own projects and @mentioned projects. Manages own bookings and requests.</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p>Booking access is additionally controlled by a per-user <strong>bookings permission</strong>. An admin must grant this before a user can make bookings.</p>
-      </section>
 
-      <!-- DASHBOARD -->
-      <section id="dashboard" class="section-anchor">
-        <h2>Dashboard</h2>
-        <p>The dashboard (<a href="dashboard.html">dashboard.html</a>) provides an at-a-glance overview of platform activity. It is accessible to <span class="badge badge-admin">admin</span> users.</p>
-
-        <h3>Summary cards</h3>
-        <ul>
-          <li><strong>Active projects</strong> — total non-archived projects across all groups.</li>
-          <li><strong>Team members</strong> — count of all registered users.</li>
-          <li><strong>Total requests</strong> — all service requests ever submitted.</li>
-          <li><strong>Recent requests</strong> — requests submitted in the last 7 days.</li>
-        </ul>
-
-        <h3>In-progress &amp; blocked tasks</h3>
-        <p>Two panels highlight tasks that need attention right now: tasks currently <em>In Progress</em> and tasks marked as <em>Blocked</em>. Each entry links back to the project it belongs to.</p>
-
-        <h3>Financial report</h3>
-        <p>The financial section shows all <strong>billed task cards</strong> that have store order items and were not excluded from the report. For each entry you can see:</p>
-        <ul>
-          <li>Project name and task title</li>
-          <li>Line items from the store order</li>
-          <li>EUR totals</li>
-        </ul>
-        <p>A card appears here only when it has been through the <strong>Bill →</strong> flow on the Kanban board (see <a href="#kanban-billing">Billing a card</a>) and the "Include in financial report" toggle was left on.</p>
-
-        <h3>Team panel &amp; audit log</h3>
-        <p>The <strong>Team panel</strong> lists all members with their roles and group memberships. The <strong>Audit log</strong> shows a chronological record of all actions (project edits, booking changes, request reviews, etc.).</p>
-      </section>
-
-      <!-- KANBAN -->
-      <section id="kanban" class="section-anchor">
-        <h2>Kanban board</h2>
-        <p>The Kanban board (<a href="kanban.html">kanban.html</a>) is where day-to-day experiment tracking happens. Projects live here as cards organised into task columns.</p>
-
-        <h3 id="kanban-scopes">Scope views</h3>
-        <p>Use the scope selector at the top of the left sidebar to filter which projects are shown:</p>
-        <ul>
-          <li><strong>Mine</strong> — projects you own.</li>
-          <li><strong>Mentioned</strong> — projects where any task note contains <kbd>@yourusername</kbd>.</li>
-          <li><strong>Group</strong> — all projects from members of your group. Available to <span class="badge badge-leader">leader</span>, <span class="badge badge-manager">manager</span>, and <span class="badge badge-admin">admin</span>.</li>
-        </ul>
-
-        <h3>Creating a project</h3>
-        <ol>
-          <li>Click <strong>+ New project</strong> at the top of the sidebar.</li>
-          <li>Enter a project name and confirm.</li>
-          <li>The project opens immediately and is ready for tasks.</li>
-        </ol>
-
-        <h3 id="kanban-cards">Cards &amp; tasks</h3>
-        <p>Each project has a board with four columns:</p>
-        <ul>
-          <li><strong>To Do</strong> — not started yet.</li>
-          <li><strong>In Progress</strong> — actively being worked on.</li>
-          <li><strong>Blocked</strong> — waiting on something external.</li>
-          <li><strong>Done</strong> — completed.</li>
-        </ul>
-
-        <h4 class="font-semibold text-slate-700 mt-3 mb-1">Adding a task</h4>
-        <p>Click <strong>+ Add task</strong> at the bottom of any column. Enter a title and press Enter.</p>
-
-        <h4 class="font-semibold text-slate-700 mt-3 mb-1">Editing a task</h4>
-        <p>Click any task card to expand it. You can edit:</p>
-        <ul>
-          <li><strong>Title</strong> — click the title text to edit inline.</li>
-          <li><strong>Notes</strong> — rich-text notes with a Markdown toolbar (see below). Supports <kbd>@username</kbd> mentions — type <kbd>@</kbd> to get a suggestion list.</li>
-          <li><strong>Assignee</strong> — pick a member from the dropdown.</li>
-          <li><strong>Column</strong> — use the column selector or drag (if supported).</li>
-          <li><strong>Store order</strong> — add billable line items (product name, quantity, unit price). The card shows a total in EUR.</li>
-        </ul>
-
-        <h4 class="font-semibold text-slate-700 mt-3 mb-1">Markdown notes</h4>
-        <p>The notes field has a formatting toolbar. Supported syntax:</p>
-        <ul>
-          <li><kbd>**bold**</kbd> → <strong>bold</strong></li>
-          <li><kbd>*italic*</kbd> → <em>italic</em></li>
-          <li><kbd>~~strikethrough~~</kbd> → <s>strikethrough</s></li>
-          <li><kbd>==highlight==</kbd> → highlighted text</li>
-          <li><kbd>`code`</kbd> → inline code</li>
-          <li><kbd>- item</kbd> → bullet list</li>
-          <li><kbd>1. item</kbd> → numbered list</li>
-          <li><kbd># Heading</kbd> → heading</li>
-        </ul>
-        <div class="callout callout-tip">
-          Click a toolbar button while text is selected to wrap it. Click without a selection to insert a placeholder. For lists, place your cursor on a line and click the list button to add/remove the prefix.
-        </div>
-
-        <h4 class="font-semibold text-slate-700 mt-3 mb-1">Moving tasks</h4>
-        <p>Use the column selector inside the expanded card view. Changes are saved automatically.</p>
-
-        <h4 class="font-semibold text-slate-700 mt-3 mb-1">Deleting a task</h4>
-        <p>Open the task card and click the trash icon. You will be asked to confirm.</p>
-      </section>
-
-      <!-- BILLING -->
-      <section id="kanban-billing" class="section-anchor">
-        <h2>Billing a card</h2>
-        <p>When an experiment is complete and has billable items, you can finalise it with the <strong>Bill →</strong> button. This button appears only on task cards that have at least one store order line item.</p>
-
-        <h3>How to bill a task</h3>
-        <ol>
-          <li>Open the task card and confirm store order items are filled in.</li>
-          <li>Click <strong>Bill →</strong> (visible on the card in the collapsed board view).</li>
-          <li>A confirmation modal appears showing the task title and total.</li>
-          <li>The <strong>"Include in financial report"</strong> toggle is <em>on by default</em>. Leave it on if this expense should appear in the Dashboard financial report. Turn it off if the billing was an error or should be excluded for any reason.</li>
-          <li>Click <strong>Bill →</strong> to confirm.</li>
-        </ol>
-
-        <h3>After billing</h3>
-        <p>The task moves out of the active board columns and appears in a <strong>Billed</strong> section below the board. It shows the task title, EUR total, and (if excluded) an "excl. report" badge.</p>
-        <div class="callout callout-warn">
-          Billed tasks are not visible in the AI assistant context. If you need the AI to reason about a task, reopen it first.
-        </div>
-
-        <h3>Reopening a billed task</h3>
-        <p>Hover over a billed task and click <strong>↩ reopen</strong>. The task returns to the <strong>Done</strong> column and is no longer flagged as billed.</p>
-
-        <h3>Financial report</h3>
-        <p>Billed tasks with "Include in financial report" turned on appear in the Dashboard financial section. Tasks excluded from the report do not appear there.</p>
-      </section>
-
-      <!-- AI ASSISTANT -->
-      <section id="kanban-ai" class="section-anchor">
-        <h2>AI assistant</h2>
-        <p>Click <strong>AI</strong> in the right-side panel tabs to open the AI assistant. It is powered by Claude (Anthropic).</p>
-
-        <h3>Context</h3>
-        <p>When a project is open on the board, the AI automatically receives the full task list for that project (excluding billed tasks) as context. You can ask questions like:</p>
-        <ul>
-          <li>"Summarise what's left to do."</li>
-          <li>"Which tasks are blocked and why?"</li>
-          <li>"Draft an update email for this project."</li>
-          <li>"What was the last note added to the sequencing task?"</li>
-        </ul>
-        <p>If no project is selected, the AI sees a compact list of all projects in the current scope (names and task counts only) and you can ask broader questions.</p>
-
-        <h3>Scope-aware queries</h3>
-        <p><span class="badge badge-leader">leader</span> / <span class="badge badge-manager">manager</span> users with the Group scope active can ask about all group projects at once when no single project is selected.</p>
-      </section>
-
-      <!-- ARCHIVE -->
-      <section id="kanban-archive" class="section-anchor">
-        <h2>Closing a project</h2>
-        <p>When a project is fully done, you can close (archive) it to remove it from the active sidebar list.</p>
-        <ol>
-          <li>Open the project on the board.</li>
-          <li>Click the <strong>archive</strong> link next to the project title.</li>
-          <li>Confirm in the modal.</li>
-        </ol>
-        <p>Archived projects disappear from the default view. Toggle <strong>Show archived</strong> in the sidebar to view or restore them.</p>
-        <div class="callout">
-          Closing a project has no financial effect. Billing is per task card — use the <strong>Bill →</strong> flow before closing if any tasks need to go to the financial report.
+        <div class="flex gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+          <span class="text-blue-500 mt-0.5 shrink-0 text-base">&#8505;</span>
+          <p class="text-sm text-blue-800">Booking access is controlled per-user by an explicit <code>bookings</code> permission on top of the role. If the Bookings page is inaccessible, ask an admin to enable it for your account.</p>
         </div>
       </section>
 
-      <!-- BOOKINGS -->
-      <section id="bookings" class="section-anchor">
-        <h2>Bookings</h2>
-        <p>The Bookings page (<a href="booking.html">booking.html</a>) shows a weekly calendar grid for reserving shared lab resources. You need the <strong>bookings permission</strong> to make reservations — contact an admin if you do not have access.</p>
+      <!-- ── Dashboard ──────────────────────────────────────────────── -->
+      <section id="dashboard" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center text-xl shrink-0">&#128202;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Dashboard</h2>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The dashboard (<code>dashboard.html</code>) is your command centre. It surfaces platform-wide metrics and provides quick navigation to all modules.
+        </p>
 
-        <h3>Making a booking</h3>
-        <ol>
-          <li>Select a resource from the left panel.</li>
-          <li>Navigate to the desired week using the arrow buttons.</li>
-          <li>Click a time slot (or a day for full-day resources) to open the booking modal.</li>
-          <li>Fill in any required custom fields for that resource.</li>
-          <li>Click <strong>Book</strong>. If the resource requires approval, the booking is created with <em>pending</em> status.</li>
-        </ol>
+        <h3 id="dashboard-overview" class="section text-base font-semibold text-slate-800 mb-3">Overview stats</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-4">Three summary cards appear at the top of the page:</p>
+        <div class="grid grid-cols-3 gap-3 mb-5">
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-4">
+            <div class="text-2xl font-bold text-blue-600 mb-1">—</div>
+            <div class="text-xs text-slate-500">Active projects</div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-4">
+            <div class="text-2xl font-bold text-emerald-600 mb-1">—</div>
+            <div class="text-xs text-slate-500">Team members</div>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-xl px-4 py-4">
+            <div class="text-2xl font-bold text-slate-600 mb-1">—</div>
+            <div class="text-xs text-slate-500">Total requests</div>
+          </div>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Below the stats you will find a <strong>Recent Activity</strong> feed of the latest actions across the platform, and a <strong>Team panel</strong> listing all group members with their roles.
+        </p>
 
-        <h3>Booking statuses</h3>
-        <ul>
-          <li><strong>Pending</strong> — submitted, waiting for admin approval.</li>
-          <li><strong>Approved</strong> — confirmed, slot is reserved.</li>
-          <li><strong>Cancelled</strong> — cancelled by the user.</li>
-          <li><strong>Rejected</strong> — declined by an admin.</li>
+        <h3 id="dashboard-expenses" class="section text-base font-semibold text-slate-800 mb-3">Expenses &amp; CSV export</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          The <strong>Resource Usage Costs</strong> table aggregates spending from two sources:
+        </p>
+        <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 mb-4 ml-2">
+          <li>Approved resource bookings that carry a cost</li>
+          <li>Billed store orders from Kanban task cards</li>
         </ul>
-
-        <h3>Overlap prevention</h3>
-        <p>The platform prevents double-bookings at two levels — a pre-check in the server and a database constraint. If a slot is already taken, you will see an <strong>OVERLAP</strong> error inline in the modal.</p>
-
-        <h3>Admin — managing resources</h3>
-        <p><span class="badge badge-admin">admin</span> users see an <strong>Admin</strong> panel on the left. From there you can:</p>
-        <ul>
-          <li>Add, edit, or deactivate resources.</li>
-          <li>Set booking type: time slot, full day, or both.</li>
-          <li>Toggle approval requirement per resource.</li>
-          <li>Add custom fields (text, dropdown, multiselect) that appear in the booking form.</li>
-          <li>Approve or reject pending bookings.</li>
-        </ul>
-      </section>
-
-      <!-- REQUESTS -->
-      <section id="requests" class="section-anchor">
-        <h2>Service requests</h2>
-        <p>The Requests page (<a href="requests.html">requests.html</a>) lets users submit structured service requests (e.g. Genomics, Cell Sorting, or other configured types).</p>
-
-        <h3>Submitting a request</h3>
-        <ol>
-          <li>Choose a request type from the tabs.</li>
-          <li>Fill in the form fields (configured per type by admins).</li>
-          <li>Click <strong>Submit</strong>. You will see your request in the list with <em>pending</em> status.</li>
-        </ol>
-
-        <h3>What happens after submission</h3>
-        <ul>
-          <li>The appropriate reviewer (based on request type) is notified.</li>
-          <li>On <strong>approval</strong>: a new Kanban project is automatically created with all your request details as a single "To Do" task. You also receive a confirmation email.</li>
-          <li>On <strong>rejection</strong>: you receive an email with the reviewer's notes.</li>
-        </ul>
-
-        <h3>Admin — reviewing requests</h3>
-        <p><span class="badge badge-admin">admin</span> users see an <strong>Admin review</strong> section. Click any pending request to expand it, then choose <strong>Approve</strong> or <strong>Reject</strong> and add optional notes.</p>
-
-        <h3>Admin — configuring request types</h3>
-        <p>Request type definitions (label, approver role, form fields) are configurable from the admin panel. You can add or remove field types: text, dropdown, and multiselect.</p>
-      </section>
-
-      <!-- ADMIN -->
-      <section id="admin" class="section-anchor">
-        <h2>Admin tasks</h2>
-
-        <h3>Managing users &amp; groups</h3>
-        <p>Open the <strong>Users &amp; Groups</strong> panel on the Kanban board (visible to <span class="badge badge-admin">admin</span> only). From here you can:</p>
-        <ul>
-          <li>View all members and their roles.</li>
-          <li>Create and delete groups.</li>
-          <li>Assign members to groups with a role (member / leader / manager).</li>
-          <li>Grant or revoke the <em>bookings</em> permission for individual users.</li>
-        </ul>
-
-        <h3>Weekly report</h3>
-        <p>Every Monday at 8:00 UTC, the platform automatically sends a weekly email to all members with an email address. The report includes:</p>
-        <ul>
-          <li>All currently blocked tasks (with notes).</li>
-          <li>A summary of actions logged in the previous week.</li>
-        </ul>
-        <p>The report is generated by Claude and sent via Brevo.</p>
-
-        <h3>Audit log</h3>
-        <p>All significant actions (project edits, booking changes, request reviews, admin changes) are recorded in the audit log visible on the Dashboard.</p>
-      </section>
-
-      <!-- TIPS -->
-      <section id="tips" class="section-anchor">
-        <h2>Tips &amp; shortcuts</h2>
-
-        <h3>Mentions</h3>
-        <p>In any task notes field, type <kbd>@</kbd> followed by a username to mention a team member. Mentioned tasks appear in that user's <strong>Mentioned</strong> scope on the Kanban board.</p>
-
-        <h3>Store orders</h3>
-        <p>Use the store order panel inside a task card to record reagents, consumables, or any billable items. Enter a product name, quantity, and unit price — the total updates automatically. Once items are entered, the <strong>Bill →</strong> button becomes available on the card.</p>
-
-        <h3>Finding archived projects</h3>
-        <p>Toggle <strong>Show archived</strong> at the bottom of the project sidebar. Archived projects appear in a separate list and can be restored at any time.</p>
-
-        <h3>Session expiry</h3>
-        <p>Sessions last 8 hours. If you see the login page unexpectedly, your session expired — sign in again. All data is in the database and will be waiting for you.</p>
-
-        <h3>Booking conflicts</h3>
-        <p>If you see an OVERLAP error when booking, the slot was taken between when you loaded the page and when you submitted. Refresh the calendar and pick another time.</p>
-
-        <div class="callout callout-tip">
-          <strong>Pro tip:</strong> Use the AI assistant with a project open to quickly get a status summary before a meeting. Ask "What's the status of this project?" and get a structured overview of all tasks and their current column.
+        <p class="text-sm text-slate-600 leading-relaxed mb-5">
+          Use the year selector and scope toggle (your own costs / group) to filter the table. Click <strong>&#11015; Download CSV</strong> to export the current view as a comma-separated file.
+        </p>
+        <div class="flex gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+          <span class="text-amber-500 mt-0.5 shrink-0 text-base">&#9888;</span>
+          <p class="text-sm text-amber-800">Only bookings with <strong>approved</strong> status and tasks that have been explicitly <strong>billed</strong> appear in the expense table. Pending, cancelled, or unbilled entries are excluded.</p>
         </div>
       </section>
 
-      <div class="mt-12 pt-6 border-t border-slate-200 text-xs text-slate-400">
-        Kerno &mdash; CaixaResearch Core Facilities &mdash; Internal use only
+      <!-- ── Kanban ──────────────────────────────────────────────────── -->
+      <section id="kanban" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-xl shrink-0">&#128203;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Kanban Board</h2>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The Kanban board (<code>kanban.html</code>) is the core project management tool. Each project has four columns: <strong>To Do</strong>, <strong>In Progress</strong>, <strong>Blocked</strong>, and <strong>Done</strong>.
+        </p>
+
+        <!-- Scope views -->
+        <h3 id="kanban-scopes" class="section text-base font-semibold text-slate-800 mb-3">Scope views</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">The scope selector filters which projects appear in the left sidebar:</p>
+        <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200">
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Scope</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Shows</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Available to</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Mine</td>
+                <td class="px-4 py-3 text-slate-600">Projects you own</td>
+                <td class="px-4 py-3 text-slate-600">Everyone</td>
+              </tr>
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Mentioned</td>
+                <td class="px-4 py-3 text-slate-600">Projects where any task note contains <code>@yourname</code></td>
+                <td class="px-4 py-3 text-slate-600">Everyone</td>
+              </tr>
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Group</td>
+                <td class="px-4 py-3 text-slate-600">All projects from every member of your group</td>
+                <td class="px-4 py-3 text-slate-600">Leader &amp; Manager</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Projects -->
+        <h3 id="kanban-projects" class="section text-base font-semibold text-slate-800 mb-3">Creating &amp; managing projects</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          Click <strong>+ New project</strong> in the left project sidebar to create a project. Give it a name and it will appear as an empty board with four columns.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-5">
+          To <strong>close a project</strong>, hover over its name in the sidebar — a close icon appears on the right side. Closed projects are archived and no longer shown in the active list, but their data is preserved.
+        </p>
+        <div class="flex gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 mb-6">
+          <span class="text-slate-400 mt-0.5 shrink-0 text-base">&#128161;</span>
+          <p class="text-sm text-slate-600">Projects created from approved service requests appear prefixed with the request type, e.g. <code>[Genomics] Sample batch 12</code>. They arrive with a single To Do task pre-filled with all submission metadata.</p>
+        </div>
+
+        <!-- Task cards -->
+        <h3 id="kanban-tasks" class="section text-base font-semibold text-slate-800 mb-3">Task cards</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">Each card contains:</p>
+        <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 mb-4 ml-2">
+          <li><strong>Title</strong> — click to rename inline</li>
+          <li><strong>Notes</strong> — click to open the markdown editor</li>
+          <li><strong>Assignee</strong> — optional team member assigned to the task</li>
+          <li><strong>Move arrows</strong> — <code>&#8592;</code> and <code>&#8594;</code> shift the card to the adjacent column</li>
+        </ul>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Add a new card by clicking <strong>+ Add task</strong> at the bottom of any column.
+        </p>
+
+        <!-- Markdown toolbar -->
+        <h3 id="kanban-markdown" class="section text-base font-semibold text-slate-800 mb-3">Markdown notes toolbar</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-4">
+          Clicking a task note opens the editor with a formatting toolbar. Notes render as markdown when not being edited.
+        </p>
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5">
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>B</kbd><span class="text-sm text-slate-600">Bold</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>I</kbd><span class="text-sm text-slate-600">Italic</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>S</kbd><span class="text-sm text-slate-600">Strikethrough</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>H1</kbd><span class="text-sm text-slate-600">Heading 1</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>H2</kbd><span class="text-sm text-slate-600">Heading 2</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>• —</kbd><span class="text-sm text-slate-600">Bullet list</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>1. —</kbd><span class="text-sm text-slate-600">Numbered list</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>&lt;/&gt;</kbd><span class="text-sm text-slate-600">Code block</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>"</kbd><span class="text-sm text-slate-600">Blockquote</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>—</kbd><span class="text-sm text-slate-600">Horizontal rule</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>&#128279;</kbd><span class="text-sm text-slate-600">Insert link</span>
+          </div>
+          <div class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2">
+            <kbd>&#9733;</kbd><span class="text-sm text-slate-600">Highlight</span>
+          </div>
+        </div>
+        <div class="flex gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-6">
+          <span class="text-blue-500 mt-0.5 shrink-0 text-base">&#8505;</span>
+          <p class="text-sm text-blue-800">Press <kbd>Esc</kbd> to cancel editing without saving. Click outside the note to save. Clicking the rendered note text always enters edit mode.</p>
+        </div>
+
+        <!-- Store orders -->
+        <h3 id="kanban-store" class="section text-base font-semibold text-slate-800 mb-3">Store orders</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          Task cards can hold store order items — consumables or reagents ordered for the task. To add an item:
+        </p>
+        <ol class="list-decimal list-inside text-sm text-slate-600 space-y-1 mb-4 ml-2">
+          <li>Open a task card and find the <strong>Store Orders</strong> section</li>
+          <li>Enter a <strong>SKU</strong> (product code) and <strong>quantity</strong></li>
+          <li>Optionally assign a <strong>grant</strong> from the grants you are a member of</li>
+          <li>Click <strong>Add item</strong></li>
+        </ol>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Multiple SKU items can be added to the same task. Each item shows its SKU, quantity, grant code, and unit cost if defined in the product catalogue.
+        </p>
+
+        <!-- Billing -->
+        <h3 id="kanban-billing" class="section text-base font-semibold text-slate-800 mb-3">Billing a task</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          Once store order items are attached to a task, a <strong>Bill &#8594;</strong> button appears on the card. Clicking it opens the billing modal showing an itemised cost summary.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          The modal includes a toggle labelled <strong>Include in financial report</strong>, which is on by default. Leave it enabled so the cost appears in the Dashboard expense table and CSV export.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Confirming billing moves the task to the <strong>Billed</strong> section below the board. The card is no longer editable from within the columns.
+        </p>
+
+        <!-- Billed section -->
+        <h3 id="kanban-billed" class="section text-base font-semibold text-slate-800 mb-3">Billed section</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          Below the four Kanban columns sits a compact <strong>Billed</strong> list. Each entry shows the task name, SKU items, and cost. The section header displays the running <strong>EUR total</strong> for all billed tasks in the current project.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Hover over a billed task to reveal an <strong>&#8617; Reopen</strong> button. This returns the task to the Done column so you can correct errors before re-billing.
+        </p>
+
+        <!-- AI Assistant -->
+        <h3 id="kanban-ai" class="section text-base font-semibold text-slate-800 mb-3">AI Assistant panel</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          The AI Assistant panel opens from the right side of the board. It is scoped to the project currently open — it can see all tasks, notes, and columns for that project.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">The assistant can answer questions and take actions:</p>
+        <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 mb-4 ml-2">
+          <li>Add new tasks to a specified column</li>
+          <li>Move tasks between columns</li>
+          <li>Update task titles or notes</li>
+          <li>Delete tasks</li>
+          <li>Summarise what is blocked or in progress</li>
+        </ul>
+        <div class="flex gap-3 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 mb-6">
+          <span class="text-emerald-500 mt-0.5 shrink-0 text-base">&#128161;</span>
+          <p class="text-sm text-emerald-800">The AI only sees the currently open project. Switch projects in the sidebar before asking about a different project.</p>
+        </div>
+
+        <!-- Audit Log -->
+        <h3 id="kanban-audit" class="section text-base font-semibold text-slate-800 mb-3">Audit Log panel</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The Audit Log panel records every action on the platform: project creation, task moves, billing events, booking changes, request approvals, and more. Each entry shows the username, action type, details, and timestamp. Admins also have access to a <strong>Users &amp; Groups</strong> panel from the same right-side drawer.
+        </p>
+      </section>
+
+      <!-- ── Bookings ────────────────────────────────────────────────── -->
+      <section id="bookings" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl shrink-0">&#128197;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Bookings</h2>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The Bookings page (<code>booking.html</code>) lets you reserve lab equipment, instruments, and other shared resources. Access requires the <code>bookings</code> permission on your account.
+        </p>
+
+        <h3 id="bookings-calendar" class="section text-base font-semibold text-slate-800 mb-3">Calendar grid</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          The page displays a weekly grid — columns are days, rows are time slots. Use the arrow buttons in the header to navigate between weeks.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">To create a booking:</p>
+        <ol class="list-decimal list-inside text-sm text-slate-600 space-y-1 mb-4 ml-2">
+          <li>Select a <strong>resource</strong> from the left panel</li>
+          <li>Click an empty cell on the grid for your desired day and time</li>
+          <li>Fill in start time, end time (or full day), notes, and any custom fields for the resource</li>
+          <li>Optionally assign a <strong>grant</strong> for cost tracking</li>
+          <li>Click <strong>Submit</strong></li>
+        </ol>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">Resources support three booking modes:</p>
+        <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 mb-5 ml-2">
+          <li><strong>Timeslot</strong> — pick specific start and end times</li>
+          <li><strong>Full day</strong> — blocks the entire day</li>
+          <li><strong>Both</strong> — a toggle in the form lets you choose per booking</li>
+        </ul>
+        <div class="flex gap-3 bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-6">
+          <span class="text-red-400 mt-0.5 shrink-0 text-base">&#128683;</span>
+          <p class="text-sm text-red-800">Overlapping bookings are blocked at two levels: a server pre-check and a database exclusion constraint. If another user books the same slot while you are filling in the form, you will see an <strong>OVERLAP</strong> error inline in the modal.</p>
+        </div>
+
+        <h3 id="bookings-approval" class="section text-base font-semibold text-slate-800 mb-3">Approval workflow</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-4">
+          Resources that require admin approval show bookings in <strong>Pending</strong> status until reviewed. The flow:
+        </p>
+        <div class="flex flex-wrap items-center gap-2 mb-5">
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Pending</span>
+          <span class="text-slate-300">&#8594;</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Approved</span>
+          <span class="text-slate-400 text-xs mx-1">or</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">Rejected</span>
+          <span class="text-slate-400 text-xs mx-1">or</span>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">Cancelled</span>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Resources without approval required move directly to <strong>Approved</strong> on submission. Admins manage pending bookings from the admin panel on the right side of the bookings page.
+        </p>
+
+        <h3 id="bookings-grants" class="section text-base font-semibold text-slate-800 mb-3">Grant assignment</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          When creating a booking you can assign it to a grant — only grants where your username is listed as a member are shown. The booking cost will appear in the Dashboard expense table under that grant code, enabling per-grant financial tracking.
+        </p>
+      </section>
+
+      <!-- ── Service Requests ──────────────────────────────────────── -->
+      <section id="requests" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center text-xl shrink-0">&#128221;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Service Requests</h2>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The Requests page (<code>requests.html</code>) is where users submit requests for core facility services such as genomics runs, cell sorting sessions, or other custom workflows. Admins review and action submissions.
+        </p>
+
+        <h3 id="requests-submit" class="section text-base font-semibold text-slate-800 mb-3">Submitting a request</h3>
+        <ol class="list-decimal list-inside text-sm text-slate-600 space-y-1 mb-4 ml-2">
+          <li>Click <strong>New request</strong></li>
+          <li>Select the <strong>request type</strong> — Genomics, Cell Sorting, or Other</li>
+          <li>Fill in the type-specific form fields (configured by admins per type)</li>
+          <li>Click <strong>Submit</strong></li>
+        </ol>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          Your request appears in the list with <strong>Pending</strong> status. You will receive an email notification when it is reviewed.
+        </p>
+
+        <h3 id="requests-review" class="section text-base font-semibold text-slate-800 mb-3">Review &amp; approval</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          Admins (or users with the configured approver role for the request type) see all pending requests in the same list. Clicking a request opens a detail view showing every submitted field.
+        </p>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The reviewer can <strong>Approve</strong> or <strong>Reject</strong> from the detail view, optionally adding a review note. An email is sent automatically to the requester's address with the decision.
+        </p>
+
+        <h3 id="requests-flow" class="section text-base font-semibold text-slate-800 mb-3">Automatic Kanban project creation</h3>
+        <p class="text-sm text-slate-600 leading-relaxed mb-3">
+          When a request is <strong>approved</strong>, the system automatically creates a Kanban project for the requester. It contains one <strong>To Do</strong> task with all form metadata pre-filled in the notes:
+        </p>
+        <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 mb-5 ml-2">
+          <li>All form fields as <code>Key: Value</code> lines</li>
+          <li>Submitter username</li>
+          <li>Approver username and approval date</li>
+        </ul>
+        <div class="flex gap-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+          <span class="text-blue-500 mt-0.5 shrink-0 text-base">&#8505;</span>
+          <p class="text-sm text-blue-800">The Kanban project is owned by the requester. It appears immediately in their <strong>Mine</strong> scope on the board.</p>
+        </div>
+      </section>
+
+      <!-- ── Grants ──────────────────────────────────────────────────── -->
+      <section id="grants" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-xl shrink-0">&#128181;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Grants</h2>
+        </div>
+        <p class="text-sm text-slate-600 leading-relaxed mb-6">
+          The Grants page (<code>grants.html</code>) is admin-only. It manages the funding grants used across the platform for financial tracking. Access requires the <strong>Admin</strong> role.
+        </p>
+
+        <h3 class="text-base font-semibold text-slate-800 mb-3">Grant fields</h3>
+        <div class="overflow-hidden rounded-xl border border-slate-200 mb-6">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200">
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Field</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Description</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Code</td>
+                <td class="px-4 py-3 text-slate-600">Short identifier shown in dropdowns (e.g. <code>GR-2025-01</code>)</td>
+              </tr>
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Name</td>
+                <td class="px-4 py-3 text-slate-600">Full descriptive name of the grant or project</td>
+              </tr>
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Tier</td>
+                <td class="px-4 py-3 text-slate-600">
+                  Funding category:
+                  <span class="px-1.5 py-0.5 rounded text-xs bg-slate-100 text-slate-600">Internal</span>,
+                  <span class="px-1.5 py-0.5 rounded text-xs bg-blue-50 text-blue-600">CRACs</span>,
+                  <span class="px-1.5 py-0.5 rounded text-xs bg-emerald-50 text-emerald-600">Academia</span>, or
+                  <span class="px-1.5 py-0.5 rounded text-xs bg-amber-50 text-amber-700">Industry</span>
+                </td>
+              </tr>
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Funds</td>
+                <td class="px-4 py-3 text-slate-600">Total allocated budget in EUR</td>
+              </tr>
+              <tr class="bg-white">
+                <td class="px-4 py-3 font-medium text-slate-800">Members</td>
+                <td class="px-4 py-3 text-slate-600">Platform users who can assign this grant to their bookings and store orders</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 class="text-base font-semibold text-slate-800 mb-3">How grants are used</h3>
+        <ul class="list-disc list-inside text-sm text-slate-600 space-y-2 mb-6 ml-2">
+          <li><strong>Bookings</strong> — grant members can select the grant when creating a booking; its cost is attributed to the grant in the expense table</li>
+          <li><strong>Store orders</strong> — grant members can assign a grant code to individual SKU items in Kanban task cards</li>
+          <li><strong>Dashboard CSV export</strong> — costs are broken down by grant code for financial reporting</li>
+        </ul>
+      </section>
+
+      <!-- ── Tips & Shortcuts ──────────────────────────────────────── -->
+      <section id="tips" class="section mb-16">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-xl shrink-0">&#128161;</div>
+          <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Tips &amp; Shortcuts</h2>
+        </div>
+
+        <div class="space-y-3">
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-blue-500 font-bold text-base mt-0.5 shrink-0 w-5 text-center">@</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1">@mention teammates in notes</p>
+                <p class="text-sm text-slate-600">Type <code>@username</code> anywhere in a task note. After you stop typing for 30 seconds, the mentioned user receives an email notification pointing them to the project. Useful for flagging blockers or requesting input.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-slate-500 font-bold text-base mt-0.5 shrink-0 w-5 text-center">&#9000;</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1"><kbd>Esc</kbd> cancels editing</p>
+                <p class="text-sm text-slate-600">Press <kbd>Esc</kbd> while editing a note or title to discard changes and return to the read view with no save. Clicking outside the editor saves changes.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-slate-400 text-base mt-0.5 shrink-0 w-5 text-center">&#128432;</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1">Click a note to edit</p>
+                <p class="text-sm text-slate-600">Notes display as rendered markdown by default. Click anywhere on the note text to enter the markdown editor with the full formatting toolbar. Press <kbd>Esc</kbd> or click outside to exit.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-amber-500 text-base mt-0.5 shrink-0 w-5 text-center">&#9201;</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1">Sessions expire after 8 hours</p>
+                <p class="text-sm text-slate-600">If you are redirected to the login page with an <em>expired</em> message, your session has timed out. Log back in to resume. Unsaved note edits will be lost — save frequently during long editing sessions.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-emerald-500 text-base mt-0.5 shrink-0 w-5 text-center">&#128138;</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1">Automatic weekly report</p>
+                <p class="text-sm text-slate-600">Every Monday at 08:00 UTC the system generates an AI-written summary of blocked tasks and last week's activity. The report is emailed automatically to all team members who have an email address on file.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-slate-400 text-base mt-0.5 shrink-0 w-5 text-center">&#128273;</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1">Changing your password</p>
+                <p class="text-sm text-slate-600">Click <strong>&#128273; Password</strong> in the top navigation bar to open the password change page. Passwords must be at least 10 characters and include an uppercase letter, a lowercase letter, a number, and a special character.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white border border-slate-200 rounded-xl px-5 py-4">
+            <div class="flex items-start gap-3">
+              <span class="text-red-400 text-base mt-0.5 shrink-0 w-5 text-center">&#128683;</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 mb-1">Rate limits</p>
+                <p class="text-sm text-slate-600">The API enforces 5 requests/minute on the login endpoint and 60 requests/minute elsewhere. If you receive a <em>429 Too Many Requests</em> error, wait a moment before retrying.</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <div class="border-t border-slate-200 pt-8 pb-6">
+        <p class="text-xs text-slate-400 text-center">Kerno &mdash; CaixaResearch Core Facilities &middot; Internal platform</p>
       </div>
 
-    </main>
-  </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  // Highlight active sidebar link based on scroll position
+  (function () {
+    const allLinks = document.querySelectorAll('.nav-link, .nav-sub');
+    const allSections = Array.from(document.querySelectorAll('.section[id]'));
+    const mainEl = document.getElementById('main-content');
+
+    function onScroll() {
+      const scrollTop = mainEl.scrollTop;
+      let current = '';
+
+      allSections.forEach(function (s) {
+        // offsetTop relative to main content
+        if (s.offsetTop - mainEl.offsetTop - 70 <= scrollTop) {
+          current = s.id;
+        }
+      });
+
+      allLinks.forEach(function (link) {
+        const href = link.getAttribute('href');
+        if (href === '#' + current) {
+          link.classList.add('active');
+        } else {
+          link.classList.remove('active');
+        }
+      });
+    }
+
+    mainEl.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    // Smooth scroll within main content for sidebar links
+    allLinks.forEach(function (link) {
+      link.addEventListener('click', function (e) {
+        const href = link.getAttribute('href');
+        if (!href || !href.startsWith('#')) return;
+        const target = document.getElementById(href.slice(1));
+        if (!target) return;
+        e.preventDefault();
+        // Close sidebar on mobile after clicking a link
+        closeSidebar();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  })();
+
+  function toggleSidebar() {
+    const sb = document.getElementById('guide-sidebar');
+    const ov = document.getElementById('sidebar-overlay');
+    const isOpen = sb.classList.contains('open');
+    if (isOpen) { sb.classList.remove('open'); ov.classList.add('hidden'); }
+    else         { sb.classList.add('open');    ov.classList.remove('hidden'); }
+  }
+  function closeSidebar() {
+    document.getElementById('guide-sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.add('hidden');
+  }
+</script>
 
 </body>
 </html>

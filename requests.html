@@ -81,27 +81,32 @@
     const navA = "text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline";
     const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
     return (
-      <div className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+      <div className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3">
         <a href="dashboard.html" className="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
         <span className="text-slate-600 text-xs hidden sm:inline">›</span>
         <span className="text-slate-400 text-xs hidden sm:inline">Requests</span>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          <a href="kanban.html"   className={nav}>📋 Kanban</a>
-          <a href="booking.html"  className={nav}>📅 Bookings</a>
-          <a href="requests.html" className={navA}>📝 Requests</a>
+        <div className="ml-auto flex items-center gap-2">
+          <a href="kanban.html"   className={`${nav} hidden sm:inline-flex`}>📋 Kanban</a>
+          <a href="booking.html"  className={`${nav} hidden sm:inline-flex`}>📅 Bookings</a>
+          <a href="requests.html" className={`${navA} hidden sm:inline-flex`}>📝 Requests</a>
           <div className="relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setMenuOpen(o => !o)}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-[inherit]">
               {user.avatar_url
                 ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
                 : <span className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-200">{user.username[0].toUpperCase()}</span>}
-              {user.display_name || user.username}
-              {isAdmin && <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold">admin</span>}
+              <span className="hidden sm:inline">{user.display_name || user.username}</span>
+              {isAdmin && <span className="text-[9px] bg-blue-600 text-white rounded-full px-1.5 py-0.5 font-semibold hidden sm:inline">admin</span>}
               <span className="text-[10px] text-slate-500">▾</span>
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
                 <a href="profile.html" className={drop}>👤 My Profile</a>
+                <a href="guide.html"   className={drop}>📖 User Guide</a>
+                <div className="border-t border-slate-700 sm:hidden" />
+                <a href="kanban.html"   className={`${drop} sm:hidden`}>📋 Kanban</a>
+                <a href="booking.html"  className={`${drop} sm:hidden`}>📅 Bookings</a>
+                <a href="requests.html" className={`${drop} sm:hidden`}>📝 Requests</a>
                 {isAdmin && <div className="border-t border-slate-700" />}
                 {isAdmin && <a href="users.html"   className={drop}>👥 Users & Groups</a>}
                 {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}

@@ -80,7 +80,7 @@
         <div id="expense-total" class="text-4xl font-bold text-violet-600 leading-none">—</div>
         <div class="text-sm text-slate-400 mb-1">total this year</div>
       </div>
-      <div id="expense-table" class="max-h-72 overflow-y-auto">
+      <div id="expense-table" class="max-h-72 overflow-y-auto overflow-x-auto">
         <p class="text-xs text-slate-400">Loading…</p>
       </div>
     </div>
@@ -145,7 +145,8 @@
   // ── Navbar ─────────────────────────────────────────────────────────────────
   (function buildNavbar() {
     const isAdmin   = role === "admin";
-    const nav       = `class="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline"`;
+    const navCls    = "text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline";
+    const nav       = `class="${navCls}"`;
     const avatarHtml = session.avatar_url
       ? `<img src="${session.avatar_url}" style="width:20px;height:20px;border-radius:50%;object-fit:cover" alt="" />`
       : `<span style="width:20px;height:20px;border-radius:50%;background:#334155;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#cbd5e1">${username[0].toUpperCase()}</span>`;
@@ -155,23 +156,30 @@
       <a href="users.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
       <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>
       <a href="grants.html"  class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🏛 Grants</a>` : "";
+    const mobileDrop = `
+      <div style="border-top:1px solid #334155" class="sm:hidden"></div>
+      <a href="kanban.html"   class="sm:hidden flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">📋 Kanban</a>
+      <a href="booking.html"  class="sm:hidden flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">📅 Bookings</a>
+      <a href="requests.html" class="sm:hidden flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">📝 Requests</a>`;
     document.getElementById("navbar").innerHTML = `
-      <div class="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 flex-wrap">
+      <div class="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3">
         <a href="dashboard.html" class="text-base font-bold text-white no-underline mr-1">⚙️ Kerno</a>
         <span class="text-slate-600 text-xs hidden sm:inline">CaixaResearch platform</span>
-        <div class="ml-auto flex items-center gap-2 flex-wrap">
-          <a href="kanban.html"   ${nav}>📋 Kanban</a>
-          <a href="booking.html"  ${nav}>📅 Bookings</a>
-          <a href="requests.html" ${nav}>📝 Requests</a>
+        <div class="ml-auto flex items-center gap-2">
+          <a href="kanban.html"   class="hidden sm:inline-flex ${navCls}">📋 Kanban</a>
+          <a href="booking.html"  class="hidden sm:inline-flex ${navCls}">📅 Bookings</a>
+          <a href="requests.html" class="hidden sm:inline-flex ${navCls}">📝 Requests</a>
           <div class="relative" id="nav-menu-wrap">
             <button id="nav-menu-btn" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer" style="font-family:inherit">
               ${avatarHtml}
-              ${session.display_name || username}
+              <span class="hidden sm:inline">${session.display_name || username}</span>
               ${adminBadge}
               <span style="font-size:10px;color:#64748b">▾</span>
             </button>
             <div id="nav-menu-drop" class="hidden absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
               <a href="profile.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👤 My Profile</a>
+              <a href="guide.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">📖 User Guide</a>
+              ${mobileDrop}
               ${adminDrop}
             </div>
           </div>
