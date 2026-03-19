@@ -8,11 +8,13 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>if (typeof marked !== 'undefined') marked.use({ gfm: true });</script>
   <style>
     ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
   </style>
 </head>
-<body class="min-h-screen bg-slate-50">
+<body>
 <div id="root"></div>
 <script type="text/babel">
   const { useState, useEffect } = React;
@@ -77,8 +79,8 @@
       document.addEventListener("click", h);
       return () => document.removeEventListener("click", h);
     }, [menuOpen]);
-    const nav  = "text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition no-underline";
-    const navA = "text-xs px-3 py-1.5 rounded-lg border border-blue-500 bg-blue-600 text-white no-underline";
+    const nav  = "text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition no-underline";
+    const navA = "text-xs px-3.5 py-1.5 rounded-full bg-blue-600 border border-blue-500 text-white no-underline";
     const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
     return (
       <div className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3">
@@ -91,7 +93,7 @@
           <a href="requests.html" className={`${navA} hidden sm:inline-flex`}>📝 Requests</a>
           <div className="relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setMenuOpen(o => !o)}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-[inherit]">
+              className="flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">
               {user.avatar_url
                 ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
                 : <span className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-[10px] font-bold text-slate-200">{user.username[0].toUpperCase()}</span>}
@@ -114,7 +116,7 @@
               </div>
             )}
           </div>
-          <button onClick={logout} className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-slate-300 hover:text-white hover:border-slate-400 transition cursor-pointer font-[inherit]">Sign out</button>
+          <button onClick={logout} className="text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">Sign out</button>
         </div>
       </div>
     );
@@ -285,6 +287,7 @@
     const [storeItems, setStoreItems] = useState([{ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 }]);
     const [grants,     setGrants]     = useState([]);
     const [grantId,    setGrantId]    = useState("");
+    const [showDesc,   setShowDesc]   = useState(false);
 
     const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
 
@@ -306,7 +309,7 @@
     }, [type]);
 
     const handleTypeChange = (t) => {
-      setType(t); setMeta({}); setError(null);
+      setType(t); setMeta({}); setError(null); setShowDesc(false);
       setStoreItems([{ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 }]);
     };
 
@@ -334,10 +337,26 @@
       setTimeout(() => { setSuccess(false); setMeta({}); setNotes(""); setGrantId(""); setStoreItems([{ id: Date.now(), sku_id: "", sku_name: "", qty: 1, unit_price: 0, comment: "", line_total: 0 }]); onSubmitted(); }, 2500);
     };
 
+    const renderDesc = (md) => typeof marked !== 'undefined'
+      ? marked.parse(md.replace(/==(.+?)==/g, '<mark>$1</mark>'))
+      : md;
+
     return (
-      <div className="max-w-xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-        <h2 className="text-base font-bold text-slate-900 mb-1">New Request</h2>
-        <p className="text-sm text-slate-400 mb-6">Submit a service request to the platforms team.</p>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
+        <div className="flex items-start justify-between mb-1">
+          <h2 className="text-base font-bold text-slate-900">New Request</h2>
+        </div>
+        <div className="flex items-center gap-2 mb-5">
+          <p className="text-sm text-slate-400">Submit a service request to the platforms team.</p>
+          {typeConfig?.description && (
+            <button onClick={() => setShowDesc(d => !d)} title="About this request type"
+              className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
+          )}
+        </div>
+        {showDesc && typeConfig?.description && (
+          <div className="mb-5 text-sm text-slate-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3"
+            dangerouslySetInnerHTML={{ __html: renderDesc(typeConfig.description) }}/>
+        )}
 
         <div className="flex gap-2 flex-wrap mb-6">
           {typeKeys.map(k => (
@@ -405,14 +424,26 @@
   }
 
   // ── My requests ────────────────────────────────────────────────────────────
-  function MyRequests({ requests, requestTypes }) {
+  function MyRequests({ requests, requestTypes, search }) {
+    const visible = search
+      ? requests.filter(r => {
+          const q = search.toLowerCase();
+          return (requestTypes?.[r.type]?.label || r.type).toLowerCase().includes(q)
+            || r.status.toLowerCase().includes(q)
+            || (r.notes || "").toLowerCase().includes(q);
+        })
+      : requests;
+
     if (!requests.length) return (
       <div className="text-center py-16 text-slate-400 text-sm">You haven't submitted any requests yet.</div>
     );
+    if (search && !visible.length) return (
+      <div className="text-center py-16 text-slate-400 text-sm">No requests match "{search}".</div>
+    );
 
     return (
-      <div className="space-y-3 max-w-xl mx-auto">
-        {requests.map(r => {
+      <div className="space-y-3">
+        {visible.map(r => {
           const typeLabel = requestTypes?.[r.type]?.label || r.type;
           const fields    = requestTypes?.[r.type]?.fields || [];
           return (
@@ -465,7 +496,7 @@
   }
 
   // ── Admin queue ────────────────────────────────────────────────────────────
-  function AdminQueue({ requests, requestTypes, onRefresh }) {
+  function AdminQueue({ requests, requestTypes, onRefresh, search }) {
     const [filter,      setFilter]      = useState("pending");
     const [reviewing,   setReviewing]   = useState(null);
     const [reason,      setReason]      = useState("");
@@ -474,7 +505,16 @@
     const [reviewOrder, setReviewOrder] = useState(null);
     const [skus,        setSkus]        = useState([]);
 
-    const visible = requests.filter(r => filter === "all" ? true : r.status === filter);
+    const visible = requests.filter(r => {
+      if (filter !== "all" && r.status !== filter) return false;
+      if (search) {
+        const q = search.toLowerCase();
+        return (requestTypes?.[r.type]?.label || r.type).toLowerCase().includes(q)
+          || r.username?.toLowerCase().includes(q)
+          || (r.notes || "").toLowerCase().includes(q);
+      }
+      return true;
+    });
 
     const startReview = (r) => {
       setReviewing(r); setReason(""); setError(null);
@@ -499,7 +539,7 @@
     const filterLabels = ["pending", "approved", "rejected", "all"];
 
     return (
-      <div className="max-w-2xl mx-auto">
+      <div>
         {/* Filter tabs */}
         <div className="flex gap-2 flex-wrap mb-5">
           {filterLabels.map(f => {
@@ -646,7 +686,7 @@
     const inputCls = "w-full text-sm px-3.5 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition";
 
     return (
-      <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8">
         <h2 className="text-base font-bold text-slate-900 mb-5">⚙️ Configure Request Types</h2>
 
         {/* Type selector */}
@@ -676,6 +716,12 @@
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Approver Role</label>
                 <input value={cfg.approver_role} onChange={e => setcfg({ ...cfg, approver_role: e.target.value })} className={inputCls} />
               </div>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Description (markdown, shown via ⓘ in the form)</label>
+              <textarea value={cfg.description || ""} onChange={e => setcfg({ ...cfg, description: e.target.value })}
+                rows={3} placeholder="Describe this request type… (markdown supported)"
+                className={inputCls + " resize-y"} />
             </div>
             <label className="flex items-center gap-3 mb-5 cursor-pointer select-none">
               <div className={`relative w-10 h-5 rounded-full transition-colors ${cfg.is_store ? "bg-violet-600" : "bg-slate-200"}`}>
@@ -736,6 +782,7 @@
     });
 
     const [tab,          setTab]          = useState("submit");
+    const [search,       setSearch]       = useState("");
     const [requestTypes, setRequestTypes] = useState({});
     const [requests,     setRequests]     = useState([]);
     const [loading,      setLoading]      = useState(true);
@@ -776,25 +823,40 @@
       ] : []),
     ];
 
+    const handleTabChange = (key) => { setTab(key); setSearch(""); };
+
     return (
-      <div className="min-h-screen bg-slate-50 font-sans">
+      <div className="h-screen flex flex-col bg-slate-50 font-sans">
         <Navbar user={user} />
 
-        {/* Tab bar */}
-        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 flex gap-0 overflow-x-auto">
-          {tabs.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`text-sm px-5 py-3.5 border-b-2 whitespace-nowrap transition cursor-pointer bg-transparent font-sans ${tab === t.key ? "border-blue-600 text-blue-600 font-semibold" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-              {t.label}
-            </button>
-          ))}
+        {/* Header bar */}
+        <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 shrink-0">
+          <div className="flex items-center justify-between gap-3 mb-2.5">
+            <div>
+              <h1 className="text-base font-bold text-slate-900">Requests</h1>
+              <p className="text-xs text-slate-400">Submit a service request to the platforms team.</p>
+            </div>
+            {(tab === "queue" || tab === "mine") && (
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search requests…"
+                className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 w-36 sm:w-48"/>
+            )}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => handleTabChange(t.key)}
+                className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer whitespace-nowrap ${tab === t.key ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Content */}
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-          {tab === "submit" && <RequestForm user={user} requestTypes={requestTypes} onSubmitted={() => { loadAll(); setTab("mine"); }} />}
-          {tab === "mine"   && <MyRequests requests={myRequests} requestTypes={requestTypes} />}
-          {tab === "queue"  && isAdmin && <AdminQueue requests={requests} requestTypes={requestTypes} onRefresh={loadAll} />}
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
+          {tab === "submit" && <RequestForm user={user} requestTypes={requestTypes} onSubmitted={() => { loadAll(); handleTabChange("mine"); }} />}
+          {tab === "mine"   && <MyRequests requests={myRequests} requestTypes={requestTypes} search={search} />}
+          {tab === "queue"  && isAdmin && <AdminQueue requests={requests} requestTypes={requestTypes} onRefresh={loadAll} search={search} />}
           {tab === "config" && isAdmin && <ConfigPanel requestTypes={requestTypes} onSaved={(t) => setRequestTypes(t)} />}
         </div>
       </div>

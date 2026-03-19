@@ -8,7 +8,15 @@
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>if (typeof marked !== 'undefined') marked.use({ gfm: true });</script>
   <style>
+    .md-content h1{font-size:1.15em;font-weight:700;margin-bottom:.4em}
+    .md-content h2{font-size:1em;font-weight:700;margin-bottom:.3em}
+    .md-content p{margin-bottom:.5em}
+    .md-content ul,.md-content ol{padding-left:1.2em;margin-bottom:.5em}
+    .md-content code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:.85em}
+    .md-content strong{font-weight:700}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, sans-serif; background: #f8fafc; min-height: 100vh; }
     .slot-row:hover { background: #eff6ff !important; cursor: pointer; }
@@ -126,6 +134,58 @@
       );
     }
 
+    // ── Markdown editor ──────────────────────────────────────────────────────
+    function MdEditor({ value, onChange, placeholder, rows = 4 }) {
+      const [preview, setPreview] = React.useState(false);
+      const ref = React.useRef(null);
+      const b = "text-[11px] px-1.5 py-0.5 rounded border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 cursor-pointer leading-none";
+      const sep = <span className="w-px h-3 bg-slate-200 mx-0.5 inline-block self-center"/>;
+
+      const wrap = (before, after, ph) => {
+        const el = ref.current; if (!el) return;
+        const s = el.selectionStart, e = el.selectionEnd;
+        const sel = value.slice(s, e) || ph || "";
+        onChange(value.slice(0, s) + before + sel + after + value.slice(e));
+        requestAnimationFrame(() => { el.focus(); el.setSelectionRange(s + before.length, s + before.length + sel.length); });
+      };
+      const line = (prefix) => {
+        const el = ref.current; if (!el) return;
+        const pos = el.selectionStart;
+        const ls = value.lastIndexOf('\n', pos - 1) + 1;
+        const has = value.slice(ls).startsWith(prefix);
+        onChange(has ? value.slice(0, ls) + value.slice(ls + prefix.length) : value.slice(0, ls) + prefix + value.slice(ls));
+        requestAnimationFrame(() => el.focus());
+      };
+      const html = () => typeof marked !== 'undefined'
+        ? marked.parse((value || "").replace(/==(.+?)==/g, '<mark>$1</mark>'))
+        : (value || "");
+
+      return (
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div onMouseDown={e => e.preventDefault()} className="flex items-center gap-0.5 px-2 py-1.5 bg-slate-50 border-b border-slate-200 flex-wrap">
+            <button className={b} onClick={() => wrap("**","**","bold")}><strong>B</strong></button>
+            <button className={b} onClick={() => wrap("_","_","italic")} style={{fontStyle:"italic"}}>I</button>
+            {sep}
+            <button className={b} onClick={() => line("- ")} style={{letterSpacing:-1}}>• —</button>
+            <button className={b} onClick={() => line("1. ")} style={{letterSpacing:-1}}>1. —</button>
+            {sep}
+            <button className={b} onClick={() => wrap("`","`","code")} style={{fontFamily:"monospace"}}>&lt;/&gt;</button>
+            <div className="flex-1"/>
+            <button onMouseDown={e => { e.preventDefault(); setPreview(p => !p); }}
+              className={`${b} ${preview ? "bg-blue-50 text-blue-600 border-blue-200" : ""}`}>
+              {preview ? "Edit" : "Preview"}
+            </button>
+          </div>
+          {preview
+            ? <div className="md-content px-3 py-2 text-sm text-slate-700 min-h-[80px]" dangerouslySetInnerHTML={{ __html: html() }}/>
+            : <textarea ref={ref} value={value || ""} onChange={e => onChange(e.target.value)}
+                rows={rows} placeholder={placeholder}
+                className="w-full text-sm px-3 py-2 outline-none resize-y border-none"/>
+          }
+        </div>
+      );
+    }
+
     // ── Navbar ───────────────────────────────────────────────────────────────
     function Navbar({ user }) {
       const [menuOpen, setMenuOpen] = React.useState(false);
@@ -137,8 +197,8 @@
         document.addEventListener("click", h);
         return () => document.removeEventListener("click", h);
       }, [menuOpen]);
-      const nav  = "text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 no-underline hover:bg-slate-700";
-      const navA = "text-[11px] px-2.5 py-1 rounded-md border border-blue-600 bg-blue-600 text-white no-underline";
+      const nav  = "text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition no-underline";
+      const navA = "text-xs px-3.5 py-1.5 rounded-full bg-blue-600 border border-blue-500 text-white no-underline";
       const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
       return (
         <div className="bg-slate-900 px-4 sm:px-6 py-3 flex items-center gap-3 shrink-0">
@@ -151,7 +211,7 @@
             <a href="requests.html" className={`${nav} hidden sm:inline-flex`}>📝 Requests</a>
             <div className="relative" onClick={e => e.stopPropagation()}>
               <button onClick={() => setMenuOpen(o => !o)}
-                className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700 cursor-pointer font-[inherit]">
+                className="flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">
                 {user.avatar_url
                   ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
                   : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-600 text-slate-200 font-bold text-[10px]">{user.username[0].toUpperCase()}</span>}
@@ -174,7 +234,7 @@
                 </div>
               )}
             </div>
-            <button onClick={logout} className="text-[11px] px-2.5 py-1 rounded-md border border-slate-700 bg-slate-800 text-slate-400 cursor-pointer font-[inherit] hover:bg-slate-700">Sign out</button>
+            <button onClick={logout} className="text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">Sign out</button>
           </div>
         </div>
       );
@@ -433,7 +493,10 @@
                   {editRes&&(
                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-3">
                       <input value={editRes.name||""} onChange={e=>setEditRes({...editRes,name:e.target.value})} placeholder="Resource name" className={inputCls}/>
-                      <input value={editRes.description||""} onChange={e=>setEditRes({...editRes,description:e.target.value})} placeholder="Description" className={inputCls}/>
+                      <label className={labelCls}>DESCRIPTION (markdown, shown via ⓘ in calendar)</label>
+                      <div className="mb-2">
+                        <MdEditor value={editRes.description||""} onChange={v=>setEditRes({...editRes,description:v})} placeholder="Describe this resource… (markdown supported)" rows={3}/>
+                      </div>
                       <label className={labelCls}>BOOKING TYPE</label>
                       <select value={editRes.booking_type||"both"} onChange={e=>setEditRes({...editRes,booking_type:e.target.value})} className={inputCls}>
                         <option value="timeslot">Time slots only</option>
@@ -585,6 +648,7 @@
       const [modal,     setModal]     = useState(null);
       const [requested, setRequested] = useState(false);
       const [requesting,setRequesting]= useState(false);
+      const [showDesc,  setShowDesc]  = useState(false);
       const days        = Array.from({length:7},(_,i)=>addDays(weekStart,i));
       const color       = "#3b82f6";
       const slotMins    = resource?.slot_duration || 30;
@@ -644,7 +708,12 @@
 
           {/* Day headers */}
           <div style={{display:"grid",gridTemplateColumns:"60px repeat(7,1fr)",minWidth:600}} className="sticky top-0 z-10 bg-white border-b-2 border-slate-200">
-            <div className="p-2"/>
+            <div className="p-2 flex items-start justify-center pt-2.5">
+              {resource?.description && (
+                <button onClick={() => setShowDesc(d => !d)} title="Resource description"
+                  className={`text-base leading-none bg-transparent border-none cursor-pointer transition ${showDesc ? "text-blue-500" : "text-slate-400 hover:text-blue-500"}`}>ⓘ</button>
+              )}
+            </div>
             {days.map((day,i)=>{
               const isToday = fmt(day)===fmt(new Date());
               return (
@@ -658,6 +727,14 @@
               );
             })}
           </div>
+
+          {/* Description panel */}
+          {showDesc && resource?.description && (
+            <div className="mx-4 mt-3 mb-1 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-slate-700 md-content"
+              dangerouslySetInnerHTML={{ __html: typeof marked !== 'undefined'
+                ? marked.parse(resource.description.replace(/==(.+?)==/g, '<mark>$1</mark>'))
+                : resource.description }}/>
+          )}
 
           {/* Full-day row */}
           <div style={{display:"grid",gridTemplateColumns:"60px repeat(7,1fr)",minWidth:600}} className="border-b-2 border-slate-200 bg-slate-50">
