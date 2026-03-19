@@ -10,7 +10,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #f8fafc; }
+    body { font-family: system-ui, sans-serif; background: #f8fafc; min-height: 100vh; }
     .slot-row:hover { background: #eff6ff !important; cursor: pointer; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -728,17 +728,18 @@
         return { username: s.username, role: s.role, token: s.token, avatar_url: s.avatar_url || null, display_name: s.display_name || null };
       });
 
-      const [resources,   setResources]   = useState([]);
-      const [selectedRes, setSelectedRes] = useState(null);
-      const [bookings,    setBookings]    = useState([]);
-      const [members,     setMembers]     = useState([]);
-      const [allFields,   setAllFields]   = useState({});
-      const [pricing,     setPricing]     = useState({ skus: [] });
-      const [grants,      setGrants]      = useState([]);
-      const [loading,     setLoading]     = useState(true);
-      const [loadError,   setLoadError]   = useState(null);
-      const [showAdmin,   setShowAdmin]   = useState(false);
-      const [resSidebarOpen, setResSidebarOpen] = useState(false);
+      const [resources,      setResources]      = useState([]);
+      const [selectedRes,    setSelectedRes]    = useState(null);
+      const [bookings,       setBookings]       = useState([]);
+      const [allBookings,    setAllBookings]    = useState([]);
+      const [members,        setMembers]        = useState([]);
+      const [allFields,      setAllFields]      = useState({});
+      const [pricing,        setPricing]        = useState({ skus: [] });
+      const [grants,         setGrants]         = useState([]);
+      const [loading,        setLoading]        = useState(true);
+      const [loadError,      setLoadError]      = useState(null);
+      const [showAdmin,      setShowAdmin]      = useState(false);
+      const [resourceSearch, setResourceSearch] = useState("");
       const [weekStart,   setWeekStart]   = useState(()=>{
         const d=new Date(); d.setDate(d.getDate()-d.getDay()); d.setHours(0,0,0,0); return d;
       });
@@ -752,9 +753,14 @@
       const loadBase = async () => {
         setLoadError(null);
         try {
-          const [r,m,f,p,g] = await Promise.all([api.getResources(), api.getMembers(), api.getSettings("booking-fields"), api.getSettings("pricing"), api.getGrants()]);
+          const [r,m,f,p,g,b] = await Promise.all([
+            api.getResources(), api.getMembers(), api.getSettings("booking-fields"),
+            api.getSettings("pricing"), api.getGrants(), api.getBookings(),
+          ]);
           const resList = Array.isArray(r) ? r : [];
+          const bList   = Array.isArray(b) ? b : [];
           setResources(resList);
+          setAllBookings(bList);
           setMembers(Array.isArray(m) ? m : []);
           setAllFields(f && typeof f==="object" ? f : {});
           setPricing(p && Array.isArray(p.skus) ? p : { skus: [] });
@@ -769,7 +775,9 @@
         if (!selectedRes) return;
         try {
           const b = await api.getBookings();
-          setBookings(Array.isArray(b) ? b.filter(bk=>bk.resource_id===selectedRes.id) : []);
+          const bList = Array.isArray(b) ? b : [];
+          setAllBookings(bList);
+          setBookings(bList.filter(bk=>bk.resource_id===selectedRes.id));
         } catch { setBookings([]); }
       };
 
@@ -785,79 +793,93 @@
         </div>
       );
 
+      // Usage-sorted + search-filtered resource list
+      const usageCount   = allBookings.reduce((acc, b) => { acc[b.resource_id] = (acc[b.resource_id]||0)+1; return acc; }, {});
+      const sortedRes    = [...resources].sort((a,b) => (usageCount[b.id]||0) - (usageCount[a.id]||0));
+      const searchLower  = resourceSearch.trim().toLowerCase();
+      const filteredRes  = searchLower
+        ? sortedRes.filter(r => r.name.toLowerCase().includes(searchLower) || (r.description||"").toLowerCase().includes(searchLower))
+        : sortedRes.slice(0, 20);
+      const hasMore      = !searchLower && sortedRes.length > 20;
+
       const currentFields = selectedRes ? (allFields[selectedRes.id]||[]) : [];
       const weekLabel = `${weekStart.toLocaleDateString("en",{month:"short",day:"numeric"})} – ${addDays(weekStart,6).toLocaleDateString("en",{month:"short",day:"numeric",year:"numeric"})}`;
 
       return (
-        <div className="font-sans h-screen flex flex-col">
+        <div className="font-sans h-screen flex flex-col bg-slate-50">
           {showAdmin && <AdminPanel resources={resources} members={members} pricing={pricing} onUpdate={()=>{loadBase();loadBookings();}} onClose={()=>setShowAdmin(false)}
             isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}/>}
 
           <Navbar user={user} />
 
-          {/* Week toolbar */}
-          <div className="bg-slate-800 px-3 sm:px-6 py-2 flex items-center gap-2 shrink-0">
-            <button onClick={()=>setResSidebarOpen(o=>!o)}
-              className="md:hidden text-slate-400 hover:text-white bg-transparent border-none cursor-pointer text-lg leading-none px-1 shrink-0">☰</button>
-            <button onClick={()=>setWeekStart(addDays(weekStart,-7))}
-              className="text-[13px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600">‹</button>
-            <span className="text-xs text-slate-100 font-semibold min-w-[100px] sm:min-w-[180px] text-center">{weekLabel}</span>
-            <button onClick={()=>setWeekStart(addDays(weekStart,7))}
-              className="text-[13px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600">›</button>
-            <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}}
-              className="text-[11px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600">Today</button>
-            {(isAdmin || isCalendarAdmin) && (
-              <button onClick={()=>setShowAdmin(true)}
-                className="text-[11px] px-2.5 py-1 rounded-md border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600 ml-auto sm:ml-2">
-                {isAdmin ? "⚙ Admin" : "⚙ Calendars"}
-              </button>
-            )}
-          </div>
-
-          <div className="flex flex-1 overflow-hidden relative">
-            {/* Mobile overlay */}
-            {resSidebarOpen && (
-              <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={()=>setResSidebarOpen(false)} />
-            )}
-            {/* Resource sidebar */}
-            <div className={`bg-slate-800 shrink-0 py-3 overflow-y-auto z-40 transition-transform
-              ${resSidebarOpen ? "fixed inset-y-0 left-0 w-56 top-0 flex flex-col" : "hidden md:flex md:flex-col md:w-48 md:relative"}`}>
-              <div className="md:hidden flex items-center justify-between px-3.5 pb-2 mb-1 border-b border-slate-700 shrink-0">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Resources</span>
-                <button onClick={()=>setResSidebarOpen(false)} className="text-slate-400 hover:text-white bg-transparent border-none cursor-pointer text-lg leading-none">✕</button>
+          {/* Resource selector bar */}
+          <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 shrink-0">
+            <div className="flex items-center justify-between gap-3 mb-2.5">
+              <div>
+                <h1 className="text-base font-bold text-slate-900">Bookings</h1>
+                <p className="text-xs text-slate-400">Select a resource to view its calendar.</p>
               </div>
-              <div className="px-3.5 pb-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider hidden md:block">Resources</div>
-              {resources.length===0 && <div className="px-3.5 text-xs text-slate-500">No resources yet.</div>}
-              {resources.map((r,i)=>(
-                <div key={r.id} onClick={()=>{ setSelectedRes(r); setResSidebarOpen(false); }}
-                  style={{borderLeft:`3px solid ${selectedRes?.id===r.id ? COLORS[i%COLORS.length] : "transparent"}`}}
-                  className={`px-3.5 py-2.5 cursor-pointer transition-colors ${selectedRes?.id===r.id?"bg-slate-700":"hover:bg-slate-700/50"}`}>
-                  <div className={`text-xs font-semibold ${selectedRes?.id===r.id?"text-slate-100":"text-slate-400"}`}>{r.name}</div>
-                  {r.description&&<div className="text-[11px] text-slate-500 mt-0.5">{r.description}</div>}
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"}
-                  </div>
-                  <div className={`text-[10px] mt-0.5 ${r.approval_required?"text-orange-400":"text-green-400"}`}>
-                    {r.approval_required?"⚠ Approval required":"✓ Auto-confirm"}
-                  </div>
-                  {r.max_days_ahead > 0 && (
-                    <div className="text-[10px] text-slate-500 mt-0.5">📅 Up to {r.max_days_ahead} days ahead</div>
+              <div className="flex items-center gap-2">
+                {resources.length > 4 && (
+                  <input value={resourceSearch} onChange={e=>setResourceSearch(e.target.value)}
+                    placeholder="Search resources…"
+                    className="text-xs px-3 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 w-36 sm:w-48"/>
+                )}
+                {(isAdmin || isCalendarAdmin) && (
+                  <button onClick={()=>setShowAdmin(true)}
+                    className="text-xs px-3.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer hover:bg-slate-50 font-medium">
+                    ⚙ {isAdmin ? "Admin" : "Calendars"}
+                  </button>
+                )}
+              </div>
+            </div>
+            {resources.length === 0
+              ? <div className="text-sm text-slate-400">
+                  {isAdmin
+                    ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>
+                    : "No resources available."}
+                </div>
+              : <div className="flex gap-2 flex-wrap">
+                  {filteredRes.map(r => (
+                    <button key={r.id} onClick={()=>setSelectedRes(r)}
+                      className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer whitespace-nowrap ${
+                        selectedRes?.id===r.id
+                          ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                      {r.name}
+                      {r.approval_required && <span className="ml-1.5 text-[10px] text-orange-500">⚠</span>}
+                      {(usageCount[r.id]||0) > 0 && <span className="ml-1.5 text-[10px] text-slate-400">{usageCount[r.id]}</span>}
+                    </button>
+                  ))}
+                  {hasMore && (
+                    <span className="text-xs text-slate-400 self-center pl-1">+{sortedRes.length-20} more — use search</span>
                   )}
-                  {r.admin_username && (
-                    <div className="text-[10px] text-slate-500 mt-0.5">👤 {r.admin_username}</div>
+                  {searchLower && filteredRes.length === 0 && (
+                    <span className="text-xs text-slate-400 self-center">No resources match "{resourceSearch}"</span>
                   )}
                 </div>
-              ))}
-            </div>
+            }
+          </div>
 
+          {/* Week navigation toolbar */}
+          <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-2 flex items-center gap-2 shrink-0">
+            <button onClick={()=>setWeekStart(addDays(weekStart,-7))}
+              className="text-sm px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer hover:bg-slate-50">‹</button>
+            <span className="text-sm font-semibold text-slate-700 min-w-[140px] sm:min-w-[200px] text-center">{weekLabel}</span>
+            <button onClick={()=>setWeekStart(addDays(weekStart,7))}
+              className="text-sm px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-slate-600 cursor-pointer hover:bg-slate-50">›</button>
+            <button onClick={()=>{const d=new Date();d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);setWeekStart(d);}}
+              className="text-xs px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-500 cursor-pointer hover:bg-slate-50">Today</button>
+          </div>
+
+          {/* Calendar area */}
+          <div className="flex-1 overflow-hidden bg-white mx-4 sm:mx-6 my-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
             {selectedRes
               ? <WeeklyCalendar key={selectedRes.id} resource={selectedRes} weekStart={weekStart} bookings={bookings}
                   fields={currentFields} user={user} isAdmin={isAdmin} canBook={canBook} onRefresh={loadBookings}
                   onRequestAccess={api.requestAccess} grants={grants}/>
               : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-                  {isAdmin
-                    ? <span>No resources yet. <button onClick={()=>setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>
-                    : "No resources available."}
+                  Select a resource above to view its calendar.
                 </div>
             }
           </div>
