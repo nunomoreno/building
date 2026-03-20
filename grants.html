@@ -273,22 +273,45 @@
                       <tr className="bg-slate-50 border-b border-slate-100">
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Code</th>
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Name</th>
-                        <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Funds (EUR)</th>
+                        <th className="text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-36">Total Budget</th>
+                        <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-52">Usage</th>
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 w-32">Tier</th>
                         <th className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider px-4 py-3">Members</th>
                         <th className="w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {grants.map((g, i) => (
+                      {grants.map((g, i) => {
+                        const total     = parseFloat(g.funds) || 0;
+                        const spent     = parseFloat(g.spent) || 0;
+                        const remaining = total - spent;
+                        const pct       = total > 0 ? Math.min(100, (spent / total) * 100) : 0;
+                        const overBudget = remaining < 0;
+                        return (
                         <tr key={g.id} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
                           <td className="px-4 py-2.5"><input value={g.code} onChange={e => updateGrant(g.id, "code", e.target.value)} className={inputCls} /></td>
                           <td className="px-4 py-2.5"><input value={g.name} onChange={e => updateGrant(g.id, "name", e.target.value)} placeholder="Grant name" className={inputCls} /></td>
                           <td className="px-4 py-2.5">
-                            <div className="relative">
-                              <input type="number" min="0" step="0.01" value={g.funds} onChange={e => updateGrant(g.id, "funds", e.target.value)}
-                                className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-white" />
-                            </div>
+                            <input type="number" min="0" step="0.01" value={g.funds} onChange={e => updateGrant(g.id, "funds", e.target.value)}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-white" />
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {total > 0 ? (
+                              <div>
+                                <div className="flex items-center justify-between text-[10px] mb-1">
+                                  <span className={overBudget ? "text-red-600 font-semibold" : "text-slate-500"}>
+                                    {overBudget ? "Over budget!" : `€${remaining.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})} left`}
+                                  </span>
+                                  <span className="text-slate-400">€{spent.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})} spent</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                                  <div className="h-full rounded-full transition-all"
+                                    style={{width:`${pct}%`, background: overBudget ? "#dc2626" : pct > 80 ? "#f59e0b" : "#10b981"}} />
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic">no budget set</span>
+                            )}
                           </td>
                           <td className="px-4 py-2.5">
                             <select value={g.tier} onChange={e => updateGrant(g.id, "tier", e.target.value)} className={inputCls}>
@@ -305,7 +328,8 @@
                             <button onClick={() => removeExisting(g.id)} className="text-slate-300 hover:text-red-400 bg-transparent border-none cursor-pointer text-lg leading-none font-sans" title="Remove">×</button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       {newRows.map((r, i) => (
                         <tr key={r._tempId} className="border-l-2 border-blue-400 bg-blue-50/20">
                           <td className="px-4 py-2.5"><input value={r.code} onChange={e => updateNewRow(r._tempId, "code", e.target.value)} placeholder="e.g. FCT-2024-001" className={`${inputCls} border-blue-200`} /></td>
@@ -313,6 +337,9 @@
                           <td className="px-4 py-2.5">
                             <input type="number" min="0" step="0.01" value={r.funds} onChange={e => updateNewRow(r._tempId, "funds", e.target.value)}
                               className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 outline-none focus:ring-2 focus:ring-blue-500 font-sans text-right bg-blue-50/30" />
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-[10px] text-slate-400 italic">save to track usage</span>
                           </td>
                           <td className="px-4 py-2.5">
                             <select value={r.tier} onChange={e => updateNewRow(r._tempId, "tier", e.target.value)} className={`${inputCls} border-blue-200 bg-blue-50/30`}>
@@ -331,7 +358,7 @@
                         </tr>
                       ))}
                       {grants.length === 0 && newRows.length === 0 && (
-                        <tr><td colSpan={6} className="text-center text-sm text-slate-400 py-8">No grants yet. Click "+ Add Grant" to start.</td></tr>
+                        <tr><td colSpan={7} className="text-center text-sm text-slate-400 py-8">No grants yet. Click "+ Add Grant" to start.</td></tr>
                       )}
                     </tbody>
                   </table>

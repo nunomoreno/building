@@ -634,7 +634,55 @@ export default {
     // ── GET /grants ───────────────────────────────────────────────────────────
     if (path === "/grants" && method === "GET") {
       try {
-        return json(await sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,members"));
+        const [grants, bookings, projects, resources, pricingRows] = await Promise.all([
+          sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,members"),
+          sb("bookings?status=eq.approved&grant_id=not.is.null&select=grant_id,resource_id,start_time,end_time,full_day"),
+          sb("projects?select=data"),
+          sb("resources?select=id,sku_id"),
+          sb("settings?key=eq.pricing&limit=1"),
+        ]);
+
+        const skus        = pricingRows?.[0]?.value?.skus || [];
+        const skuMap      = Object.fromEntries(skus.map(s => [s.id, s]));
+        const resourceMap = Object.fromEntries((Array.isArray(resources) ? resources : []).map(r => [r.id, r]));
+        const grantList   = Array.isArray(grants) ? grants : [];
+
+        // Accumulate spending per grant_id
+        const spent = {};
+
+        // From approved bookings (cost = hours × sku price at grant tier)
+        for (const b of (Array.isArray(bookings) ? bookings : [])) {
+          if (!b.grant_id) continue;
+          const grant = grantList.find(g => g.id === b.grant_id);
+          if (!grant) continue;
+          const sku = skuMap[resourceMap[b.resource_id]?.sku_id];
+          if (!sku) continue;
+          const price = parseFloat(sku[grant.tier] || 0);
+          let hours;
+          if (b.full_day) {
+            hours = 8;
+          } else {
+            const [sh, sm] = (b.start_time || "00:00").split(":").map(Number);
+            const [eh, em] = (b.end_time   || "00:00").split(":").map(Number);
+            hours = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
+          }
+          spent[b.grant_id] = (spent[b.grant_id] || 0) + price * hours;
+        }
+
+        // From finalized kanban tasks with a grant (exclude tasks marked exclude_from_financial)
+        for (const proj of (Array.isArray(projects) ? projects : [])) {
+          for (const t of (proj.data?.tasks || [])) {
+            if (!t.finalized || t.exclude_from_financial) continue;
+            const gid   = t.store_order?.grant_id;
+            const total = t.store_order?.total || 0;
+            if (gid && total > 0) spent[gid] = (spent[gid] || 0) + total;
+          }
+        }
+
+        return json(grantList.map(g => ({
+          ...g,
+          spent: Math.round((spent[g.id] || 0) * 100) / 100,
+        })));
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 
@@ -734,14 +782,15 @@ export default {
         const invalid = sanitiseBooking(body);
         if (invalid) return errRes(ch, invalid, 400, "VALIDATION_ERROR");
         const { resource_id, date, start_time, end_time } = body;
-        const canBook = sessionUser.role === "admin" ||
-          (Array.isArray(sessionUser.permissions) && sessionUser.permissions.includes(resource_id));
-        if (!canBook) return errRes(ch, "You do not have permission to book this resource", 403, "FORBIDDEN");
         if (new Date(start_time) < new Date()) return errRes(ch, "Cannot book in the past", 400, "PAST_BOOKING");
         if (await hasOverlap(sb, resource_id, date, start_time, end_time)) return errRes(ch, "This time slot is already booked", 409, "OVERLAP");
-        const resource        = await sb(`resources?id=eq.${resource_id}&select=approval_required,max_days_ahead&limit=1`);
+        const resource        = await sb(`resources?id=eq.${resource_id}&select=approval_required,max_days_ahead,admin_username&limit=1`);
         const approvalRequired = resource[0]?.approval_required ?? true;
         const maxDaysAhead = resource[0]?.max_days_ahead;
+        const canBook = sessionUser.role === "admin" ||
+          resource[0]?.admin_username === sessionUser.username ||
+          (Array.isArray(sessionUser.permissions) && sessionUser.permissions.includes(resource_id));
+        if (!canBook) return errRes(ch, "You do not have permission to book this resource", 403, "FORBIDDEN");
         if (maxDaysAhead) {
           const maxDate = new Date();
           maxDate.setDate(maxDate.getDate() + maxDaysAhead);

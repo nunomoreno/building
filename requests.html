@@ -26,7 +26,7 @@
     .btn-violet{background:#7c3aed;color:#fff} .btn-violet:hover{background:#6d28d9}
     .md-content h1{font-size:1.15em;font-weight:700;margin-bottom:.4em}
     .md-content h2{font-size:1em;font-weight:700;margin-bottom:.3em}
-    .md-content p{margin-bottom:.5em} .md-content ul,.md-content ol{padding-left:1.2em;margin-bottom:.5em}
+    .md-content p{margin-bottom:.5em} .md-content ul{list-style-type:disc;padding-left:1.4em;margin-bottom:.5em} .md-content ol{list-style-type:decimal;padding-left:1.4em;margin-bottom:.5em} .md-content li{margin-bottom:.2em}
     .md-content code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:.85em}
     .md-content strong{font-weight:700} mark{background:#fef08a;padding:1px 2px;border-radius:2px}
   </style>
@@ -34,7 +34,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-  const { useState, useEffect } = React;
+  const { useState, useEffect, useRef, useLayoutEffect } = React;
 
   const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
   const SESSION_KEY = "kerno_session";
@@ -189,7 +189,7 @@
           </button>
         </div>
         {preview
-          ? <div style={{padding:"8px 12px",fontSize:13,color:"#334155",minHeight:80}} dangerouslySetInnerHTML={{ __html: html() }}/>
+          ? <div className="md-content" style={{padding:"8px 12px",fontSize:13,color:"#334155",minHeight:80}} dangerouslySetInnerHTML={{ __html: html() }}/>
           : <textarea ref={ref} value={value || ""} onChange={e => onChange(e.target.value)}
               rows={rows} placeholder={placeholder}
               style={{width:"100%",fontSize:13,padding:"6px 10px",outline:"none",resize:"vertical",border:"none",boxSizing:"border-box"}}/>
@@ -228,38 +228,58 @@
     );
   }
 
+  // ── PillSelect ─────────────────────────────────────────────────────────────
+  function PillSelect({ options, value, onChange, disabled, single }) {
+    const containerRef = useRef(null);
+    const [showSearch, setShowSearch] = useState(false);
+    const [search, setSearch] = useState("");
+    useLayoutEffect(() => {
+      const el = containerRef.current;
+      if (!el) return;
+      const check = () => setShowSearch(el.scrollHeight > 46);
+      check();
+      if (window.ResizeObserver) {
+        const ro = new ResizeObserver(check);
+        ro.observe(el);
+        return () => ro.disconnect();
+      }
+    }, [options.length]);
+    const filtered = search ? options.filter(o => o.toLowerCase().includes(search.toLowerCase())) : options;
+    const isOn = (o) => single ? value === o : (Array.isArray(value) ? value.includes(o) : false);
+    const toggle = (o) => {
+      if (disabled) return;
+      if (single) onChange(value === o ? "" : o);
+      else { const a = Array.isArray(value) ? value : []; onChange(a.includes(o) ? a.filter(x=>x!==o) : [...a, o]); }
+    };
+    return (
+      <div>
+        {showSearch && (
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search options…"
+            className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 mb-2"/>
+        )}
+        <div ref={containerRef} className="flex flex-wrap gap-2">
+          {filtered.map(o=>(
+            <button key={o} type="button" disabled={disabled} onClick={()=>toggle(o)}
+              className={`text-sm px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer ${isOn(o)?"border-blue-500 bg-blue-50 text-blue-600":"border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+              {o}
+            </button>
+          ))}
+          {filtered.length===0 && search && <span className="text-xs text-slate-400 self-center">No match for "{search}"</span>}
+        </div>
+      </div>
+    );
+  }
+
   // ── Field renderer ─────────────────────────────────────────────────────────
   function FieldInput({ field, value, onChange, disabled }) {
     const inputCls = "w-full text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:bg-slate-50 disabled:text-slate-400";
-
     if (field.type === "dropdown") return (
-      <select value={value || ""} onChange={e => onChange(e.target.value)} disabled={disabled} className={inputCls}>
-        <option value="">Select…</option>
-        {(field.options || []).map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
+      <PillSelect options={field.options||[]} value={value||""} onChange={onChange} disabled={disabled} single={true}/>
     );
-
-    if (field.type === "multiselect") {
-      const selected = Array.isArray(value) ? value : [];
-      return (
-        <div className="flex flex-wrap gap-2">
-          {(field.options || []).map(o => {
-            const on = selected.includes(o);
-            return (
-              <button key={o} type="button" disabled={disabled}
-                onClick={() => onChange(on ? selected.filter(x => x !== o) : [...selected, o])}
-                className={`text-sm px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer ${on ? "border-blue-500 bg-blue-50 text-blue-600" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
-                {o}
-              </button>
-            );
-          })}
-        </div>
-      );
-    }
-
-    return (
-      <input value={value || ""} onChange={e => onChange(e.target.value)} disabled={disabled} className={inputCls} />
+    if (field.type === "multiselect") return (
+      <PillSelect options={field.options||[]} value={Array.isArray(value)?value:[]} onChange={onChange} disabled={disabled} single={false}/>
     );
+    return <input value={value||""} onChange={e=>onChange(e.target.value)} disabled={disabled} className={inputCls}/>;
   }
 
   // ── Store Order Editor ──────────────────────────────────────────────────────
@@ -401,10 +421,11 @@
         }
       }
       setSaving(true);
+      const reqId = String(Math.floor(100000+Math.random()*900000));
       const validItems = storeItems.filter(i => i.sku_id);
       const baseMetadata = isStore
-        ? { store_order: { items: validItems, total: validItems.reduce((s, i) => s + (i.line_total || 0), 0) } }
-        : meta;
+        ? { store_order: { items: validItems, total: validItems.reduce((s, i) => s + (i.line_total || 0), 0) }, request_id: reqId }
+        : { ...meta, request_id: reqId };
       const res = await api.submitRequest({ type, metadata: baseMetadata, notes, email: user.email || null, grant_id: grantId || null });
       setSaving(false);
       if (res?.error) { setError(res.error); return; }
@@ -500,39 +521,68 @@
     );
   }
 
+  // ── getReqId helper ────────────────────────────────────────────────────────
+  const getReqId = (r) => r.metadata?.request_id || String(Math.abs(new Date(r.created_at||Date.now()).getTime()) % 1000000).padStart(6,'0');
+
   // ── My requests ────────────────────────────────────────────────────────────
   function MyRequests({ requests, requestTypes, search }) {
-    const visible = search
+    const [selectedId, setSelectedId] = useState(null);
+    const pillsRef = useRef(null);
+    const [showPillSearch, setShowPillSearch] = useState(false);
+    useLayoutEffect(() => {
+      const el = pillsRef.current; if (!el) return;
+      const check = () => setShowPillSearch(el.scrollHeight > 46);
+      check();
+      if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return ()=>ro.disconnect(); }
+    }, [requests.length]);
+
+    const filtered = search
       ? requests.filter(r => {
           const q = search.toLowerCase();
-          return (requestTypes?.[r.type]?.label || r.type).toLowerCase().includes(q)
-            || r.status.toLowerCase().includes(q)
-            || (r.notes || "").toLowerCase().includes(q);
+          return (requestTypes?.[r.type]?.label||r.type).toLowerCase().includes(q) || r.status.toLowerCase().includes(q) || (r.notes||"").toLowerCase().includes(q);
         })
       : requests;
 
-    if (!requests.length) return (
-      <div className="text-center py-16 text-slate-400 text-sm">You haven't submitted any requests yet.</div>
-    );
-    if (search && !visible.length) return (
-      <div className="text-center py-16 text-slate-400 text-sm">No requests match "{search}".</div>
-    );
+    const effectiveId = selectedId && filtered.find(r=>r.id===selectedId) ? selectedId : filtered[0]?.id;
+    const selected = filtered.find(r=>r.id===effectiveId);
+
+    if (!requests.length) return <div className="text-center py-16 text-slate-400 text-sm">You haven't submitted any requests yet.</div>;
+    if (search && !filtered.length) return <div className="text-center py-16 text-slate-400 text-sm">No requests match "{search}".</div>;
 
     return (
-      <div className="space-y-3">
-        {visible.map(r => {
-          const typeLabel = requestTypes?.[r.type]?.label || r.type;
-          const fields    = requestTypes?.[r.type]?.fields || [];
+      <div>
+        {/* Request pills */}
+        <div ref={pillsRef} className="flex flex-wrap gap-2 mb-5">
+          {filtered.map(r => {
+            const typeLabel = requestTypes?.[r.type]?.label || r.type;
+            const reqId = getReqId(r);
+            const isActive = r.id === effectiveId;
+            return (
+              <button key={r.id} onClick={()=>setSelectedId(r.id)}
+                className={`text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer flex items-center gap-1.5 ${isActive?"border-blue-500 bg-blue-50 text-blue-600 font-semibold":"border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                <span className="font-mono">#{reqId}</span>
+                <span>{typeLabel}</span>
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${r.status==="approved"?"bg-emerald-100 text-emerald-600":r.status==="rejected"?"bg-red-100 text-red-500":"bg-amber-100 text-amber-600"}`}>{r.status}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Selected detail */}
+        {selected && (() => {
+          const typeLabel = requestTypes?.[selected.type]?.label || selected.type;
+          const fields = requestTypes?.[selected.type]?.fields || [];
           return (
-            <div key={r.id} className={`bg-white border rounded-2xl p-5 ${CARD_BORDER[r.status] || "border-slate-200"}`}>
+            <div className={`bg-white border rounded-2xl p-5 ${CARD_BORDER[selected.status]||"border-slate-200"}`}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
+                  <span className="font-mono text-xs text-slate-400 mr-2">#{getReqId(selected)}</span>
                   <span className="text-sm font-bold text-slate-900">{typeLabel}</span>
-                  <span className="text-xs text-slate-400 ml-2">{new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                  <span className="text-xs text-slate-400 ml-2">{new Date(selected.created_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</span>
                 </div>
-                <span className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 capitalize shrink-0 ${STATUS_CLASSES[r.status] || "bg-slate-100 text-slate-500"}`}>{r.status}</span>
+                <span className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 capitalize shrink-0 ${STATUS_CLASSES[selected.status]||"bg-slate-100 text-slate-500"}`}>{selected.status}</span>
               </div>
-              {r.metadata?.store_order ? (
+              {selected.metadata?.store_order ? (
                 <div className="text-xs mt-1">
                   <table className="w-full border-collapse text-slate-500">
                     <thead><tr className="border-b border-slate-100 text-slate-400">
@@ -541,122 +591,132 @@
                       <th className="text-right py-1 pr-2 font-semibold">€/unit</th>
                       <th className="text-right py-1 font-semibold">Total</th>
                     </tr></thead>
-                    <tbody>
-                      {(r.metadata.store_order.items || []).map((item, i) => (
-                        <tr key={i} className="border-b border-slate-50">
-                          <td className="py-1 pr-2">{item.sku_name || item.sku_id}{item.comment && <span className="text-slate-400 ml-1">— {item.comment}</span>}</td>
-                          <td className="py-1 pr-2 text-right">{item.qty}</td>
-                          <td className="py-1 pr-2 text-right">€{parseFloat(item.unit_price||0).toFixed(2)}</td>
-                          <td className="py-1 text-right font-semibold text-slate-700">€{parseFloat(item.line_total||0).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                    <tbody>{(selected.metadata.store_order.items||[]).map((item,i)=>(
+                      <tr key={i} className="border-b border-slate-50">
+                        <td className="py-1 pr-2">{item.sku_name||item.sku_id}{item.comment&&<span className="text-slate-400 ml-1">— {item.comment}</span>}</td>
+                        <td className="py-1 pr-2 text-right">{item.qty}</td>
+                        <td className="py-1 pr-2 text-right">€{parseFloat(item.unit_price||0).toFixed(2)}</td>
+                        <td className="py-1 text-right font-semibold text-slate-700">€{parseFloat(item.line_total||0).toFixed(2)}</td>
+                      </tr>
+                    ))}</tbody>
                   </table>
-                  <div className="text-right font-bold text-sm text-violet-600 mt-1">Total: €{parseFloat(r.metadata.store_order.total||0).toFixed(2)}</div>
+                  <div className="text-right font-bold text-sm text-violet-600 mt-1">Total: €{parseFloat(selected.metadata.store_order.total||0).toFixed(2)}</div>
                 </div>
               ) : (
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                {fields.map(f => {
-                  const v = r.metadata?.[f.id];
-                  if (!v || (Array.isArray(v) && !v.length)) return null;
-                  return <span key={f.id}><strong className="text-slate-700">{f.label}:</strong> {Array.isArray(v) ? v.join(", ") : v}</span>;
-                })}
-              </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                  {fields.map(f => { const v = selected.metadata?.[f.id]; if (!v||(Array.isArray(v)&&!v.length)) return null; return <span key={f.id}><strong className="text-slate-700">{f.label}:</strong> {Array.isArray(v)?v.join(", "):v}</span>; })}
+                </div>
               )}
-              {r.notes && <p className="text-xs text-slate-400 mt-2">{r.notes}</p>}
-              {r.reviewed_by && <p className="text-xs text-slate-400 mt-2">Reviewed by <strong>{r.reviewed_by}</strong> · {new Date(r.reviewed_at).toLocaleDateString("en-GB")}</p>}
+              {selected.notes && <p className="text-xs text-slate-400 mt-2">{selected.notes}</p>}
+              {selected.reviewed_by && <p className="text-xs text-slate-400 mt-2">Reviewed by <strong>{selected.reviewed_by}</strong> · {new Date(selected.reviewed_at).toLocaleDateString("en-GB")}</p>}
             </div>
           );
-        })}
+        })()}
       </div>
     );
   }
 
   // ── Admin queue ────────────────────────────────────────────────────────────
   function AdminQueue({ requests, requestTypes, onRefresh, search }) {
-    const [filter,      setFilter]      = useState("pending");
-    const [reviewing,   setReviewing]   = useState(null);
-    const [reason,      setReason]      = useState("");
-    const [saving,      setSaving]      = useState(false);
-    const [error,       setError]       = useState(null);
+    const [filter, setFilter] = useState("pending");
+    const [selectedId, setSelectedId] = useState(null);
+    const [reviewing, setReviewing] = useState(false);
+    const [reason, setReason] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState(null);
     const [reviewOrder, setReviewOrder] = useState(null);
-    const [skus,        setSkus]        = useState([]);
+    const [skus, setSkus] = useState([]);
+    const pillsRef = useRef(null);
+    const [showPillSearch, setShowPillSearch] = useState(false);
+    useLayoutEffect(() => {
+      const el = pillsRef.current; if (!el) return;
+      const check = () => setShowPillSearch(el.scrollHeight > 46);
+      check();
+      if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return ()=>ro.disconnect(); }
+    }, [requests.length, filter]);
 
-    const visible = requests.filter(r => {
-      if (filter !== "all" && r.status !== filter) return false;
-      if (search) {
-        const q = search.toLowerCase();
-        return (requestTypes?.[r.type]?.label || r.type).toLowerCase().includes(q)
-          || r.username?.toLowerCase().includes(q)
-          || (r.notes || "").toLowerCase().includes(q);
-      }
-      return true;
+    const base = requests.filter(r => filter === "all" || r.status === filter).filter(r => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return (requestTypes?.[r.type]?.label||r.type).toLowerCase().includes(q) || (r.username||"").toLowerCase().includes(q) || (r.notes||"").toLowerCase().includes(q);
     });
 
-    const startReview = (r) => {
-      setReviewing(r); setReason(""); setError(null);
-      if (r.metadata?.store_order) {
-        setReviewOrder(JSON.parse(JSON.stringify(r.metadata.store_order)));
-        api.getPricing().then(data => { if (data?.skus) setSkus(data.skus); });
-      } else {
-        setReviewOrder(null);
-      }
+    const effectiveId = selectedId && base.find(r=>r.id===selectedId) ? selectedId : base[0]?.id;
+    const selected = base.find(r=>r.id===effectiveId);
+
+    const openReview = (r) => {
+      setSelectedId(r.id); setReviewing(true); setReason(""); setError(null);
+      if (r.metadata?.store_order) { setReviewOrder(JSON.parse(JSON.stringify(r.metadata.store_order))); api.getPricing().then(d=>{ if(d?.skus) setSkus(d.skus); }); }
+      else setReviewOrder(null);
     };
 
-    const review = async (status) => {
+    const doReview = async (status) => {
       setSaving(true); setError(null);
       const body = { status, rejection_reason: reason };
       if (status === "approved" && reviewOrder) body.store_order = reviewOrder;
-      const res = await api.reviewRequest(reviewing.id, body);
+      const res = await api.reviewRequest(effectiveId, body);
       setSaving(false);
       if (res?.error) { setError(res.error); return; }
-      setReviewing(null); setReviewOrder(null); setReason(""); onRefresh();
+      setReviewing(false); setReviewOrder(null); setReason(""); onRefresh();
     };
 
-    const filterLabels = ["pending", "approved", "rejected", "all"];
+    const filterLabels = ["pending","approved","rejected","all"];
 
     return (
       <div>
-        {/* Filter tabs */}
-        <div className="flex gap-2 flex-wrap mb-5">
+        {/* Status filter tabs */}
+        <div className="flex gap-2 flex-wrap mb-4">
           {filterLabels.map(f => {
-            const count = requests.filter(r => r.status === f).length;
+            const count = requests.filter(r=>r.status===f).length;
             return (
-              <button key={f} onClick={() => setFilter(f)}
-                className={`text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer capitalize flex items-center gap-1.5 ${filter === f ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+              <button key={f} onClick={()=>{ setFilter(f); setSelectedId(null); setReviewing(false); }}
+                className={`text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer capitalize flex items-center gap-1.5 ${filter===f?"border-blue-500 bg-blue-50 text-blue-600 font-semibold":"border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
                 {f}
-                {f !== "all" && <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${filter === f ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-400"}`}>{count}</span>}
+                {f!=="all" && <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${filter===f?"bg-blue-600 text-white":"bg-slate-100 text-slate-400"}`}>{count}</span>}
               </button>
             );
           })}
         </div>
 
-        {visible.length === 0 && (
-          <div className="text-center py-16 text-slate-400 text-sm">No {filter === "all" ? "" : filter} requests.</div>
-        )}
+        {base.length === 0 && <div className="text-center py-16 text-slate-400 text-sm">No {filter==="all"?"":filter} requests.</div>}
 
-        <div className="space-y-3">
-          {visible.map(r => {
-            const typeLabel = requestTypes?.[r.type]?.label || r.type;
-            const fields    = requestTypes?.[r.type]?.fields || [];
+        {base.length > 0 && <>
+          {/* Request pills */}
+          <div ref={pillsRef} className="flex flex-wrap gap-2 mb-5">
+            {base.map(r => {
+              const typeLabel = requestTypes?.[r.type]?.label || r.type;
+              const reqId = getReqId(r);
+              const isActive = r.id === effectiveId;
+              return (
+                <button key={r.id} onClick={()=>{ setSelectedId(r.id); setReviewing(false); }}
+                  className={`text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer flex items-center gap-1.5 ${isActive?"border-blue-500 bg-blue-50 text-blue-600 font-semibold":"border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                  <span className="font-mono">#{reqId}</span>
+                  <span className="hidden sm:inline">{r.username} ·</span>
+                  <span>{typeLabel}</span>
+                  <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${r.status==="approved"?"bg-emerald-100 text-emerald-600":r.status==="rejected"?"bg-red-100 text-red-500":"bg-amber-100 text-amber-600"}`}>{r.status}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selected detail + review */}
+          {selected && (() => {
+            const typeLabel = requestTypes?.[selected.type]?.label || selected.type;
+            const fields = requestTypes?.[selected.type]?.fields || [];
             return (
-              <div key={r.id} className={`bg-white border rounded-2xl p-5 ${CARD_BORDER[r.status] || "border-slate-200"}`}>
+              <div className={`bg-white border rounded-2xl p-5 ${CARD_BORDER[selected.status]||"border-slate-200"}`}>
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <div>
+                    <span className="font-mono text-xs text-slate-400 mr-2">#{getReqId(selected)}</span>
                     <span className="text-sm font-bold text-slate-900">{typeLabel}</span>
-                    <span className="text-xs text-slate-500 ml-2">by <strong>{r.username}</strong></span>
-                    <span className="text-xs text-slate-400 ml-2">{new Date(r.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    <span className="text-xs text-slate-500 ml-2">by <strong>{selected.username}</strong></span>
+                    <span className="text-xs text-slate-400 ml-2">{new Date(selected.created_at).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</span>
                   </div>
-                  <span className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 capitalize shrink-0 ${STATUS_CLASSES[r.status] || "bg-slate-100 text-slate-500"}`}>{r.status}</span>
+                  <span className={`text-[10px] font-semibold rounded-full px-2.5 py-0.5 capitalize shrink-0 ${STATUS_CLASSES[selected.status]||"bg-slate-100 text-slate-500"}`}>{selected.status}</span>
                 </div>
-
                 <div className="flex flex-col gap-1 text-xs text-slate-500 mb-3">
-                  {fields.map(f => {
-                    const v = r.metadata?.[f.id];
-                    if (!v || (Array.isArray(v) && !v.length)) return null;
-                    return <div key={f.id}><strong className="text-slate-700">{f.label}:</strong> {Array.isArray(v) ? v.join(", ") : v}</div>;
-                  })}
-                  {r.metadata?.store_order && reviewing?.id !== r.id && (
+                  {fields.map(f=>{ const v=selected.metadata?.[f.id]; if(!v||(Array.isArray(v)&&!v.length)) return null; return <div key={f.id}><strong className="text-slate-700">{f.label}:</strong> {Array.isArray(v)?v.join(", "):v}</div>; })}
+                  {selected.metadata?.store_order && !reviewing && (
                     <div className="mt-1">
                       <table className="w-full border-collapse">
                         <thead><tr className="border-b border-slate-100 text-slate-400">
@@ -665,64 +725,49 @@
                           <th className="text-right py-1 pr-2 font-semibold">€/unit</th>
                           <th className="text-right py-1 font-semibold">Total</th>
                         </tr></thead>
-                        <tbody>
-                          {(r.metadata.store_order.items || []).map((item, i) => (
-                            <tr key={i} className="border-b border-slate-50">
-                              <td className="py-1 pr-2">{item.sku_name || item.sku_id}{item.comment && <span className="text-slate-400 ml-1">— {item.comment}</span>}</td>
-                              <td className="py-1 pr-2 text-right">{item.qty}</td>
-                              <td className="py-1 pr-2 text-right">€{parseFloat(item.unit_price||0).toFixed(2)}</td>
-                              <td className="py-1 text-right font-semibold text-slate-700">€{parseFloat(item.line_total||0).toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
+                        <tbody>{(selected.metadata.store_order.items||[]).map((item,i)=>(
+                          <tr key={i} className="border-b border-slate-50">
+                            <td className="py-1 pr-2">{item.sku_name||item.sku_id}{item.comment&&<span className="text-slate-400 ml-1">— {item.comment}</span>}</td>
+                            <td className="py-1 pr-2 text-right">{item.qty}</td>
+                            <td className="py-1 pr-2 text-right">€{parseFloat(item.unit_price||0).toFixed(2)}</td>
+                            <td className="py-1 text-right font-semibold text-slate-700">€{parseFloat(item.line_total||0).toFixed(2)}</td>
+                          </tr>
+                        ))}</tbody>
                       </table>
-                      <div className="text-right font-bold text-xs text-violet-600 mt-1">Total: €{parseFloat(r.metadata.store_order.total||0).toFixed(2)}</div>
+                      <div className="text-right font-bold text-xs text-violet-600 mt-1">Total: €{parseFloat(selected.metadata.store_order.total||0).toFixed(2)}</div>
                     </div>
                   )}
-                  {r.notes && <div><strong className="text-slate-700">Notes:</strong> {r.notes}</div>}
-                  {r.email  && <div className="text-slate-400">📧 {r.email}</div>}
+                  {selected.notes && <div><strong className="text-slate-700">Notes:</strong> {selected.notes}</div>}
+                  {selected.email  && <div className="text-slate-400">📧 {selected.email}</div>}
                 </div>
-
-                {r.status === "pending" && (
-                  reviewing?.id === r.id ? (
+                {selected.status === "pending" && (
+                  reviewing ? (
                     <div className="mt-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <textarea value={reason} onChange={e => setReason(e.target.value)} rows={2}
+                      <textarea value={reason} onChange={e=>setReason(e.target.value)} rows={2}
                         placeholder="Rejection reason (optional)…"
-                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-3" />
+                        className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 resize-none mb-3"/>
                       {reviewOrder && (
                         <div className="mb-3">
                           <div className="text-xs font-semibold text-slate-500 mb-2">Edit Order (optional)</div>
-                          <StoreOrderEditor
-                            items={reviewOrder.items || []}
-                            onChange={items => setReviewOrder({ ...reviewOrder, items, total: items.reduce((s,i) => s+(i.line_total||0), 0) })}
-                            skus={skus}
-                            disabled={false}
-                          />
+                          <StoreOrderEditor items={reviewOrder.items||[]} onChange={items=>setReviewOrder({...reviewOrder,items,total:items.reduce((s,i)=>s+(i.line_total||0),0)})} skus={skus} disabled={false}/>
                         </div>
                       )}
                       {error && <div className="text-xs text-red-600 mb-2">⚠ {error}</div>}
                       <div className="flex gap-2">
-                        <button onClick={() => review("approved")} disabled={saving} className="btn btn-sm btn-success flex-1">
-                          {saving ? "…" : "✅ Approve"}
-                        </button>
-                        <button onClick={() => review("rejected")} disabled={saving} className="btn btn-sm btn-danger-fill flex-1">
-                          {saving ? "…" : "❌ Reject"}
-                        </button>
-                        <button onClick={() => { setReviewing(null); setReason(""); setError(null); }} className="btn btn-sm btn-secondary">Cancel</button>
+                        <button onClick={()=>doReview("approved")} disabled={saving} className="btn btn-sm btn-success flex-1">{saving?"…":"✅ Approve"}</button>
+                        <button onClick={()=>doReview("rejected")} disabled={saving} className="btn btn-sm btn-danger-fill flex-1">{saving?"…":"❌ Reject"}</button>
+                        <button onClick={()=>{ setReviewing(false); setReason(""); setError(null); }} className="btn btn-sm btn-secondary">Cancel</button>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => startReview(r)} className="btn btn-sm btn-primary mt-1">Review →</button>
+                    <button onClick={()=>openReview(selected)} className="btn btn-sm btn-primary mt-1">Review →</button>
                   )
                 )}
-
-                {r.reviewed_by && (
-                  <p className="text-xs text-slate-400 mt-3">Reviewed by <strong>{r.reviewed_by}</strong> · {new Date(r.reviewed_at).toLocaleDateString("en-GB")}</p>
-                )}
+                {selected.reviewed_by && <p className="text-xs text-slate-400 mt-3">Reviewed by <strong>{selected.reviewed_by}</strong> · {new Date(selected.reviewed_at).toLocaleDateString("en-GB")}</p>}
               </div>
             );
-          })}
-        </div>
+          })()}
+        </>}
       </div>
     );
   }

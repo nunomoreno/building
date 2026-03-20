@@ -14,7 +14,7 @@
     .md-content h1{font-size:1.15em;font-weight:700;margin-bottom:.4em}
     .md-content h2{font-size:1em;font-weight:700;margin-bottom:.3em}
     .md-content p{margin-bottom:.5em}
-    .md-content ul,.md-content ol{padding-left:1.2em;margin-bottom:.5em}
+    .md-content ul{list-style-type:disc;padding-left:1.2em;margin-bottom:.5em}.md-content ol{list-style-type:decimal;padding-left:1.2em;margin-bottom:.5em}
     .md-content code{background:#f1f5f9;padding:1px 4px;border-radius:3px;font-size:.85em}
     .md-content strong{font-weight:700}
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -304,7 +304,7 @@
     function BookingModal({
       booking, resource, fields, onSave, onDelete, onClose,
       isAdmin, username, initialStart, initialEnd, initialDate, grants,
-      allBookings,
+      allBookings, pricing,
       moveFromId, moveFromName,
     }) {
       const isNew    = !booking?.id;
@@ -474,6 +474,32 @@
               </div>
             )}
 
+            {/* Estimated cost */}
+            {(() => {
+              const sku = (pricing?.skus || []).find(s => s.id === resource?.sku_id);
+              if (!sku) return null;
+              let hours = 0;
+              if (fullDay) {
+                hours = 8;
+              } else {
+                const [sh, sm] = (startTime || "00:00").split(":").map(Number);
+                const [eh, em] = (endTime   || "00:00").split(":").map(Number);
+                hours = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
+              }
+              if (hours <= 0) return null;
+              const tier  = grantId ? ((grants||[]).find(g => g.id === grantId)?.tier || "internal") : "internal";
+              const price = parseFloat(sku[tier] || 0);
+              const cost  = price * hours;
+              return (
+                <div className="mb-3 flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="bg-violet-50 border border-violet-100 rounded-lg px-2.5 py-1 font-semibold text-violet-700">
+                    Estimated: €{cost.toFixed(2)}
+                  </span>
+                  <span className="text-slate-400">{sku.name} · {hours}h × €{price.toFixed(2)} / {TIER_LABELS[tier]||tier}</span>
+                </div>
+              );
+            })()}
+
             {(grants||[]).length > 0 && (
               <div className="mb-3">
                 <label className={labelCls}>GRANT</label>
@@ -484,9 +510,18 @@
                   ))}
                 </select>
                 {grantId && (() => { const g = grants.find(x=>x.id===grantId); return g ? (
-                  <div className="mt-1.5 text-[11px] text-slate-500 flex gap-3">
+                  <div className="mt-1.5 text-[11px] text-slate-500 flex gap-3 flex-wrap">
                     <span className="bg-slate-100 rounded px-1.5 py-0.5">Tier: <strong>{TIER_LABELS[g.tier]||g.tier}</strong></span>
-                    {g.funds > 0 && <span className="bg-slate-100 rounded px-1.5 py-0.5">Budget: <strong>€{g.funds.toLocaleString()}</strong></span>}
+                    {g.funds > 0 && (() => {
+                      const remaining = g.funds - (g.spent || 0);
+                      const over = remaining < 0;
+                      return (
+                        <span className={`rounded px-1.5 py-0.5 ${over ? "bg-red-50 text-red-600" : "bg-slate-100"}`}>
+                          Available: <strong>€{remaining.toLocaleString("en",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong>
+                          <span className="text-slate-400 ml-1">of €{g.funds.toLocaleString()}</span>
+                        </span>
+                      );
+                    })()}
                   </div>
                 ) : null; })()}
               </div>
@@ -784,22 +819,27 @@
                         </tr>
                       </thead>
                       <tbody>
-                        {members.map(m=>(
+                        {members.filter(m => m.role !== "admin").map(m=>(
                           <tr key={m.id} className="border-b border-slate-100">
                             <td className="py-2.5 pr-4">
                               <span className="text-[13px] font-semibold text-slate-800">{m.username}</span>
-                              {m.role==="admin"&&<span className="ml-1.5 text-[10px] bg-blue-600 text-white rounded-full px-1.5 py-0.5">admin</span>}
                             </td>
                             {visibleResources.map(r=>(
                               <td key={r.id} className="text-center py-2.5 px-3">
                                 <input type="checkbox"
-                                  checked={m.role==="admin"||(m.permissions||[]).includes(r.id)}
-                                  disabled={m.role==="admin"}
+                                  checked={(m.permissions||[]).includes(r.id)}
                                   onChange={()=>togglePerm(m, r.id)}/>
                               </td>
                             ))}
                           </tr>
                         ))}
+                        {isGlobalAdmin && (
+                          <tr>
+                            <td colSpan={visibleResources.length+1} className="py-2 text-[11px] text-slate-400 italic">
+                              Admin users have automatic access to all resources and are not shown above.
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -812,7 +852,7 @@
     }
 
     // ── Weekly Calendar (multi-resource) ─────────────────────────────────────
-    function WeeklyCalendar({ resources, weekStart, allBookings, allFields, user, isAdmin, canBookResource, onRefresh, onRequestAccess, grants }) {
+    function WeeklyCalendar({ resources, weekStart, allBookings, allFields, user, isAdmin, canBookResource, onRefresh, onRequestAccess, grants, pricing }) {
       const [modal,      setModal]      = useState(null);   // { booking, startTime, endTime, date, resId }
       const [dropModal,  setDropModal]  = useState(null);   // { prefill, targetResource, targetFields, moveFromId, moveFromName }
       const [showDesc,   setShowDesc]   = useState(false);
@@ -960,6 +1000,7 @@
               initialDate={modal.date}
               grants={grants || []}
               allBookings={allBookings}
+              pricing={pricing}
               onSave={() => { setModal(null); onRefresh(); }}
               onDelete={() => { setModal(null); onRefresh(); }}
               onClose={() => setModal(null)}
@@ -979,6 +1020,7 @@
               initialDate={dropModal.prefill?.date}
               grants={grants || []}
               allBookings={allBookings}
+              pricing={pricing}
               moveFromId={dropModal.moveFromId}
               moveFromName={dropModal.moveFromName}
               onSave={() => { setDropModal(null); onRefresh(); }}
@@ -1196,7 +1238,9 @@
       const isCalendarAdmin  = myAdminResources.length > 0;
 
       const canBookResource = (resId) =>
-        isAdmin || (Array.isArray(currentMember?.permissions) && currentMember.permissions.includes(resId));
+        isAdmin ||
+        myAdminResources.some(r => r.id === resId) ||
+        (Array.isArray(currentMember?.permissions) && currentMember.permissions.includes(resId));
 
       const toggleResource = (resId) => {
         setSelectedResIds(prev =>
@@ -1359,6 +1403,7 @@
                   onRefresh={refreshBookings}
                   onRequestAccess={api.requestAccess}
                   grants={grants}
+                  pricing={pricing}
                 />
               : <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
                   Select a resource above to view its calendar.

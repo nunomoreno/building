@@ -12,7 +12,7 @@
   <style>
     .md-notes h1,.md-notes h2,.md-notes h3{font-weight:600;margin-bottom:2px}
     .md-notes h1{font-size:13px}.md-notes h2{font-size:12px}.md-notes h3{font-size:11px}
-    .md-notes p{margin-bottom:3px}.md-notes ul,.md-notes ol{padding-left:14px;margin-bottom:3px}
+    .md-notes p{margin-bottom:3px}.md-notes ul{list-style-type:disc;padding-left:14px;margin-bottom:3px}.md-notes ol{list-style-type:decimal;padding-left:14px;margin-bottom:3px}
     .md-notes li{margin-bottom:1px}.md-notes code{background:#f1f5f9;border-radius:3px;padding:0 3px;font-family:monospace}
     .md-notes pre{background:#f1f5f9;border-radius:4px;padding:4px 6px;overflow-x:auto;margin-bottom:3px}
     .md-notes a{color:#2563eb;text-decoration:underline}.md-notes strong{font-weight:600}
@@ -219,8 +219,8 @@
         document.addEventListener("click", h);
         return () => document.removeEventListener("click", h);
       }, [menuOpen]);
-      const nav  = "text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 no-underline hover:bg-slate-600";
-      const navA = "text-xs px-2.5 py-1 rounded border border-blue-500 bg-blue-600 text-white no-underline";
+      const nav  = "text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 no-underline hover:text-white hover:border-slate-500 transition";
+      const navA = "text-xs px-3.5 py-1.5 rounded-full bg-blue-600 border border-blue-500 text-white no-underline";
       const drop = "flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors";
       return (
         <nav className="bg-slate-900 px-4 sm:px-6 py-2.5 flex items-center gap-3 shrink-0">
@@ -233,7 +233,7 @@
             <a href="requests.html" className={`${nav} hidden sm:inline-flex`}>📝 Requests</a>
             <div className="relative" onClick={e => e.stopPropagation()}>
               <button onClick={() => setMenuOpen(o => !o)}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600 cursor-pointer font-[inherit]">
+                className="flex items-center gap-1.5 text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">
                 {user.avatar_url
                   ? <img src={user.avatar_url} className="w-5 h-5 rounded-full object-cover" alt="" />
                   : <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-600 text-slate-200 font-bold text-[10px]">{user.username[0].toUpperCase()}</span>}
@@ -256,7 +256,7 @@
                 </div>
               )}
             </div>
-            <button onClick={logout} className="text-xs px-2.5 py-1 rounded border border-slate-600 bg-slate-700 text-slate-300 cursor-pointer hover:bg-slate-600 font-[inherit]">Sign out</button>
+            <button onClick={logout} className="text-xs px-3.5 py-1.5 rounded-full border border-slate-700 text-slate-300 hover:text-white hover:border-slate-500 transition cursor-pointer font-[inherit]">Sign out</button>
           </div>
         </nav>
       );
@@ -663,10 +663,26 @@
                                     onChange={e => setDraftGrantId(e.target.value)}
                                     className="w-full text-xs px-1.5 py-1 rounded-md border border-slate-200 bg-white font-sans mt-0.5">
                                     <option value="">— no grant —</option>
-                                    {grants.map(g => (
-                                      <option key={g.id} value={g.id}>{g.code} — {g.name} ({g.tier})</option>
-                                    ))}
+                                    {grants.map(g => {
+                                      const rem = g.funds > 0 ? (g.funds - (g.spent||0)) : null;
+                                      return (
+                                        <option key={g.id} value={g.id}>
+                                          {g.code} — {g.name} ({g.tier}){rem !== null ? ` · €${rem.toFixed(2)} avail.` : ""}
+                                        </option>
+                                      );
+                                    })}
                                   </select>
+                                  {draftGrantId && (() => {
+                                    const g = grants.find(x => x.id === draftGrantId);
+                                    if (!g || !g.funds) return null;
+                                    const rem = g.funds - (g.spent || 0);
+                                    const over = rem < 0;
+                                    return (
+                                      <div className={`mt-1 text-[10px] px-1.5 py-0.5 rounded ${over ? "text-red-600 bg-red-50" : "text-slate-500"}`}>
+                                        {over ? "Over budget — " : ""}Available: €{rem.toFixed(2)} of €{g.funds.toLocaleString()}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               )}
                               <StoreOrderEditor
@@ -782,7 +798,7 @@
                     )}
                     {isOwner && (
                       <button onClick={() => unbillTask(t.id)}
-                        className="text-[10px] text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity font-sans shrink-0" title="Reopen">↩ reopen</button>
+                        className="text-[10px] text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer font-sans shrink-0" title="Reopen">↩ reopen</button>
                     )}
                   </div>
                 ))}
