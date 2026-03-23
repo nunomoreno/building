@@ -636,7 +636,7 @@ export default {
       try {
         const [grants, bookings, projects, resources, pricingRows] = await Promise.all([
           sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,members"),
-          sb("bookings?status=in.(pending,approved)&grant_id=not.is.null&select=grant_id,resource_id,start_time,end_time,full_day"),
+          sb("bookings?status=in.(pending,approved)&grant_id=not.is.null&select=id,grant_id,resource_id,username,date,start_time,end_time,full_day,status"),
           sb("projects?select=data"),
           sb("resources?select=id,sku_id"),
           sb("settings?key=eq.pricing&limit=1"),

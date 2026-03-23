@@ -120,10 +120,11 @@
       const tasks    = grant.details?.tasks    || [];
 
       const bookingLink = (date) => {
+        if (!date) return "booking.html";
         const d = new Date(date);
+        if (isNaN(d.getTime())) return "booking.html";
         d.setDate(d.getDate() - d.getDay());
-        const iso = d.toISOString().split("T")[0];
-        return `booking.html?date=${iso}`;
+        return `booking.html?date=${d.toISOString().split("T")[0]}`;
       };
 
       return (

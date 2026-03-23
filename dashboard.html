@@ -233,6 +233,14 @@
   let _allBookings = [], _resourceMap = {}, _skuMap = {}, _memberMap = {}, _grantMap = {};
   let _allProjects = [];
 
+  function bookingWeekLink(date) {
+    if (!date) return "booking.html";
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "booking.html";
+    d.setDate(d.getDate() - d.getDay());
+    return `booking.html?date=${d.toISOString().split("T")[0]}`;
+  }
+
   function bookingHours(b) {
     if (b.full_day) return 8;
     if (!b.start_time || !b.end_time) return 0;
@@ -301,6 +309,7 @@
               cost: parseFloat(item.line_total || 0),
               comment: item.comment || "",
               grant: grant?.code || "",
+              projectId: proj.id || null,
             });
           });
         });
@@ -359,7 +368,7 @@
             <tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
               <td class="py-2 pr-3 text-slate-700 font-medium max-w-[140px] truncate">${esc(r.resource)}${r.type === "order" ? `<span class="ml-1 text-[9px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>` : ""}${r.released ? `<span class="ml-1 text-[9px] bg-amber-100 text-amber-600 rounded-full px-1.5 py-0.5">released</span>` : ""}</td>
               <td class="py-2 pr-3 text-slate-600 max-w-[100px] truncate">${esc(r.user)}</td>
-              <td class="py-2 pr-3 text-slate-500">${esc(r.date)}</td>
+              <td class="py-2 pr-3 text-slate-500">${r.type === "order" && r.projectId ? `<a href="kanban.html?project=${encodeURIComponent(r.projectId)}" class="hover:text-blue-600 hover:underline">${esc(r.date)} ↗</a>` : r.date ? `<a href="${bookingWeekLink(r.date)}" class="hover:text-blue-600 hover:underline">${esc(r.date)} ↗</a>` : "—"}</td>
               <td class="py-2 pr-3 text-slate-500">${r.type === "order" ? `${r.hours} units` : `${r.hours % 1 === 0 ? r.hours : r.hours.toFixed(1)}h${r.full_day ? " (full)" : ""}`}</td>
               <td class="py-2 pr-3 text-slate-500">${r.grant ? `<span class="text-[10px] bg-violet-50 text-violet-600 border border-violet-200 rounded-full px-1.5 py-0.5">${esc(r.grant)}</span>` : "—"}</td>
               <td class="py-2 pr-3 text-slate-500">${r.rate > 0 ? r.rate.toFixed(2) : "—"}</td>
