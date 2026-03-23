@@ -980,7 +980,7 @@
         const check = () => setShowPillSearch(el.scrollHeight > 46);
         check();
         if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
-      }, [projects.length, showArchived]);
+      }, [projects.length, showArchived, scope]);
 
       if (!user)     return null; // redirecting
       if (loading)   return <div className="p-8 text-slate-500">Loading…</div>;
