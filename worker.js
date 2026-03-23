@@ -921,9 +921,13 @@ export default {
         const settingsRow = await sb("settings?key=eq.request-types&limit=1");
         const typeConfig  = settingsRow[0]?.value?.[type];
         if (!typeConfig) return errRes(ch, "Unknown request type", 400);
+        const countRows = await sb("requests?select=id");
+        const seqNum = (Array.isArray(countRows) ? countRows.length : 0) + 1;
+        const seqId = String(seqNum).padStart(6, "0");
+        const updatedMetadata = { ...(metadata || {}), request_id: seqId };
         const data = await sb("requests", "POST", {
           type, username: sessionUser.username, email: body.email || null,
-          status: "pending", metadata: metadata || {}, notes: notes || null,
+          status: "pending", metadata: updatedMetadata, notes: notes || null,
           grant_id: body.grant_id || null,
         });
         return json(Array.isArray(data) ? data[0] : data, 201);
