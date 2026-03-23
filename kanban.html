@@ -38,7 +38,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useLayoutEffect } = React;
     if (typeof marked !== 'undefined') marked.use({ gfm: true, breaks: false });
 
     const COLUMNS   = ["To Do", "In Progress", "Blocked", "Done"];
@@ -889,7 +889,10 @@
       const [grants,          setGrants]          = useState([]);
       const [showArchived,    setShowArchived]     = useState(false);
       const [archiveModal,    setArchiveModal]     = useState(null); // project object
-      const [sidebarOpen,     setSidebarOpen]      = useState(false);
+      const [listView,        setListView]        = useState(false);
+      const [projectSearch,   setProjectSearch]   = useState("");
+      const [showPillSearch,  setShowPillSearch]  = useState(false);
+      const pillsRef                              = useRef(null);
       const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
 
@@ -988,15 +991,23 @@
       const inProgress      = activeProjects.flatMap(p => (p.tasks || []).filter(t => t.col === "In Progress"));
       const blocked         = activeProjects.flatMap(p => (p.tasks || []).filter(t => t.col === "Blocked"));
 
+      const searchLower = projectSearch.trim().toLowerCase();
+      const filteredProjects = searchLower
+        ? visibleProjects.filter(p => p.name.toLowerCase().includes(searchLower))
+        : visibleProjects;
+
+      useLayoutEffect(() => {
+        const el = pillsRef.current; if (!el) return;
+        const check = () => setShowPillSearch(el.scrollHeight > 46);
+        check();
+        if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
+      }, [visibleProjects.length]);
+
       return (
         <div className="font-sans h-screen flex flex-col bg-slate-50">
           <Navbar user={user} />
           {/* Scope toggle + stats sub-bar */}
           <div className="bg-slate-800 border-b border-slate-900 px-3 sm:px-6 py-2 flex items-center gap-2 flex-wrap shrink-0">
-            {scope !== "mentioned" && (
-              <button onClick={() => setSidebarOpen(o => !o)}
-                className="md:hidden text-slate-400 hover:text-white bg-transparent border-none cursor-pointer font-sans text-lg leading-none px-1 shrink-0">☰</button>
-            )}
             <div className="bg-slate-900 rounded-lg p-1 flex gap-1">
               {[["mine","👤 Mine"], ["mentioned","@ Mentioned"], ...(isElevated ? [["group","👥 Group"]] : [])].map(([s, label]) => (
                 <button key={s} onClick={() => setScope(s)}
@@ -1007,98 +1018,132 @@
             </div>
             <span className="text-xs text-slate-500 hidden sm:inline">{activeProjects.length} projects · {inProgress.length} in progress · {blocked.length} blocked</span>
             <div className="ml-auto flex gap-1.5">
-              <button onClick={() => { setPanel(panel === "log" ? null : "log"); setSidebarOpen(false); }}
+              <button onClick={() => setPanel(panel === "log" ? null : "log")}
                 className={`text-xs px-3 py-1.5 rounded-lg border border-slate-600 cursor-pointer font-sans transition-colors ${panel === "log" ? "bg-blue-600 text-white border-blue-600" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}>📋 Log</button>
-              <button onClick={() => { setPanel(panel === "ai" ? null : "ai"); setSidebarOpen(false); }}
+              <button onClick={() => setPanel(panel === "ai" ? null : "ai")}
                 className={`text-xs px-3 py-1.5 rounded-lg border border-slate-600 cursor-pointer font-semibold font-sans transition-colors ${panel === "ai" ? "bg-blue-600 text-white border-blue-600" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}`}>🤖 AI</button>
             </div>
           </div>
 
-          <div className="flex flex-1 overflow-hidden relative">
-            {scope !== "mentioned" && (
-              <>
-              {sidebarOpen && (
-                <div className="fixed inset-0 z-30 bg-black/50 md:hidden" onClick={() => setSidebarOpen(false)} />
-              )}
-              <div className={`bg-slate-800 shrink-0 flex-col py-3 overflow-y-auto z-40
-                ${sidebarOpen ? "flex fixed inset-y-0 left-0 w-64 top-0" : "hidden md:flex md:w-56 md:relative"}`}>
-                <div className="md:hidden flex items-center justify-between px-3.5 pb-2 mb-1 border-b border-slate-700 shrink-0">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Projects</span>
-                  <button onClick={() => setSidebarOpen(false)} className="text-slate-400 hover:text-white bg-transparent border-none cursor-pointer font-sans text-lg leading-none">✕</button>
+          {/* Project pills header (hidden for "mentioned" scope) */}
+          {scope !== "mentioned" && (
+            <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 shrink-0">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Projects</h2>
                 </div>
-                {showArchived && (
-                  <div className="px-3.5 pb-2 border-b border-slate-700 mb-1">
-                    <span className="text-[10px] text-amber-400 font-semibold uppercase tracking-wide">Finalized</span>
-                  </div>
-                )}
-                {visibleProjects.map(p => (
-                  <div key={p.id} onClick={() => { setActive(p.id); setSidebarOpen(false); }}
-                    className={`px-3.5 py-2 cursor-pointer flex items-center justify-between gap-1.5 border-l-2 transition-colors group ${active === p.id ? "bg-slate-700 border-blue-400" : "border-transparent hover:bg-slate-700/50"}`}>
-                    <span className={`text-xs leading-snug flex-1 break-words line-clamp-2 ${active === p.id ? "text-slate-100 font-semibold" : showArchived ? "text-slate-500" : "text-slate-400 font-normal"}`}>{p.name}</span>
-                    <span className="text-[10px] text-slate-500 shrink-0">{(p.tasks||[]).filter(t=>t.col!=='Billed').length}</span>
-                    <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {(p.owner_username === user.username || user.role === "admin") && (
-                        showArchived
-                          ? <button onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} title="Reopen" className="text-[10px] text-amber-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-300 font-sans">reopen</button>
-                          : <button onClick={e => { e.stopPropagation(); setArchiveModal(p); }} title="Finalize" className="text-[10px] text-slate-400 bg-transparent border-none cursor-pointer px-0.5 hover:text-amber-400 font-sans">finalize</button>
-                      )}
+                <div className="flex items-center gap-2">
+                  {/* List view toggle */}
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500">
+                    <div onClick={() => setListView(s => !s)} className={`relative inline-block w-8 h-4 rounded-full transition-colors cursor-pointer ${listView ? "bg-blue-500" : "bg-slate-200"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${listView ? "translate-x-4" : ""}`} />
                     </div>
-                  </div>
-                ))}
-                {!showArchived && (
-                  <div className="px-3.5 py-2 mt-1">
-                    {addingProject
-                      ? <div>
-                          <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
-                            onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
-                            placeholder="Project name…" className="w-full text-xs px-1.5 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 outline-none font-sans" />
-                          <div className="flex gap-1 mt-1">
-                            <button onClick={addProject} className="text-xs px-2 py-0.5 rounded bg-blue-600 text-white border-none cursor-pointer font-sans">Add</button>
-                            <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="text-xs px-1.5 py-0.5 rounded bg-slate-700 text-slate-400 border-none cursor-pointer font-sans">✕</button>
-                          </div>
-                        </div>
-                      : <button onClick={() => setAddingProject(true)} className="text-xs text-blue-400 bg-transparent border-none cursor-pointer p-0 hover:text-blue-300 font-sans">+ New project</button>
-                    }
-                  </div>
-                )}
-                {archivedCount > 0 && (
-                  <div className="mt-auto px-3.5 pt-2 border-t border-slate-700">
-                    <button onClick={() => { setShowArchived(s => !s); setActive(null); setSidebarOpen(false); }}
-                      className="text-[10px] text-slate-500 hover:text-slate-300 bg-transparent border-none cursor-pointer p-0 font-sans w-full text-left">
-                      {showArchived ? "← Back to active" : `${archivedCount} finalized`}
+                    List view
+                  </label>
+                  {!showArchived && <button onClick={() => setAddingProject(true)} className="btn btn-xs btn-primary">+ New</button>}
+                  {archivedCount > 0 && (
+                    <button onClick={() => { setShowArchived(s => !s); setActive(null); }}
+                      className="text-[10px] text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer font-sans">
+                      {showArchived ? "← Active" : `${archivedCount} finalized`}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-              </>
-            )}
-
-            <div className="flex-1 p-3 sm:p-5 overflow-y-auto min-w-0">
-              {scope === "mentioned" ? (
-                <>
-                  <h2 className="mb-3.5 text-lg font-bold text-slate-900">
-                    Tasks mentioning you
-                    <span className="ml-2.5 text-sm font-normal text-slate-400">read-only</span>
-                  </h2>
-                  <MentionedBoard project={projects[0] || { tasks: [] }} currentUser={user} />
-                </>
-              ) : activeProject ? (
-                <>
-                  <div className="flex items-center justify-between mb-3.5">
-                    <h2 className="text-lg font-bold text-slate-900">{activeProject.name}</h2>
-                    {(activeProject.owner_username === user.username || user.role === "admin") && (
-                      <button onClick={() => setArchiveModal(activeProject)}
-                        className="text-xs px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 cursor-pointer font-sans transition-colors">
-                        Finalize project →
-                      </button>
+              {/* Pill row OR search box */}
+              {showPillSearch
+                ? <input autoFocus value={projectSearch} onChange={e => setProjectSearch(e.target.value)} placeholder="Search projects…" className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 mb-0.5" />
+                : <div ref={pillsRef} className="flex flex-wrap gap-2">
+                    {addingProject && (
+                      <div className="flex items-center gap-1">
+                        <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
+                          placeholder="Project name…" className="text-xs px-2 py-1 rounded-lg border border-blue-300 outline-none focus:ring-2 focus:ring-blue-400 font-sans w-36" />
+                        <button onClick={addProject} className="btn btn-xs btn-primary">Add</button>
+                        <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="btn btn-xs btn-secondary">✕</button>
+                      </div>
+                    )}
+                    {filteredProjects.map((p) => {
+                      const shortId = (p._id || p.id || "").slice(-6);
+                      const isActive = p.id === active;
+                      return (
+                        <button key={p.id} onClick={() => setActive(p.id)}
+                          className={`text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer flex items-center gap-1.5 ${isActive ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                          <span className="font-mono text-[10px] text-slate-400">#{shortId}</span>
+                          <span>{p.name}</span>
+                          {(p.owner_username === user.username || user.role === "admin") && !showArchived && (
+                            <span onClick={e => { e.stopPropagation(); setArchiveModal(p); }} className="text-[9px] text-slate-300 hover:text-amber-400 cursor-pointer ml-0.5" title="Finalize">●</span>
+                          )}
+                          {showArchived && (p.owner_username === user.username || user.role === "admin") && (
+                            <span onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} className="text-[9px] text-amber-400 hover:text-amber-600 cursor-pointer ml-0.5 font-sans" title="Reopen">↩</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                    {filteredProjects.length === 0 && !addingProject && (
+                      <span className="text-xs text-slate-400 self-center">{showArchived ? "No finalized projects." : "No projects yet."}</span>
                     )}
                   </div>
-                  <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} pricing={pricing} grants={grants} />
-                </>
-              ) : (
-                <div className="text-slate-400 mt-10 text-center">Select or create a project to get started</div>
-              )}
+              }
             </div>
+          )}
+
+          <div className="flex flex-1 overflow-hidden relative">
+            {listView && scope !== "mentioned" ? (
+              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+                <div className="space-y-2">
+                  {activeProjects.map(p => {
+                    const taskCounts = { "To Do": 0, "In Progress": 0, "Blocked": 0, "Done": 0, "Billed": 0 };
+                    (p.tasks || []).forEach(t => { if (taskCounts[t.col] !== undefined) taskCounts[t.col]++; });
+                    return (
+                      <div key={p.id} onClick={() => { setActive(p.id); setListView(false); }}
+                        className="bg-white border border-slate-200 rounded-xl px-4 py-3 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm font-semibold text-slate-800">{p.name}</span>
+                          <span className="text-[10px] text-slate-400">{p.owner_username}</span>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          {Object.entries(taskCounts).filter(([,n]) => n > 0).map(([col, n]) => (
+                            <span key={col} className={`text-[10px] rounded-full px-2 py-0.5 font-medium ${col === "Blocked" ? "bg-red-50 text-red-600" : col === "In Progress" ? "bg-blue-50 text-blue-600" : col === "Done" ? "bg-emerald-50 text-emerald-600" : col === "Billed" ? "bg-violet-50 text-violet-600" : "bg-slate-100 text-slate-500"}`}>
+                              {col} {n}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {activeProjects.length === 0 && (
+                    <div className="text-slate-400 text-center py-10">No active projects.</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 p-3 sm:p-5 overflow-y-auto min-w-0">
+                {scope === "mentioned" ? (
+                  <>
+                    <h2 className="mb-3.5 text-lg font-bold text-slate-900">
+                      Tasks mentioning you
+                      <span className="ml-2.5 text-sm font-normal text-slate-400">read-only</span>
+                    </h2>
+                    <MentionedBoard project={projects[0] || { tasks: [] }} currentUser={user} />
+                  </>
+                ) : activeProject ? (
+                  <>
+                    <div className="flex items-center justify-between mb-3.5">
+                      <h2 className="text-lg font-bold text-slate-900">{activeProject.name}</h2>
+                      {(activeProject.owner_username === user.username || user.role === "admin") && (
+                        <button onClick={() => setArchiveModal(activeProject)}
+                          className="text-xs px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 cursor-pointer font-sans transition-colors">
+                          Finalize project →
+                        </button>
+                      )}
+                    </div>
+                    <Board project={activeProject} onUpdate={updateProject} username={user.username} members={members} membersRef={membersRef} currentUser={user} pricing={pricing} grants={grants} />
+                  </>
+                ) : (
+                  <div className="text-slate-400 mt-10 text-center">Select or create a project to get started</div>
+                )}
+              </div>
+            )}
 
             {panel && (
               <div className="flex flex-col bg-white fixed inset-0 z-40 md:relative md:inset-auto md:z-auto md:w-80 md:shrink-0 md:border-l md:border-slate-200">

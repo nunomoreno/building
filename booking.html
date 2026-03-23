@@ -1381,17 +1381,22 @@
                 )}
               </div>
             </div>
-            {/* Domain filter pills */}
+            {/* Domain filter slide tabs */}
             {domains.length > 0 && resources.length > 0 && (
-              <div className="flex gap-1.5 flex-wrap mb-2.5">
+              <div className="flex items-center gap-2 mb-2.5 overflow-x-auto pb-0.5">
+                <span className="text-[11px] font-semibold text-slate-500 shrink-0">Domain</span>
                 <button onClick={() => setDomainFilter("all")}
-                  className={`text-xs px-3 py-1 rounded-full border transition font-medium cursor-pointer ${domainFilter === "all" ? "bg-slate-700 text-white border-slate-700" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                  className={`text-xs px-3 py-1.5 rounded-lg border-l-2 shrink-0 transition font-medium cursor-pointer ${domainFilter === "all" ? "bg-slate-100 border-slate-600 text-slate-700" : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50"}`}>
                   All
                 </button>
                 {domains.map(d => (
                   <button key={d.id} onClick={() => setDomainFilter(domainFilter === d.id ? "all" : d.id)}
-                    className={`text-xs px-3 py-1 rounded-full border transition font-medium cursor-pointer ${domainFilter === d.id ? "text-white border-transparent" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
-                    style={domainFilter === d.id ? { background: d.color || "#6366f1", borderColor: d.color || "#6366f1" } : {}}>
+                    className="text-xs px-3 py-1.5 rounded-lg border-l-2 shrink-0 transition font-medium cursor-pointer"
+                    style={{
+                      borderLeftColor: d.color || "#6366f1",
+                      background: domainFilter === d.id ? (d.color || "#6366f1") + "22" : "#fff",
+                      color: domainFilter === d.id ? (d.color || "#6366f1") : "#64748b",
+                    }}>
                     {d.name}
                   </button>
                 ))}
