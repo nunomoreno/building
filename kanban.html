@@ -977,7 +977,13 @@
       // ── Must be before any early returns (Rules of Hooks) ──────────────────
       useLayoutEffect(() => {
         const el = pillsRef.current; if (!el) return;
-        const check = () => setShowPillSearch(el.scrollHeight > 46);
+        const check = () => {
+          if (!el.isConnected) return;
+          const items = Array.from(el.children);
+          if (!items.length) { setShowPillSearch(false); return; }
+          const top0 = items[0].getBoundingClientRect().top;
+          setShowPillSearch(items.some(c => c.getBoundingClientRect().top > top0 + 4));
+        };
         check();
         if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
       }, [projects.length, showArchived, scope]);

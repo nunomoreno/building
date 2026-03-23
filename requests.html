@@ -390,7 +390,9 @@
 
     const TIER_LABELS = { internal: "Internal", cracs: "CRACs", academia: "Academia", industry: "Industry" };
 
-    const typeConfig = requestTypes?.[type];
+    const filteredTypeKeys = typeKeys.filter(k => domainFilter === "all" || (requestTypes[k]?.domain_id === domainFilter));
+    const effectiveType  = filteredTypeKeys.includes(type) ? type : "";
+    const typeConfig = requestTypes?.[effectiveType];
     const fields     = typeConfig?.fields || [];
     const isStore    = !!typeConfig?.is_store;
 
@@ -413,6 +415,7 @@
     };
 
     const submit = async () => {
+      if (!effectiveType) return;
       setError(null);
       if (isStore) {
         if (!storeItems.some(i => i.sku_id)) { setError("Please add at least one item."); return; }
@@ -429,7 +432,7 @@
       const baseMetadata = isStore
         ? { store_order: { items: validItems, total: validItems.reduce((s, i) => s + (i.line_total || 0), 0) } }
         : { ...meta };
-      const res = await api.submitRequest({ type, metadata: baseMetadata, notes, email: user.email || null, grant_id: grantId || null });
+      const res = await api.submitRequest({ type: effectiveType, metadata: baseMetadata, notes, email: user.email || null, grant_id: grantId || null });
       setSaving(false);
       if (res?.error) { setError(res.error); return; }
       setSuccess(true);
@@ -476,16 +479,14 @@
           </div>
         )}
         <div className="flex gap-2 flex-wrap mb-6">
-          {typeKeys
-            .filter(k => domainFilter === "all" || (requestTypes[k].domain_id === domainFilter))
-            .map(k => (
-              <button key={k} onClick={() => handleTypeChange(k)}
-                className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer ${type === k ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
-                {requestTypes[k].label}
-                {requestTypes[k].is_store && <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>}
-              </button>
-            ))}
-          {typeKeys.filter(k => domainFilter === "all" || (requestTypes[k].domain_id === domainFilter)).length === 0 && (
+          {filteredTypeKeys.map(k => (
+            <button key={k} onClick={() => handleTypeChange(k)}
+              className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer ${effectiveType === k ? "border-blue-500 bg-blue-50 text-blue-600 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+              {requestTypes[k].label}
+              {requestTypes[k].is_store && <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 rounded-full px-1.5 py-0.5">order</span>}
+            </button>
+          ))}
+          {filteredTypeKeys.length === 0 && (
             <span className="text-xs text-slate-400 self-center">No request types in this domain.</span>
           )}
         </div>
@@ -537,7 +538,7 @@
         {error   && <div className="flex items-center gap-2 mt-4 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5 text-sm text-red-600">⚠ {error}</div>}
         {success && <div className="flex items-center gap-2 mt-4 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-sm text-emerald-600">✅ Request submitted successfully!</div>}
 
-        <button onClick={submit} disabled={saving || success} className="btn btn-md btn-primary btn-block mt-5">
+        <button onClick={submit} disabled={saving || success || !effectiveType} className="btn btn-md btn-primary btn-block mt-5">
           {saving ? "Submitting…" : "Submit Request"}
         </button>
       </div>
