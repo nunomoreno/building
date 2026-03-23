@@ -1229,7 +1229,9 @@
       const [showAdmin,      setShowAdmin]      = useState(false);
       const [resourceSearch, setResourceSearch] = useState("");
       const [weekStart, setWeekStart] = useState(() => {
-        const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d;
+        const param = new URLSearchParams(location.search).get("date");
+        const d = param ? new Date(param) : new Date();
+        d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d;
       });
 
       const isAdmin          = user?.role === "admin";

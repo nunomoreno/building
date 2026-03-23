@@ -636,7 +636,7 @@ export default {
       try {
         const [grants, bookings, projects, resources, pricingRows] = await Promise.all([
           sb("grants?active=eq.true&order=code&select=id,code,name,funds,tier,members"),
-          sb("bookings?status=eq.approved&grant_id=not.is.null&select=grant_id,resource_id,start_time,end_time,full_day"),
+          sb("bookings?status=in.(pending,approved)&grant_id=not.is.null&select=grant_id,resource_id,start_time,end_time,full_day"),
           sb("projects?select=data"),
           sb("resources?select=id,sku_id"),
           sb("settings?key=eq.pricing&limit=1"),
@@ -647,15 +647,16 @@ export default {
         const resourceMap = Object.fromEntries((Array.isArray(resources) ? resources : []).map(r => [r.id, r]));
         const grantList   = Array.isArray(grants) ? grants : [];
 
-        // Accumulate spending per grant_id
-        const spent = {};
+        const spent   = {};
+        const details = {}; // grantId → { bookings: [], tasks: [] }
 
-        // From approved bookings (cost = hours × sku price at grant tier)
+        // From pending/approved bookings (cost = hours × sku price at grant tier)
         for (const b of (Array.isArray(bookings) ? bookings : [])) {
           if (!b.grant_id) continue;
           const grant = grantList.find(g => g.id === b.grant_id);
           if (!grant) continue;
-          const sku = skuMap[resourceMap[b.resource_id]?.sku_id];
+          const res = resourceMap[b.resource_id];
+          const sku = res?.sku_id ? skuMap[res.sku_id] : null;
           if (!sku) continue;
           const price = parseFloat(sku[grant.tier] || 0);
           let hours;
@@ -666,7 +667,18 @@ export default {
             const [eh, em] = (b.end_time   || "00:00").split(":").map(Number);
             hours = Math.max(0, ((eh * 60 + em) - (sh * 60 + sm)) / 60);
           }
-          spent[b.grant_id] = (spent[b.grant_id] || 0) + price * hours;
+          const cost = price * hours;
+          spent[b.grant_id] = (spent[b.grant_id] || 0) + cost;
+          if (!details[b.grant_id]) details[b.grant_id] = { bookings: [], tasks: [] };
+          details[b.grant_id].bookings.push({
+            id:            b.id,
+            date:          b.date,
+            username:      b.username,
+            resource_name: res?.name || b.resource_id,
+            hours,
+            cost:          Math.round(cost * 100) / 100,
+            status:        b.status,
+          });
         }
 
         // From finalized kanban tasks with a grant (exclude tasks marked exclude_from_financial)
@@ -675,13 +687,22 @@ export default {
             if (!t.finalized || t.exclude_from_financial) continue;
             const gid   = t.store_order?.grant_id;
             const total = t.store_order?.total || 0;
-            if (gid && total > 0) spent[gid] = (spent[gid] || 0) + total;
+            if (!gid || total <= 0) continue;
+            spent[gid] = (spent[gid] || 0) + total;
+            if (!details[gid]) details[gid] = { bookings: [], tasks: [] };
+            details[gid].tasks.push({
+              project_id:   proj.data?.id,
+              project_name: proj.data?.name,
+              task_title:   t.title,
+              total:        Math.round(total * 100) / 100,
+            });
           }
         }
 
         return json(grantList.map(g => ({
           ...g,
-          spent: Math.round((spent[g.id] || 0) * 100) / 100,
+          spent:   Math.round((spent[g.id] || 0) * 100) / 100,
+          details: details[g.id] || { bookings: [], tasks: [] },
         })));
       } catch (e) { return errRes(ch, e.message, 500); }
     }

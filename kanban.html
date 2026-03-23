@@ -913,7 +913,8 @@
           membersRef.current = memberList;
           setPricing(pricingRaw?.skus ? pricingRaw : { skus: [] });
           setGrants(Array.isArray(grantsRaw) ? grantsRaw : []);
-          setActive(a => a || p[0]?.id || null);
+          const urlProject = new URLSearchParams(location.search).get("project");
+          setActive(a => urlProject || a || p[0]?.id || null);
         } catch {
           setLoadError("Could not load data. Please refresh.");
         }

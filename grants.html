@@ -114,6 +114,84 @@
       );
     }
 
+    // ── Spending details modal ───────────────────────────────────────────────
+    function DetailsModal({ grant, onClose }) {
+      const bookings = grant.details?.bookings || [];
+      const tasks    = grant.details?.tasks    || [];
+
+      const bookingLink = (date) => {
+        const d = new Date(date);
+        d.setDate(d.getDate() - d.getDay());
+        const iso = d.toISOString().split("T")[0];
+        return `booking.html?date=${iso}`;
+      };
+
+      return (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 pt-20" onClick={onClose}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[70vh]" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">Spending breakdown</div>
+                <div className="text-xs text-slate-400 mt-0.5">{grant.code} — {grant.name}</div>
+              </div>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer text-xl leading-none font-sans">×</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4">
+              {bookings.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Bookings</div>
+                  <div className="space-y-1">
+                    {bookings.map((b, i) => (
+                      <a key={i} href={bookingLink(b.date)} target="_blank"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 no-underline group">
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-700 truncate group-hover:text-blue-700">
+                            {b.resource_name}
+                            <span className={`ml-1.5 text-[9px] rounded-full px-1.5 py-0.5 ${b.status === "approved" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{b.status}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-400">{b.date} · {b.username} · {b.hours.toFixed(1)}h</div>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-700 ml-3 flex-shrink-0">
+                          €{b.cost.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})}
+                          <span className="ml-1 text-[10px] text-blue-400 group-hover:text-blue-600">↗</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tasks.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Billed tasks</div>
+                  <div className="space-y-1">
+                    {tasks.map((t, i) => (
+                      <a key={i} href={`kanban.html?project=${encodeURIComponent(t.project_id)}`} target="_blank"
+                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 hover:bg-blue-50 no-underline group">
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-slate-700 truncate group-hover:text-blue-700">{t.task_title}</div>
+                          <div className="text-[10px] text-slate-400">{t.project_name}</div>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-700 ml-3 flex-shrink-0">
+                          €{t.total.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})}
+                          <span className="ml-1 text-[10px] text-blue-400 group-hover:text-blue-600">↗</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {bookings.length === 0 && tasks.length === 0 && (
+                <div className="text-center text-sm text-slate-400 py-6">No spending details available.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function App() {
       const [grants,       setGrants]       = useState([]);
       const [newRows,      setNewRows]      = useState([]);
@@ -123,6 +201,7 @@
       const [msg,          setMsg]          = useState(null);
       const [menuOpen,     setMenuOpen]     = useState(false);
       const [modal,        setModal]        = useState(null); // { type: "existing"|"new", id, code }
+      const [detailsModal, setDetailsModal] = useState(null); // grant object
 
       useEffect(() => {
         if (!menuOpen) return;
@@ -208,6 +287,9 @@
 
       return (
         <div className="min-h-screen bg-slate-50">
+          {detailsModal && (
+            <DetailsModal grant={detailsModal} onClose={() => setDetailsModal(null)} />
+          )}
           {modal && (
             <MemberModal
               title={modal.code || "New grant"}
@@ -302,7 +384,9 @@
                                   <span className={overBudget ? "text-red-600 font-semibold" : "text-slate-500"}>
                                     {overBudget ? "Over budget!" : `€${remaining.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})} left`}
                                   </span>
-                                  <span className="text-slate-400">€{spent.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})} spent</span>
+                                  <button onClick={() => setDetailsModal(g)} className="text-slate-400 hover:text-blue-600 hover:underline bg-transparent border-none cursor-pointer font-sans p-0 text-[10px]">
+                                    €{spent.toLocaleString("en", {minimumFractionDigits:2,maximumFractionDigits:2})} spent ↗
+                                  </button>
                                 </div>
                                 <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                                   <div className="h-full rounded-full transition-all"
