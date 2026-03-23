@@ -174,7 +174,8 @@
       <div style="border-top:1px solid #334155"></div>
       <a href="users.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
       <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>
-      <a href="grants.html"  class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🏛 Grants</a>` : "";
+      <a href="grants.html"  class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🏛 Grants</a>
+      <a href="domains.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🗂 Domains</a>` : "";
     document.getElementById("navbar").innerHTML = `
       <div style="background:#0f172a;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <a href="dashboard.html" style="font-size:15px;font-weight:700;color:#fff;text-decoration:none">⚙️ Kerno</a>
@@ -454,23 +455,18 @@
     const btn = document.getElementById("save-security");
     btn.disabled = true; btn.textContent = "Updating…";
 
-    const loginRes = await fetch(`${WORKER}/login`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: session.username, password: current }),
-    }).then(r => r.json());
-
-    if (loginRes.error) {
-      btn.disabled = false; btn.textContent = "Update Password";
-      return showMsg("msg-security", "Current password is incorrect.", true);
-    }
-
+    // Verify current password by hashing it and checking against the stored hash.
+    // We do NOT call /login (which would rotate the session token and invalidate
+    // the current session). Instead, hash the current password and send it along
+    // with the new password so the worker can verify and update atomically.
+    const currentHash = await sha256(current);
     const updateRes = await fetch(`${WORKER}/members/${window._profileId}`, {
       method: "PUT", headers: authHeaders(),
-      body: JSON.stringify({ password: newPwd }),
+      body: JSON.stringify({ password: newPwd, current_password_hash: currentHash }),
     }).then(r => r.json());
 
     btn.disabled = false; btn.textContent = "Update Password";
-    if (updateRes.error) return showMsg("msg-security", "Failed to update password: " + updateRes.error, true);
+    if (updateRes.error) return showMsg("msg-security", updateRes.error, true);
     showMsg("msg-security", "Password updated successfully!", false);
     document.getElementById("current-pwd").value = "";
     document.getElementById("new-pwd").value     = "";

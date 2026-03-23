@@ -341,6 +341,15 @@ export default {
         // Strip role change unless admin
         if (body.role && sessionUser.role !== "admin") delete body.role;
 
+        // If the client sent current_password_hash for self-service password change,
+        // verify the current password before allowing the update.
+        if (body.current_password_hash) {
+          const verify = await sb(`members?id=eq.${id}&password=eq.${encodeURIComponent(body.current_password_hash)}&select=id&limit=1`);
+          if (!Array.isArray(verify) || !verify.length)
+            return errRes(ch, "Current password is incorrect.", 403, "FORBIDDEN");
+          delete body.current_password_hash;
+        }
+
         // Always hash password server-side regardless of what the client sent.
         // This covers both the admin reset (users.html sends plaintext) and
         // the profile page (profile.html sends a pre-hashed value — we
@@ -1074,6 +1083,60 @@ export default {
           body: JSON.stringify(body),
         });
         return json(await res.json());
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── GET /domains ─────────────────────────────────────────────────────────
+    if (path === "/domains" && method === "GET") {
+      try {
+        const data = await sb("settings?key=eq.domains&limit=1");
+        return json(data[0]?.value || []);
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── POST /domains ─────────────────────────────────────────────────────────
+    if (path === "/domains" && method === "POST") {
+      try {
+        if (sessionUser?.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const { name, color } = await request.json();
+        if (!name?.trim()) return errRes(ch, "name is required", 400);
+        const existing = await sb("settings?key=eq.domains&limit=1");
+        const domains  = Array.isArray(existing[0]?.value) ? existing[0].value : [];
+        const newDomain = { id: crypto.randomUUID(), name: name.trim(), color: color || "#6366f1" };
+        const updated  = [...domains, newDomain];
+        if (existing.length) {
+          await sb("settings?key=eq.domains", "PATCH", { value: updated, updated_at: new Date().toISOString() });
+        } else {
+          await sb("settings", "POST", { key: "domains", value: updated });
+        }
+        return json(newDomain, 201);
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── PUT /domains/:id ──────────────────────────────────────────────────────
+    if (path.match(/^\/domains\/[^/]+$/) && method === "PUT") {
+      try {
+        if (sessionUser?.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const id   = path.split("/").pop();
+        const body = await request.json();
+        const existing = await sb("settings?key=eq.domains&limit=1");
+        const domains  = Array.isArray(existing[0]?.value) ? existing[0].value : [];
+        const updated  = domains.map(d => d.id === id ? { ...d, ...body, id } : d);
+        await sb("settings?key=eq.domains", "PATCH", { value: updated, updated_at: new Date().toISOString() });
+        return json({ success: true });
+      } catch (e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── DELETE /domains/:id ───────────────────────────────────────────────────
+    if (path.match(/^\/domains\/[^/]+$/) && method === "DELETE") {
+      try {
+        if (sessionUser?.role !== "admin") return errRes(ch, "Forbidden", 403, "FORBIDDEN");
+        const id   = path.split("/").pop();
+        const existing = await sb("settings?key=eq.domains&limit=1");
+        const domains  = Array.isArray(existing[0]?.value) ? existing[0].value : [];
+        const updated  = domains.filter(d => d.id !== id);
+        await sb("settings?key=eq.domains", "PATCH", { value: updated, updated_at: new Date().toISOString() });
+        return json({ success: true });
       } catch (e) { return errRes(ch, e.message, 500); }
     }
 

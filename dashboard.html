@@ -62,12 +62,12 @@
     </div>
     <div class="bg-white border border-slate-200 rounded-2xl px-6 py-5">
       <div id="stat-members" class="text-3xl font-bold text-emerald-600 leading-none mb-1">—</div>
-      <div class="text-sm text-slate-500">Team members</div>
+      <div id="stat-members-label" class="text-sm text-slate-500">Team members</div>
       <div id="stat-members-sub" class="text-xs text-slate-400 mt-0.5"></div>
     </div>
     <div class="bg-white border border-slate-200 rounded-2xl px-6 py-5">
       <div id="stat-requests" class="text-3xl font-bold text-slate-600 leading-none mb-1">—</div>
-      <div class="text-sm text-slate-500">Total requests</div>
+      <div id="stat-requests-label" class="text-sm text-slate-500">My Requests</div>
       <div id="stat-requests-sub" class="text-xs text-slate-400 mt-0.5"></div>
     </div>
   </div>
@@ -147,7 +147,8 @@
   // ── Greeting ───────────────────────────────────────────────────────────────
   const hour  = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  document.getElementById("greeting").textContent     = `${greet}, ${username} 👋`;
+  const displayName = session.display_name || username;
+  document.getElementById("greeting").textContent     = `${greet}, ${displayName} 👋`;
   document.getElementById("greeting-sub").textContent = "Here's what's happening at the platforms today.";
 
   // ── Navbar ─────────────────────────────────────────────────────────────────
@@ -163,7 +164,8 @@
       <div style="border-top:1px solid #334155"></div>
       <a href="users.html"   class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">👥 Users & Groups</a>
       <a href="pricing.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">💰 Pricing</a>
-      <a href="grants.html"  class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🏛 Grants</a>` : "";
+      <a href="grants.html"  class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🏛 Grants</a>
+      <a href="domains.html" class="flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">🗂 Domains</a>` : "";
     const mobileDrop = `
       <div style="border-top:1px solid #334155" class="sm:hidden"></div>
       <a href="kanban.html"   class="sm:hidden flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700 hover:text-white no-underline transition-colors">📋 Kanban</a>
@@ -479,39 +481,62 @@
     document.getElementById("expense-csv").addEventListener("click", downloadCSV);
     renderExpenses();
 
-    const pendingReqs = requestList.filter(r => r.status === "pending");
-    const adminCount  = memberList.filter(m => m.role === "admin").length;
+    const myRequests   = requestList.filter(r => r.username === username);
+    const pendingReqs  = requestList.filter(r => r.status === "pending");
+    const adminCount   = memberList.filter(m => m.role === "admin").length;
+
+    // Determine team members to show: admin sees all, others see their group
+    let teamMembers = memberList;
+    if (role !== "admin" && group_id) {
+      teamMembers = memberList.filter(m => m.group_id === group_id);
+    }
 
     // Stats
     document.getElementById("stat-projects").textContent    = projectList.length;
-    document.getElementById("stat-members").textContent     = memberList.length;
-    document.getElementById("stat-members-sub").textContent = `${adminCount} admin${adminCount !== 1 ? "s" : ""}`;
-    document.getElementById("stat-requests").textContent    = requestList.length;
-    if (pendingReqs.length) {
+    if (role === "admin") {
+      document.getElementById("stat-members").textContent     = memberList.length;
+      document.getElementById("stat-members-label").textContent = "Team members";
+      document.getElementById("stat-members-sub").textContent = `${adminCount} admin${adminCount !== 1 ? "s" : ""}`;
+    } else {
+      document.getElementById("stat-members").textContent     = teamMembers.length;
+      document.getElementById("stat-members-label").textContent = "Group members";
+      document.getElementById("stat-members-sub").textContent = group_id ? "" : "No group assigned";
+    }
+    document.getElementById("stat-requests").textContent    = myRequests.length;
+    if (pendingReqs.length && role === "admin") {
       const sub = document.getElementById("stat-requests-sub");
       sub.textContent = `${pendingReqs.length} pending approval`;
       sub.className = "text-xs text-amber-600 mt-0.5 font-medium";
     }
 
+    // Determine role label for non-admin team members
+    function memberRoleLabel(m) {
+      if (m.role === "admin") return "Admin";
+      if (m.group_role === "leader") return "PI";
+      if (m.group_role === "manager") return "Lab Manager";
+      return "Member";
+    }
+
     // Team panel
     const membersEl = document.getElementById("panel-members");
-    membersEl.innerHTML = memberList.length
-      ? memberList.map(m => `
+    membersEl.innerHTML = teamMembers.length
+      ? teamMembers.map(m => `
           <div class="flex items-center gap-3 py-2.5 border-b border-slate-50 last:border-0">
             <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
-              ${esc(m.username[0].toUpperCase())}
+              ${esc((m.display_name || m.username)[0].toUpperCase())}
             </div>
             <div class="min-w-0">
-              <div class="text-sm font-semibold text-slate-800 truncate">${esc(m.username)}</div>
-              <div class="text-xs text-slate-400 truncate">${m.role === "admin" ? "Admin" : "User"}${m.email ? ` · ${esc(m.email)}` : ""}</div>
+              <div class="text-sm font-semibold text-slate-800 truncate">${esc(m.display_name || m.username)}</div>
+              <div class="text-xs text-slate-400 truncate">${memberRoleLabel(m)}${m.email ? ` · ${esc(m.email)}` : ""}</div>
             </div>
           </div>`).join("")
       : `<p class="text-xs text-slate-400 py-2">No team members yet.</p>`;
 
-    // Requests panel
+    // Requests panel — show my requests for non-admins, all for admins
+    const panelRequests = role === "admin" ? requestList : myRequests;
     const requestsEl = document.getElementById("panel-requests");
-    requestsEl.innerHTML = requestList.length
-      ? requestList.slice(0, 8).map(r => `
+    requestsEl.innerHTML = panelRequests.length
+      ? panelRequests.slice(0, 8).map(r => `
           <div class="flex items-center justify-between py-2.5 border-b border-slate-50 last:border-0 gap-3">
             <div class="min-w-0">
               <div class="text-sm font-semibold text-slate-800 truncate">${esc(r.type.charAt(0).toUpperCase() + r.type.slice(1))} — ${esc(r.username)}</div>

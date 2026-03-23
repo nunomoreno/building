@@ -289,6 +289,7 @@
                   {isAdmin && <a href="users.html"   className={drop}>👥 Users & Groups</a>}
                   {isAdmin && <a href="pricing.html" className={drop}>💰 Pricing</a>}
                   {isAdmin && <a href="grants.html"  className={drop}>🏛 Grants</a>}
+                  {isAdmin && <a href="domains.html" className={drop}>🗂 Domains</a>}
                 </div>
               )}
             </div>
@@ -637,10 +638,11 @@
     }
 
     // ── Admin Panel ──────────────────────────────────────────────────────────
-    function AdminPanel({resources, members, pricing, onUpdate, onClose, isGlobalAdmin, myAdminResources}) {
+    function AdminPanel({resources, members, pricing, onUpdate, onClose, isGlobalAdmin, myAdminResources, domains, resourceDomains: initResDomains}) {
       const visibleResources = isGlobalAdmin ? resources : myAdminResources;
       const [tab,          setTab]           = useState(isGlobalAdmin ? "resources" : "permissions");
       const [editRes,      setEditRes]       = useState(null);
+      const [editResDomain,setEditResDomain] = useState(""); // domain_id for the resource being edited
       const [allFields,    setAllFields]     = useState({});
       const [saving,       setSaving]        = useState(false);
       const [selectedResId,setSelectedResId] = useState(null);
@@ -654,7 +656,18 @@
 
       const saveResource = async () => {
         if(!editRes?.name?.trim()) return;
-        setSaving(true); await api.saveResource(editRes); setSaving(false); setEditRes(null); onUpdate();
+        setSaving(true);
+        const saved = await api.saveResource(editRes);
+        // Update resource-domains setting
+        const resId = editRes.id || (saved?.id || null);
+        if (resId) {
+          const currentMap = initResDomains || {};
+          const newMap = { ...currentMap };
+          if (editResDomain) newMap[resId] = editResDomain;
+          else delete newMap[resId];
+          await api.saveSettings("resource-domains", newMap);
+        }
+        setSaving(false); setEditRes(null); setEditResDomain(""); onUpdate();
       };
       const saveFields = async () => {
         setSaving(true); await api.saveSettings("booking-fields", allFields); setSaving(false); onUpdate();
@@ -696,7 +709,7 @@
                 <div>
                   <div className="flex justify-between items-center mb-3">
                     <div className="text-[13px] font-semibold text-slate-800">Resources</div>
-                    <button onClick={()=>setEditRes({name:"",description:"",booking_type:"both",slot_duration:30,approval_required:false})}
+                    <button onClick={()=>{ setEditRes({name:"",description:"",booking_type:"both",slot_duration:30,approval_required:false}); setEditResDomain(""); }}
                       className="btn btn-xs btn-primary">+ Add</button>
                   </div>
                   {editRes&&(
@@ -738,9 +751,18 @@
                         <option value="">— No pricing —</option>
                         {(pricing?.skus||[]).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
+                      {(domains||[]).length > 0 && (
+                        <>
+                          <label className={labelCls}>DOMAIN</label>
+                          <select value={editResDomain} onChange={e=>setEditResDomain(e.target.value)} className={inputCls}>
+                            <option value="">— None —</option>
+                            {(domains||[]).map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+                          </select>
+                        </>
+                      )}
                       <div className="flex gap-2">
                         <button onClick={saveResource} disabled={saving} className="btn btn-sm btn-primary">Save</button>
-                        <button onClick={()=>setEditRes(null)} className="btn btn-sm btn-secondary">Cancel</button>
+                        <button onClick={()=>{ setEditRes(null); setEditResDomain(""); }} className="btn btn-sm btn-secondary">Cancel</button>
                       </div>
                     </div>
                   )}
@@ -751,7 +773,7 @@
                         <span className="text-[11px] text-slate-400 ml-2">{r.booking_type} · {SLOT_DURATIONS.find(d=>d.value===(r.slot_duration??30))?.label||"30 min"} · {r.approval_required?"approval":"auto"} · admin: {r.admin_username||"—"}</span>
                       </div>
                       <div className="flex gap-1.5">
-                        <button onClick={()=>setEditRes(r)} className="btn btn-xs btn-secondary">Edit</button>
+                        <button onClick={()=>{ setEditRes(r); setEditResDomain((initResDomains||{})[r.id]||""); }} className="btn btn-xs btn-secondary">Edit</button>
                         <button onClick={()=>{if(confirm(`Delete "${r.name}"?`)){api.deleteResource(r.id);onUpdate();}}}
                           className="btn btn-xs btn-danger">Delete</button>
                       </div>
@@ -1228,6 +1250,9 @@
       const [loadError,      setLoadError]      = useState(null);
       const [showAdmin,      setShowAdmin]      = useState(false);
       const [resourceSearch, setResourceSearch] = useState("");
+      const [domains,        setDomains]        = useState([]);
+      const [resourceDomains,setResourceDomains]= useState({}); // { [resource_id]: domain_id }
+      const [domainFilter,   setDomainFilter]   = useState("all");
       const [weekStart, setWeekStart] = useState(() => {
         const param = new URLSearchParams(location.search).get("date");
         const d = param ? new Date(param) : new Date();
@@ -1253,9 +1278,11 @@
       const loadBase = async () => {
         setLoadError(null);
         try {
-          const [r, m, f, p, g, b] = await Promise.all([
+          const [r, m, f, p, g, b, dom, resDom] = await Promise.all([
             api.getResources(), api.getMembers(), api.getSettings("booking-fields"),
             api.getSettings("pricing"), api.getGrants(), api.getBookings(),
+            safeFetch(`${WORKER}/domains`, { headers: authHeaders() }),
+            api.getSettings("resource-domains"),
           ]);
           const resList = Array.isArray(r) ? r : [];
           const bList   = Array.isArray(b) ? b : [];
@@ -1266,6 +1293,8 @@
           setPricing(p && Array.isArray(p.skus) ? p : { skus: [] });
           const allGrants = Array.isArray(g) ? g : [];
           setGrants(user?.role === "admin" ? allGrants : allGrants.filter(gr => (gr.members||[]).includes(user?.username)));
+          setDomains(Array.isArray(dom) ? dom : []);
+          setResourceDomains(resDom && typeof resDom === "object" && !Array.isArray(resDom) ? resDom : {});
           setSelectedResIds(prev => {
             const valid = prev.filter(id => resList.some(r => r.id === id));
             return valid.length > 0 ? valid : resList.length > 0 ? [resList[0].id] : [];
@@ -1292,14 +1321,18 @@
         </div>
       );
 
-      // Usage-sorted + search-filtered resource list
+      // Usage-sorted + search-filtered + domain-filtered resource list
       const usageCount  = allBookings.reduce((acc, b) => { acc[b.resource_id] = (acc[b.resource_id]||0)+1; return acc; }, {});
       const sortedRes   = [...resources].sort((a, b) => (usageCount[b.id]||0) - (usageCount[a.id]||0));
       const searchLower = resourceSearch.trim().toLowerCase();
+      // Apply domain filter first
+      const domainFilteredRes = domainFilter === "all"
+        ? sortedRes
+        : sortedRes.filter(r => resourceDomains[r.id] === domainFilter);
       const filteredRes = searchLower
-        ? sortedRes.filter(r => r.name.toLowerCase().includes(searchLower) || (r.description||"").toLowerCase().includes(searchLower))
-        : sortedRes.slice(0, 20);
-      const hasMore = !searchLower && sortedRes.length > 20;
+        ? domainFilteredRes.filter(r => r.name.toLowerCase().includes(searchLower) || (r.description||"").toLowerCase().includes(searchLower))
+        : domainFilteredRes.slice(0, 20);
+      const hasMore = !searchLower && domainFilteredRes.length > 20;
 
       const selectedResources = resources.filter(r => selectedResIds.includes(r.id));
       const compareMode       = selectedResIds.length > 1;
@@ -1312,7 +1345,8 @@
             <AdminPanel resources={resources} members={members} pricing={pricing}
               onUpdate={() => { loadBase(); }}
               onClose={() => setShowAdmin(false)}
-              isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}/>
+              isGlobalAdmin={isAdmin} myAdminResources={myAdminResources}
+              domains={domains} resourceDomains={resourceDomains}/>
           )}
 
           <Navbar user={user} />
@@ -1347,6 +1381,22 @@
                 )}
               </div>
             </div>
+            {/* Domain filter pills */}
+            {domains.length > 0 && resources.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap mb-2.5">
+                <button onClick={() => setDomainFilter("all")}
+                  className={`text-xs px-3 py-1 rounded-full border transition font-medium cursor-pointer ${domainFilter === "all" ? "bg-slate-700 text-white border-slate-700" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                  All
+                </button>
+                {domains.map(d => (
+                  <button key={d.id} onClick={() => setDomainFilter(domainFilter === d.id ? "all" : d.id)}
+                    className={`text-xs px-3 py-1 rounded-full border transition font-medium cursor-pointer ${domainFilter === d.id ? "text-white border-transparent" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                    style={domainFilter === d.id ? { background: d.color || "#6366f1", borderColor: d.color || "#6366f1" } : {}}>
+                    {d.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {resources.length === 0
               ? <div className="text-sm text-slate-400">
                   {isAdmin
