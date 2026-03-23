@@ -974,6 +974,14 @@
         api.log(user.username, "unarchive_project", `Unarchived project "${p.name}"`);
       };
 
+      // ── Must be before any early returns (Rules of Hooks) ──────────────────
+      useLayoutEffect(() => {
+        const el = pillsRef.current; if (!el) return;
+        const check = () => setShowPillSearch(el.scrollHeight > 46);
+        check();
+        if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
+      }, [projects.length, showArchived]);
+
       if (!user)     return null; // redirecting
       if (loading)   return <div className="p-8 text-slate-500">Loading…</div>;
       if (loadError) return (
@@ -995,13 +1003,6 @@
       const filteredProjects = searchLower
         ? visibleProjects.filter(p => p.name.toLowerCase().includes(searchLower))
         : visibleProjects;
-
-      useLayoutEffect(() => {
-        const el = pillsRef.current; if (!el) return;
-        const check = () => setShowPillSearch(el.scrollHeight > 46);
-        check();
-        if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
-      }, [visibleProjects.length]);
 
       return (
         <div className="font-sans h-screen flex flex-col bg-slate-50">

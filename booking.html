@@ -1381,24 +1381,18 @@
                 )}
               </div>
             </div>
-            {/* Domain filter slide tabs */}
+            {/* Domain filter — small toggles on the right */}
             {domains.length > 0 && resources.length > 0 && (
-              <div className="flex items-center gap-2 mb-2.5 overflow-x-auto pb-0.5">
-                <span className="text-[11px] font-semibold text-slate-500 shrink-0">Domain</span>
-                <button onClick={() => setDomainFilter("all")}
-                  className={`text-xs px-3 py-1.5 rounded-lg border-l-2 shrink-0 transition font-medium cursor-pointer ${domainFilter === "all" ? "bg-slate-100 border-slate-600 text-slate-700" : "bg-white border-slate-200 text-slate-400 hover:bg-slate-50"}`}>
-                  All
-                </button>
+              <div className="flex items-center gap-3 mb-2.5 flex-wrap justify-end">
                 {domains.map(d => (
-                  <button key={d.id} onClick={() => setDomainFilter(domainFilter === d.id ? "all" : d.id)}
-                    className="text-xs px-3 py-1.5 rounded-lg border-l-2 shrink-0 transition font-medium cursor-pointer"
-                    style={{
-                      borderLeftColor: d.color || "#6366f1",
-                      background: domainFilter === d.id ? (d.color || "#6366f1") + "22" : "#fff",
-                      color: domainFilter === d.id ? (d.color || "#6366f1") : "#64748b",
-                    }}>
-                    {d.name}
-                  </button>
+                  <label key={d.id} className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500">
+                    <div onClick={() => setDomainFilter(domainFilter === d.id ? "all" : d.id)}
+                      className="relative inline-block w-7 h-3.5 rounded-full transition-colors cursor-pointer"
+                      style={{ background: domainFilter === d.id ? (d.color || "#6366f1") : "#e2e8f0" }}>
+                      <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${domainFilter === d.id ? "translate-x-3" : ""}`} />
+                    </div>
+                    <span style={{ color: domainFilter === d.id ? (d.color || "#6366f1") : undefined }}>{d.name}</span>
+                  </label>
                 ))}
               </div>
             )}
