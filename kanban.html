@@ -892,6 +892,7 @@
       const [listView,        setListView]        = useState(false);
       const [projectSearch,   setProjectSearch]   = useState("");
       const [showPillSearch,  setShowPillSearch]  = useState(false);
+      const [hiddenCount,     setHiddenCount]     = useState(0);
       const pillsRef                              = useRef(null);
       const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
@@ -980,9 +981,9 @@
         const check = () => {
           if (!el.isConnected) return;
           const items = Array.from(el.children);
-          if (!items.length) { setShowPillSearch(false); return; }
-          const top0 = items[0].getBoundingClientRect().top;
-          setShowPillSearch(items.some(c => c.getBoundingClientRect().top > top0 + 4));
+          if (!items.length) { setHiddenCount(0); return; }
+          const right = el.getBoundingClientRect().right;
+          setHiddenCount(items.filter(c => c.getBoundingClientRect().right > right + 4).length);
         };
         check();
         if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
@@ -1058,36 +1059,46 @@
               </div>
               {/* Pill row OR search box */}
               {showPillSearch
-                ? <input autoFocus value={projectSearch} onChange={e => setProjectSearch(e.target.value)} placeholder="Search projects…" className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 mb-0.5" />
-                : <div ref={pillsRef} className="flex flex-wrap gap-2">
-                    {addingProject && (
-                      <div className="flex items-center gap-1">
-                        <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
-                          placeholder="Project name…" className="text-xs px-2 py-1 rounded-lg border border-blue-300 outline-none focus:ring-2 focus:ring-blue-400 font-sans w-36" />
-                        <button onClick={addProject} className="btn btn-xs btn-primary">Add</button>
-                        <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="btn btn-xs btn-secondary">✕</button>
-                      </div>
-                    )}
-                    {filteredProjects.map((p) => {
-                      const shortId = (p._id || p.id || "").slice(-6);
-                      const isActive = p.id === active;
-                      return (
-                        <button key={p.id} onClick={() => setActive(p.id)}
-                          className={`text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer flex items-center gap-1.5 ${isActive ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
-                          <span className="font-mono text-[10px] text-slate-400">#{shortId}</span>
-                          <span>{p.name}</span>
-                          {(p.owner_username === user.username || user.role === "admin") && !showArchived && (
-                            <span onClick={e => { e.stopPropagation(); setArchiveModal(p); }} className="text-[9px] text-slate-300 hover:text-amber-400 cursor-pointer ml-0.5" title="Finalize">●</span>
-                          )}
-                          {showArchived && (p.owner_username === user.username || user.role === "admin") && (
-                            <span onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} className="text-[9px] text-amber-400 hover:text-amber-600 cursor-pointer ml-0.5 font-sans" title="Reopen">↩</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                    {filteredProjects.length === 0 && !addingProject && (
-                      <span className="text-xs text-slate-400 self-center">{showArchived ? "No finalized projects." : "No projects yet."}</span>
+                ? <input autoFocus value={projectSearch} onChange={e => setProjectSearch(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Escape") { setShowPillSearch(false); setProjectSearch(""); } }}
+                    placeholder="Search projects…" className="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 mb-0.5" />
+                : <div className="flex items-center gap-2">
+                    <div ref={pillsRef} className="flex gap-2 overflow-hidden flex-1 min-w-0">
+                      {addingProject && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
+                            placeholder="Project name…" className="text-xs px-2 py-1 rounded-lg border border-blue-300 outline-none focus:ring-2 focus:ring-blue-400 font-sans w-36" />
+                          <button onClick={addProject} className="btn btn-xs btn-primary">Add</button>
+                          <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="btn btn-xs btn-secondary">✕</button>
+                        </div>
+                      )}
+                      {filteredProjects.map((p) => {
+                        const shortId = (p._id || p.id || "").slice(-6);
+                        const isActive = p.id === active;
+                        return (
+                          <button key={p.id} onClick={() => setActive(p.id)}
+                            className={`shrink-0 text-xs px-3.5 py-1.5 rounded-full border transition font-medium cursor-pointer flex items-center gap-1.5 ${isActive ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold" : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}>
+                            <span className="font-mono text-[10px] text-slate-400">#{shortId}</span>
+                            <span>{p.name}</span>
+                            {(p.owner_username === user.username || user.role === "admin") && !showArchived && (
+                              <span onClick={e => { e.stopPropagation(); setArchiveModal(p); }} className="text-[9px] text-slate-300 hover:text-amber-400 cursor-pointer ml-0.5" title="Finalize">●</span>
+                            )}
+                            {showArchived && (p.owner_username === user.username || user.role === "admin") && (
+                              <span onClick={e => { e.stopPropagation(); unarchiveProject(p.id); }} className="text-[9px] text-amber-400 hover:text-amber-600 cursor-pointer ml-0.5 font-sans" title="Reopen">↩</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      {filteredProjects.length === 0 && !addingProject && (
+                        <span className="text-xs text-slate-400 self-center">{showArchived ? "No finalized projects." : "No projects yet."}</span>
+                      )}
+                    </div>
+                    {hiddenCount > 0 && (
+                      <button onClick={() => setShowPillSearch(true)}
+                        className="shrink-0 text-xs text-slate-500 hover:text-blue-600 bg-transparent border border-slate-200 rounded-full px-2.5 py-1 cursor-pointer font-sans whitespace-nowrap hover:border-blue-300 transition">
+                        +{hiddenCount} more
+                      </button>
                     )}
                   </div>
               }

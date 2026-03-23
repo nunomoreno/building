@@ -41,7 +41,7 @@
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, useLayoutEffect } = React;
 
     const WORKER      = "https://morning-mud-283c.moreno-a64.workers.dev";
     const SESSION_KEY = "kerno_session";
@@ -1250,6 +1250,8 @@
       const [loadError,      setLoadError]      = useState(null);
       const [showAdmin,      setShowAdmin]      = useState(false);
       const [resourceSearch, setResourceSearch] = useState("");
+      const [resHiddenCount, setResHiddenCount] = useState(0);
+      const resPillsRef = useRef(null);
       const [domains,        setDomains]        = useState([]);
       const [resourceDomains,setResourceDomains]= useState({}); // { [resource_id]: domain_id }
       const [domainFilter,   setDomainFilter]   = useState("all");
@@ -1274,6 +1276,19 @@
           prev.includes(resId) ? prev.filter(id => id !== resId) : [...prev, resId]
         );
       };
+
+      useLayoutEffect(() => {
+        const el = resPillsRef.current; if (!el) return;
+        const check = () => {
+          if (!el.isConnected) return;
+          const items = Array.from(el.children);
+          if (!items.length) { setResHiddenCount(0); return; }
+          const right = el.getBoundingClientRect().right;
+          setResHiddenCount(items.filter(c => c.getBoundingClientRect().right > right + 4).length);
+        };
+        check();
+        if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
+      }, [resources.length, domainFilter, resourceSearch]);
 
       const loadBase = async () => {
         setLoadError(null);
@@ -1402,30 +1417,32 @@
                     ? <span>No resources yet. <button onClick={() => setShowAdmin(true)} className="text-blue-500 bg-transparent border-none cursor-pointer text-sm hover:underline">Add one →</button></span>
                     : "No resources available."}
                 </div>
-              : <div className="flex gap-2 flex-wrap">
-                  {filteredRes.map(r => {
-                    const isSelected = selectedResIds.includes(r.id);
-                    const resIdx     = resources.indexOf(r);
-                    const color      = COLORS[resIdx % COLORS.length];
-                    return (
-                      <button key={r.id} onClick={() => toggleResource(r.id)}
-                        className={`text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer whitespace-nowrap ${
-                          isSelected
-                            ? "text-white font-semibold"
-                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
-                        style={isSelected ? {background: color, borderColor: color} : {}}>
-                        {compareMode && isSelected && <span style={{marginRight:4,opacity:.8}}>✓</span>}
-                        {r.name}
-                        {r.approval_required && <span className="ml-1.5 text-[10px] opacity-70">⚠</span>}
-                        {(usageCount[r.id]||0) > 0 && !isSelected && <span className="ml-1.5 text-[10px] text-slate-400">{usageCount[r.id]}</span>}
-                      </button>
-                    );
-                  })}
-                  {hasMore && (
-                    <span className="text-xs text-slate-400 self-center pl-1">+{sortedRes.length-20} more — use search</span>
-                  )}
-                  {searchLower && filteredRes.length === 0 && (
-                    <span className="text-xs text-slate-400 self-center">No resources match "{resourceSearch}"</span>
+              : <div className="flex items-center gap-2">
+                  <div ref={resPillsRef} className="flex gap-2 overflow-hidden flex-1 min-w-0">
+                    {filteredRes.map(r => {
+                      const isSelected = selectedResIds.includes(r.id);
+                      const resIdx     = resources.indexOf(r);
+                      const color      = COLORS[resIdx % COLORS.length];
+                      return (
+                        <button key={r.id} onClick={() => toggleResource(r.id)}
+                          className={`shrink-0 text-sm px-4 py-1.5 rounded-full border transition font-medium cursor-pointer whitespace-nowrap ${
+                            isSelected
+                              ? "text-white font-semibold"
+                              : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"}`}
+                          style={isSelected ? {background: color, borderColor: color} : {}}>
+                          {compareMode && isSelected && <span style={{marginRight:4,opacity:.8}}>✓</span>}
+                          {r.name}
+                          {r.approval_required && <span className="ml-1.5 text-[10px] opacity-70">⚠</span>}
+                          {(usageCount[r.id]||0) > 0 && !isSelected && <span className="ml-1.5 text-[10px] text-slate-400">{usageCount[r.id]}</span>}
+                        </button>
+                      );
+                    })}
+                    {searchLower && filteredRes.length === 0 && (
+                      <span className="text-xs text-slate-400 self-center">No resources match "{resourceSearch}"</span>
+                    )}
+                  </div>
+                  {resHiddenCount > 0 && (
+                    <span className="shrink-0 text-xs text-slate-400 pl-1">+{resHiddenCount} more — use search</span>
                   )}
                 </div>
             }
