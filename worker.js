@@ -474,9 +474,9 @@ export default {
           return json(toList(rows));
         }
 
-        // Mentioned scope — DB text search for @me, then extract matching tasks
+        // Mentioned scope — scan all projects in JS (DB text cast filter is unreliable)
         if (scope === "mentioned") {
-          const rows = await sb(`projects?data::text=ilike.*@${encodeURIComponent(me)}*&select=id,project_id,data,created_at`);
+          const rows = await sb(`projects?select=id,project_id,data,created_at`);
           const mentionedTasks = [];
           for (const p of toList(rows)) {
             for (const t of (p.tasks || [])) {
@@ -1067,6 +1067,43 @@ export default {
            <p>Log in and go to Admin → Permissions to grant access:</p>
            <p><a href="https://nunomoreno.github.io/building/booking.html">Open Bookings →</a></p>`
         );
+        // Persist to settings["access-requests"] so admins see a UI badge
+        const existingReqs = await sb(`settings?key=eq.access-requests&limit=1`);
+        const currentReqs  = Array.isArray(existingReqs[0]?.value) ? existingReqs[0].value : [];
+        const deduped      = currentReqs.filter(r => !(r.username === sessionUser.username && r.resource_id === resource_id && !r.resolved));
+        const newReq       = { id: crypto.randomUUID(), username: sessionUser.username, resource_id, resource_name: resource.name, requested_at: new Date().toISOString(), resolved: false };
+        const updatedReqs  = [...deduped, newReq];
+        if (existingReqs[0]) {
+          await sb(`settings?key=eq.access-requests`, "PATCH", { value: updatedReqs, updated_at: new Date().toISOString() });
+        } else {
+          await sb("settings", "POST", { key: "access-requests", value: updatedReqs });
+        }
+        return json({ success: true });
+      } catch(e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── GET /access-requests ──────────────────────────────────────────────────
+    if (path === "/access-requests" && method === "GET") {
+      try {
+        const data    = await sb(`settings?key=eq.access-requests&limit=1`);
+        const all     = Array.isArray(data[0]?.value) ? data[0].value : [];
+        const pending = all.filter(r => !r.resolved);
+        if (sessionUser.role === "admin") return json(pending);
+        // Calendar admins see only requests for their resources
+        const myRes   = await sb(`resources?admin_username=eq.${encodeURIComponent(sessionUser.username)}&select=id`);
+        const myResIds = myRes.map(r => r.id);
+        return json(myResIds.length ? pending.filter(r => myResIds.includes(r.resource_id)) : []);
+      } catch(e) { return errRes(ch, e.message, 500); }
+    }
+
+    // ── POST /access-requests/:id/resolve ────────────────────────────────────
+    if (path.match(/^\/access-requests\/[^/]+\/resolve$/) && method === "POST") {
+      try {
+        const id   = path.split("/")[2];
+        const data = await sb(`settings?key=eq.access-requests&limit=1`);
+        const all  = Array.isArray(data[0]?.value) ? data[0].value : [];
+        const updated = all.map(r => r.id === id ? { ...r, resolved: true, resolved_by: sessionUser.username, resolved_at: new Date().toISOString() } : r);
+        if (data[0]) await sb(`settings?key=eq.access-requests`, "PATCH", { value: updated, updated_at: new Date().toISOString() });
         return json({ success: true });
       } catch(e) { return errRes(ch, e.message, 500); }
     }
