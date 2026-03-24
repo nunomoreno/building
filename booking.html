@@ -1251,6 +1251,7 @@
       const [loading,        setLoading]        = useState(true);
       const [loadError,      setLoadError]      = useState(null);
       const [showAdmin,      setShowAdmin]      = useState(false);
+      const [pillRequested,  setPillRequested]  = useState({});
       const [showPendingPanel, setShowPendingPanel] = useState(false);
       const pendingPanelRef = useRef(null);
       const [accessRequests,    setAccessRequests]    = useState([]);
@@ -1521,6 +1522,20 @@
                           {compareMode && isSelected && <span style={{marginRight:4,opacity:.8}}>✓</span>}
                           {r.name}
                           {r.approval_required && <span className="ml-1.5 text-[10px] opacity-70">⚠</span>}
+                          {!canBookResource(r.id) && !isAdmin && (
+                            <span
+                              title={pillRequested[r.id] ? "Request sent!" : "Request access"}
+                              onClick={async e => {
+                                e.stopPropagation();
+                                if (pillRequested[r.id]) return;
+                                await api.requestAccess(r.id);
+                                setPillRequested(p => ({...p, [r.id]: true}));
+                              }}
+                              className="ml-1.5 text-[10px]"
+                              style={{cursor: pillRequested[r.id] ? "default" : "pointer"}}>
+                              {pillRequested[r.id] ? "✓" : "🔒"}
+                            </span>
+                          )}
                           {(usageCount[r.id]||0) > 0 && !isSelected && <span className="ml-1.5 text-[10px] text-slate-400">{usageCount[r.id]}</span>}
                         </button>
                       );
