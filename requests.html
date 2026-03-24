@@ -373,9 +373,8 @@
   }
 
   // ── Submit form ────────────────────────────────────────────────────────────
-  function RequestForm({ user, requestTypes, domains, onSubmitted }) {
+  function RequestForm({ user, requestTypes, domains, domainFilter, setDomainFilter, onSubmitted }) {
     const typeKeys = Object.keys(requestTypes || {});
-    const [domainFilter, setDomainFilter] = useState("all");
     const [type,       setType]       = useState(typeKeys[0] || "");
     const [meta,       setMeta]       = useState({});
     const [notes,      setNotes]      = useState("");
@@ -463,21 +462,6 @@
               </div>
         )}
 
-        {/* Domain filter toggles (only if domains exist) */}
-        {(domains||[]).length > 0 && (
-          <div className="flex items-center gap-3 mb-3 flex-wrap justify-end">
-            {(domains||[]).map(d => (
-              <label key={d.id} className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500">
-                <div onClick={() => setDomainFilter(domainFilter === d.id ? "all" : d.id)}
-                  className="relative inline-block w-7 h-3.5 rounded-full transition-colors cursor-pointer"
-                  style={{ background: domainFilter === d.id ? (d.color || "#6366f1") : "#e2e8f0" }}>
-                  <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${domainFilter === d.id ? "translate-x-3" : ""}`} />
-                </div>
-                <span style={{ color: domainFilter === d.id ? (d.color || "#6366f1") : undefined }}>{d.name}</span>
-              </label>
-            ))}
-          </div>
-        )}
         <div className="flex gap-2 flex-wrap mb-6">
           {filteredTypeKeys.map(k => (
             <button key={k} onClick={() => handleTypeChange(k)}
@@ -962,6 +946,7 @@
     const [requests,     setRequests]     = useState([]);
     const [projects,     setProjects]     = useState([]);
     const [domains,      setDomains]      = useState([]);
+    const [domainFilter, setDomainFilter] = useState("all");
     const [loading,      setLoading]      = useState(true);
     const [loadError,    setLoadError]    = useState(null);
 
@@ -1012,7 +997,9 @@
           <div className="flex items-center justify-between gap-3 mb-2.5">
             <div>
               <h1 className="text-base font-bold text-slate-900">Requests</h1>
-              <p className="text-xs text-slate-400">Submit a service request to the platforms team.</p>
+              <p className="text-xs text-slate-400">
+                {tab === "submit" ? "Submit a service request to the platforms team." : tab === "mine" ? `${myRequests.length} request${myRequests.length !== 1 ? "s" : ""}` : `${requests.filter(r => r.status === "pending").length} pending review`}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               {(tab === "queue" || tab === "mine") && (
@@ -1028,6 +1015,21 @@
               )}
             </div>
           </div>
+          {/* Domain filter — right-aligned, only on submit tab */}
+          {tab === "submit" && domains.length > 0 && (
+            <div className="flex items-center gap-3 mb-2.5 flex-wrap justify-end">
+              {domains.map(d => (
+                <label key={d.id} className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500">
+                  <div onClick={() => setDomainFilter(domainFilter === d.id ? "all" : d.id)}
+                    className="relative inline-block w-7 h-3.5 rounded-full transition-colors cursor-pointer"
+                    style={{ background: domainFilter === d.id ? (d.color || "#6366f1") : "#e2e8f0" }}>
+                    <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${domainFilter === d.id ? "translate-x-3" : ""}`} />
+                  </div>
+                  <span style={{ color: domainFilter === d.id ? (d.color || "#6366f1") : undefined }}>{d.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2 flex-wrap">
             {tabs.map(t => (
               <button key={t.key} onClick={() => handleTabChange(t.key)}
@@ -1040,7 +1042,7 @@
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5">
-          {tab === "submit" && <RequestForm user={user} requestTypes={requestTypes} domains={domains} onSubmitted={() => { loadAll(); handleTabChange("mine"); }} />}
+          {tab === "submit" && <RequestForm user={user} requestTypes={requestTypes} domains={domains} domainFilter={domainFilter} setDomainFilter={setDomainFilter} onSubmitted={() => { loadAll(); handleTabChange("mine"); }} />}
           {tab === "mine"   && <MyRequests requests={myRequests} requestTypes={requestTypes} search={search} projects={projects} />}
           {tab === "queue"  && isAdmin && <AdminQueue requests={requests} requestTypes={requestTypes} onRefresh={loadAll} search={search} />}
           {tab === "config" && isAdmin && <ConfigPanel requestTypes={requestTypes} domains={domains} onSaved={(t) => setRequestTypes(t)} />}
