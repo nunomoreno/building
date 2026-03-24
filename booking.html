@@ -1349,7 +1349,8 @@
         : domainFilteredRes.slice(0, 20);
       const hasMore = !searchLower && domainFilteredRes.length > 20;
 
-      const selectedResources = resources.filter(r => selectedResIds.includes(r.id) && (domainFilter === "all" || resourceDomains[r.id] === domainFilter));
+      const selectedResources  = resources.filter(r => selectedResIds.includes(r.id) && (domainFilter === "all" || resourceDomains[r.id] === domainFilter));
+      const pendingBookings    = allBookings.filter(b => b.status === "pending" && (isAdmin || myAdminResources.some(r => r.id === b.resource_id)));
       const compareMode       = selectedResIds.length > 1;
 
       const weekLabel = `${weekStart.toLocaleDateString("en",{month:"short",day:"numeric"})} – ${addDays(weekStart,6).toLocaleDateString("en",{month:"short",day:"numeric",year:"numeric"})}`;
@@ -1387,6 +1388,12 @@
                   <button onClick={() => setSelectedResIds(prev => [prev[0]])}
                     className="btn btn-xs btn-secondary">
                     Single view
+                  </button>
+                )}
+                {pendingBookings.length > 0 && (
+                  <button onClick={() => setShowAdmin(true)}
+                    className="btn btn-sm border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100">
+                    📥 {pendingBookings.length} pending
                   </button>
                 )}
                 {(isAdmin || isCalendarAdmin) && (
