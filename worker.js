@@ -480,7 +480,7 @@ export default {
           const mentionedTasks = [];
           for (const p of toList(rows)) {
             for (const t of (p.tasks || [])) {
-              if ((t.notes || "").includes(`@${me}`))
+              if ((t.notes || "").toLowerCase().includes(`@${me.toLowerCase()}`))
                 mentionedTasks.push({ ...t, _projectName: p.name, _projectId: p._id });
             }
           }

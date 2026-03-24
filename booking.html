@@ -1249,6 +1249,8 @@
       const [loading,        setLoading]        = useState(true);
       const [loadError,      setLoadError]      = useState(null);
       const [showAdmin,      setShowAdmin]      = useState(false);
+      const [showPendingPanel, setShowPendingPanel] = useState(false);
+      const pendingPanelRef = useRef(null);
       const [resourceSearch, setResourceSearch] = useState("");
       const [resHiddenCount, setResHiddenCount] = useState(0);
       const resPillsRef = useRef(null);
@@ -1289,6 +1291,13 @@
         check();
         if (window.ResizeObserver) { const ro = new ResizeObserver(check); ro.observe(el); return () => ro.disconnect(); }
       }, [resources.length, domainFilter, resourceSearch]);
+
+      useEffect(() => {
+        if (!showPendingPanel) return;
+        const h = (e) => { if (pendingPanelRef.current && !pendingPanelRef.current.contains(e.target)) setShowPendingPanel(false); };
+        document.addEventListener("mousedown", h);
+        return () => document.removeEventListener("mousedown", h);
+      }, [showPendingPanel]);
 
       const loadBase = async () => {
         setLoadError(null);
@@ -1391,10 +1400,39 @@
                   </button>
                 )}
                 {pendingBookings.length > 0 && (
-                  <button onClick={() => setShowAdmin(true)}
-                    className="btn btn-sm border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100">
-                    📥 {pendingBookings.length} pending
-                  </button>
+                  <div className="relative" ref={pendingPanelRef}>
+                    <button onClick={() => setShowPendingPanel(s => !s)}
+                      className={`btn btn-sm border-amber-300 text-amber-700 hover:bg-amber-100 ${showPendingPanel ? "bg-amber-100" : "bg-amber-50"}`}>
+                      📥 {pendingBookings.length} pending
+                    </button>
+                    {showPendingPanel && (
+                      <div className="absolute right-0 top-full mt-1 w-80 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                        <div className="px-3 py-2 border-b border-slate-100 text-xs font-semibold text-slate-600">Pending approvals</div>
+                        <div className="max-h-72 overflow-y-auto">
+                          {pendingBookings.map(b => {
+                            const res = resources.find(r => r.id === b.resource_id);
+                            return (
+                              <div key={b.id} className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-semibold text-slate-800 truncate">{res?.name || "Unknown resource"}</div>
+                                  <div className="text-[11px] text-slate-500">{b.username} · {b.date}{!b.full_day && b.start_time ? ` · ${b.start_time}–${b.end_time}` : " · full day"}</div>
+                                  {b.notes && <div className="text-[11px] text-slate-400 truncate mt-0.5">{b.notes}</div>}
+                                </div>
+                                <div className="flex gap-1 shrink-0">
+                                  <button onClick={async () => { await api.updateBooking(b.id, { status: "approved" }); loadBase(); }}
+                                    className="text-[10px] px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 cursor-pointer font-sans border-none"
+                                    style={{border:"1px solid #a7f3d0"}}>✓</button>
+                                  <button onClick={async () => { await api.updateBooking(b.id, { status: "rejected" }); loadBase(); }}
+                                    className="text-[10px] px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 cursor-pointer font-sans"
+                                    style={{border:"1px solid #fca5a5"}}>✕</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {(isAdmin || isCalendarAdmin) && (
                   <button onClick={() => setShowAdmin(true)} className="btn btn-sm btn-secondary">

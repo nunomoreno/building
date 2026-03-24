@@ -897,7 +897,6 @@
       const [archiveModal,    setArchiveModal]     = useState(null); // project object
       const [listView,        setListView]        = useState(false);
       const [projectSearch,   setProjectSearch]   = useState("");
-      const isElevated = user?.role === "admin" || ["leader","manager"].includes(user?.group_role);
       const [scope, setScope] = useState("mine");
 
       const handleLogout = () => {
@@ -915,6 +914,7 @@
             api.getGrants(),
           ]);
           const p = Array.isArray(data) ? data : [];
+          if (scope === "mine" && p.length === 0) { setScope("mentioned"); setLoading(false); return; }
           setProjects(p);
           const memberList = Array.isArray(m) ? m : [];
           setMembers(memberList.map(u => u.username));
@@ -1011,10 +1011,15 @@
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-base font-bold text-slate-900">Projects</h1>
-                  {!showArchived && <button onClick={() => setAddingProject(true)} className="btn btn-xs btn-primary">+ New</button>}
+                  {scope !== "mentioned" && !showArchived && <button onClick={() => setAddingProject(true)} className="btn btn-xs btn-primary">+ New</button>}
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">{activeProjects.length} active · {inProgress.length} in progress · {blocked.length} blocked</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {scope === "mentioned"
+                    ? `${projects[0]?.tasks?.length || 0} task${(projects[0]?.tasks?.length || 0) !== 1 ? "s" : ""} mentioning you`
+                    : `${activeProjects.length} active · ${inProgress.length} in progress · ${blocked.length} blocked`}
+                </p>
               </div>
+              {scope !== "mentioned" && (
               <div className="flex items-center gap-2">
                 {visibleProjects.length > 4 && (
                   <input value={projectSearch} onChange={e => setProjectSearch(e.target.value)}
@@ -1028,19 +1033,18 @@
                   </button>
                 )}
               </div>
+              )}
             </div>
-            {/* Scope toggles — right-aligned */}
-            <div className="flex items-center gap-3 mb-2.5 flex-wrap justify-end">
-              {[["mine","👤 Mine"], ["mentioned","@ Mentioned"], ...(isElevated ? [["group","👥 Group"]] : [])].map(([s, label]) => (
-                <label key={s} className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500">
-                  <div onClick={() => setScope(s)}
-                    className="relative inline-block w-7 h-3.5 rounded-full transition-colors cursor-pointer"
-                    style={{ background: scope === s ? "#3b82f6" : "#e2e8f0" }}>
-                    <span className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white shadow transition-transform ${scope === s ? "translate-x-3" : ""}`} />
-                  </div>
-                  <span style={{ color: scope === s ? "#3b82f6" : undefined }}>{label}</span>
-                </label>
-              ))}
+            {/* Scope toggle — Mine / Mentioned */}
+            <div className="flex items-center justify-end mb-2.5">
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                {[["mine","👤 Mine"], ["mentioned","@ Mentioned"]].map(([s, label]) => (
+                  <button key={s} onClick={() => setScope(s)}
+                    className={`text-xs px-3 py-1 rounded-md transition border-none cursor-pointer font-sans ${scope === s ? "bg-white text-slate-800 font-medium shadow-sm" : "bg-transparent text-slate-400 hover:text-slate-600"}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* Pills row (hidden for "mentioned" scope) */}
             {scope !== "mentioned" && (
