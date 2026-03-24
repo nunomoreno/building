@@ -107,11 +107,11 @@
       getGrants:     ()        => safeFetch(`${WORKER}/grants`,            { headers: authHeaders() }),
       getMembers:    ()        => safeFetch(`${WORKER}/members`,          { headers: authHeaders() }),
       updateMember:  (id,data) => safeFetch(`${WORKER}/members/${id}`,    { method:"PUT",    headers: authHeaders(), body: JSON.stringify(data) }),
-      requestAccess:    (resId)   => safeFetch(`${WORKER}/request-access`,              { method:"POST",   headers: authHeaders(), body: JSON.stringify({ resource_id: resId }) }),
-      grantAccess:      (resId, memberId) => safeFetch(`${WORKER}/resources/${resId}/grant`,           { method:"POST",   headers: authHeaders(), body: JSON.stringify({ member_id: memberId }) }),
-      revokeAccess:     (resId, memberId) => safeFetch(`${WORKER}/resources/${resId}/grant/${memberId}`,{ method:"DELETE", headers: authHeaders() }),
-      getAccessRequests:()       => safeFetch(`${WORKER}/access-requests`,             { headers: authHeaders() }),
-      resolveAccessRequest:(id)  => safeFetch(`${WORKER}/access-requests/${id}/resolve`,{ method:"POST", headers: authHeaders() }),
+      requestAccess: (resId)   => safeFetch(`${WORKER}/request-access`,              { method:"POST",   headers: authHeaders(), body: JSON.stringify({ resource_id: resId }) }),
+      grantAccess:   (resId, memberId) => safeFetch(`${WORKER}/resources/${resId}/grant`,           { method:"POST",   headers: authHeaders(), body: JSON.stringify({ member_id: memberId }) }),
+      revokeAccess:  (resId, memberId) => safeFetch(`${WORKER}/resources/${resId}/grant/${memberId}`,{ method:"DELETE", headers: authHeaders() }),
+      log:           (username, action, details) => safeFetch(`${WORKER}/logs`, { method:"POST", headers: authHeaders(), body: JSON.stringify({ username, action, details, timestamp: new Date().toISOString() }) }),
+      getLogs:       (limit = 300) => safeFetch(`${WORKER}/logs?limit=${limit}`, { headers: authHeaders() }),
     };
 
     const fmt        = (d) => d.toISOString().split("T")[0];
@@ -1315,12 +1315,12 @@
       const loadBase = async () => {
         setLoadError(null);
         try {
-          const [r, m, f, p, g, b, dom, resDom, acReqs] = await Promise.all([
+          const [r, m, f, p, g, b, dom, resDom, logs] = await Promise.all([
             api.getResources(), api.getMembers(), api.getSettings("booking-fields"),
             api.getSettings("pricing"), api.getGrants(), api.getBookings(),
             safeFetch(`${WORKER}/domains`, { headers: authHeaders() }),
             api.getSettings("resource-domains"),
-            api.getAccessRequests(),
+            api.getLogs(300),
           ]);
           const resList = Array.isArray(r) ? r : [];
           const bList   = Array.isArray(b) ? b : [];
@@ -1333,7 +1333,17 @@
           setGrants(user?.role === "admin" ? allGrants : allGrants.filter(gr => (gr.members||[]).includes(user?.username)));
           setDomains(Array.isArray(dom) ? dom : []);
           setResourceDomains(resDom && typeof resDom === "object" && !Array.isArray(resDom) ? resDom : {});
-          setAccessRequests(Array.isArray(acReqs) ? acReqs : []);
+          const allLogs    = Array.isArray(logs) ? logs : [];
+          const reqLogs    = allLogs.filter(l => l.action === "request_access");
+          const resolvedKeys = new Set(allLogs.filter(l => l.action === "resolve_access").map(l => {
+            try { const d = JSON.parse(l.details); return `${d.username}::${d.resource_id}`; } catch { return ""; }
+          }));
+          setAccessRequests(reqLogs.map(l => {
+            try {
+              const d = JSON.parse(l.details);
+              return { key: `${l.username}::${d.resource_id}`, username: l.username, resource_id: d.resource_id, resource_name: d.resource_name, requested_at: l.timestamp };
+            } catch { return null; }
+          }).filter(r => r && !resolvedKeys.has(r.key)));
           setSelectedResIds(prev => {
             const valid = prev.filter(id => resList.some(r => r.id === id));
             return valid.length > 0 ? valid : resList.length > 0 ? [resList[0].id] : [];
@@ -1431,7 +1441,7 @@
                                 <div className="text-[11px] text-slate-500">{req.username} · {new Date(req.requested_at).toLocaleDateString()}</div>
                               </div>
                               <div className="flex gap-1 shrink-0">
-                                <button onClick={async () => { await api.resolveAccessRequest(req.id); const updated = await api.getAccessRequests(); setAccessRequests(Array.isArray(updated) ? updated : []); }}
+                                <button onClick={async () => { await api.log(user.username, "resolve_access", JSON.stringify({username: req.username, resource_id: req.resource_id})); setAccessRequests(prev => prev.filter(r => r.key !== req.key)); }}
                                   className="text-[10px] px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 cursor-pointer font-sans"
                                   style={{border:"1px solid #a7f3d0"}} title="Mark resolved">✓</button>
                               </div>
@@ -1528,7 +1538,8 @@
                               onClick={async e => {
                                 e.stopPropagation();
                                 if (pillRequested[r.id]) return;
-                                await api.requestAccess(r.id);
+                                const result = await api.requestAccess(r.id);
+                                if (result?.success) await api.log(user.username, "request_access", JSON.stringify({resource_id: r.id, resource_name: r.name}));
                                 setPillRequested(p => ({...p, [r.id]: true}));
                               }}
                               className="ml-1.5 text-[10px]"
@@ -1572,7 +1583,12 @@
                   isAdmin={isAdmin}
                   canBookResource={canBookResource}
                   onRefresh={refreshBookings}
-                  onRequestAccess={api.requestAccess}
+                  onRequestAccess={async (resId) => {
+                    const res = resources.find(r => r.id === resId);
+                    const result = await api.requestAccess(resId);
+                    if (result?.success) await api.log(user.username, "request_access", JSON.stringify({resource_id: resId, resource_name: res?.name || ""}));
+                    return result;
+                  }}
                   grants={grants}
                   pricing={pricing}
                 />
