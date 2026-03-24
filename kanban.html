@@ -1053,6 +1053,16 @@
                 ))}
               </div>
             </div>
+            {/* New project input — always visible when active */}
+            {addingProject && (
+              <div className="flex items-center gap-1 mb-2">
+                <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
+                  placeholder="Project name…" className="text-xs px-2 py-1 rounded-lg border border-blue-300 outline-none focus:ring-2 focus:ring-blue-400 font-sans w-48" />
+                <button onClick={addProject} className="btn btn-xs btn-primary">Add</button>
+                <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="btn btn-xs btn-secondary">✕</button>
+              </div>
+            )}
             {/* Pills row (hidden for "mentioned" scope) */}
             {scope !== "mentioned" && (
               <div className="flex items-center gap-2 flex-wrap">
@@ -1063,15 +1073,6 @@
                   </div>
                   <span>List</span>
                 </label>
-                {addingProject && (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <input autoFocus value={newProjectName} onChange={e => setNewProjectName(e.target.value)}
-                      onKeyDown={e => { if (e.key === "Enter") addProject(); if (e.key === "Escape") { setAddingProject(false); setNewProjectName(""); } }}
-                      placeholder="Project name…" className="text-xs px-2 py-1 rounded-lg border border-blue-300 outline-none focus:ring-2 focus:ring-blue-400 font-sans w-36" />
-                    <button onClick={addProject} className="btn btn-xs btn-primary">Add</button>
-                    <button onClick={() => { setAddingProject(false); setNewProjectName(""); }} className="btn btn-xs btn-secondary">✕</button>
-                  </div>
-                )}
                 {filteredProjects.map((p) => {
                   const shortId = (p._id || p.id || "").slice(-6);
                   const isActive = p.id === active;
